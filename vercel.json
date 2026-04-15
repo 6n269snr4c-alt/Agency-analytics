@@ -1,15 +1,19 @@
 {
-  "version": 2,
-  "builds": [
+  "headers": [
     {
-      "src": "index.html",
-      "use": "@vercel/static"
+      "source": "/js/(.*)",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/javascript; charset=utf-8"
+        }
+      ]
     }
   ],
-  "routes": [
+  "rewrites": [
     {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

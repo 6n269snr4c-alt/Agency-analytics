@@ -7,6 +7,7 @@ import { renderContractsPage } from './pages/contractsPage.js';
 import { renderPeoplePage } from './pages/peoplePage.js';
 import { renderSquadsPage } from './pages/squadsPage.js';
 import { renderComparisonPage } from './pages/comparisonPage.js';
+import { renderDeliverableTypesPage } from './pages/deliverableTypesPage.js';
 
 // Initialize app
 function init() {
@@ -19,6 +20,7 @@ function init() {
     router.register('/people', renderPeoplePage);
     router.register('/squads', renderSquadsPage);
     router.register('/comparison', renderComparisonPage);
+    router.register('/deliverables', renderDeliverableTypesPage);
 
     // Initialize router
     router.init();

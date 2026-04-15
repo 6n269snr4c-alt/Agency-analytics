@@ -5,8 +5,6 @@ import contractService from '../services/contractService.js';
 import personService from '../services/personService.js';
 import squadService from '../services/squadService.js';
 import insightsService from '../services/insightsService.js';
-import { loadDemoData } from '../utils/demoData.js';
-import storage from '../store/storage.js';
 
 export function renderDashboard() {
     const contentEl = document.getElementById('content');
@@ -21,16 +19,9 @@ export function renderDashboard() {
     const opportunities = insightsService.getTopOpportunities();
 
     contentEl.innerHTML = `
-        <div class="page-header flex-between">
-            <div>
-                <h1 class="page-title">Dashboard</h1>
-                <p class="page-subtitle">Visão geral da performance da agência</p>
-            </div>
-            <div>
-                <button class="btn btn-secondary" onclick="window.loadDemo()">
-                    🎯 Carregar Dados Demo
-                </button>
-            </div>
+        <div class="page-header">
+            <h1 class="page-title">Dashboard</h1>
+            <p class="page-subtitle">Visão geral da performance da agência</p>
         </div>
 
         <!-- Insights and Alerts -->
@@ -53,17 +44,6 @@ export function renderDashboard() {
         <!-- Deliverables Breakdown -->
         ${renderDeliverablesBreakdown(deliverablesBreakdown)}
     `;
-
-    // Attach handlers
-    window.loadDemo = loadDemoHandler;
-}
-
-function loadDemoHandler() {
-    if (confirm('Isso vai substituir todos os dados atuais por dados de demonstração. Continuar?')) {
-        const result = loadDemoData(storage);
-        alert(`Dados demo carregados!\n\n${result.peopleCount} pessoas\n${result.squadsCount} squads\n${result.contractsCount} contratos`);
-        renderDashboard();
-    }
 }
 
 function renderInsights(insights, opportunities) {

@@ -4,6 +4,7 @@ import contractService from '../services/contractService.js';
 import squadService from '../services/squadService.js';
 import personService from '../services/personService.js';
 import analyticsService from '../services/analyticsService.js';
+import deliverableTypeService from '../services/deliverableTypeService.js';
 import storage from '../store/storage.js';
 
 let currentEditId = null;
@@ -15,6 +16,7 @@ export function renderContractsPage() {
     const contracts = contractService.getAllContracts();
     const squads = squadService.getAllSquads();
     const people = personService.getAllPeople();
+    const deliverableTypes = deliverableTypeService.getActiveDeliverableTypes();
 
     contentEl.innerHTML = `
         <div class="page-header">
@@ -59,11 +61,25 @@ export function renderContractsPage() {
                     <div class="form-group">
                         <label class="form-label">Entregáveis</label>
                         <div id="deliverables-container"></div>
-                        <div class="flex gap-2 mt-2">
-                            <input type="text" class="form-input" id="deliverable-type" placeholder="Tipo (ex: Criativos)">
-                            <input type="number" class="form-input" id="deliverable-qty" placeholder="Quantidade" min="1">
-                            <button type="button" class="btn btn-secondary" onclick="window.addDeliverable()">+</button>
-                        </div>
+                        ${deliverableTypes.length > 0 ? `
+                            <div class="flex gap-2 mt-2">
+                                <select class="form-select" id="deliverable-type-select" style="flex: 2;">
+                                    <option value="">Selecione o tipo...</option>
+                                    ${deliverableTypes.map(type => `
+                                        <option value="${type.id}">${type.name} (${type.roles.join(', ')})</option>
+                                    `).join('')}
+                                </select>
+                                <input type="number" class="form-input" id="deliverable-qty" placeholder="Qtd" min="1" style="flex: 1;">
+                                <button type="button" class="btn btn-secondary" onclick="window.addDeliverable()">+</button>
+                            </div>
+                        ` : `
+                            <div style="padding: 1rem; background: rgba(255, 170, 0, 0.1); border-left: 3px solid var(--warning); border-radius: 4px;">
+                                <strong>Nenhum tipo de entregável cadastrado</strong>
+                                <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary);">
+                                    Primeiro cadastre tipos de entregáveis na aba <a href="#/deliverables" style="color: var(--primary);">Entregáveis</a>
+                                </p>
+                            </div>
+                        `}
                     </div>
 
                     <div class="form-group">
@@ -166,9 +182,12 @@ function renderContractsList(contracts) {
                     ${Object.keys(contract.deliverables || {}).length > 0 ? `
                         <div style="margin-top: 0.5rem;">
                             <strong>Entregáveis:</strong> 
-                            ${Object.entries(contract.deliverables).map(([type, qty]) => 
-                                `<span class="badge badge-success">${type}: ${qty}</span>`
-                            ).join(' ')}
+                            ${Object.entries(contract.deliverables).map(([typeId, qty]) => {
+                                const type = deliverableTypeService.getDeliverableType(typeId);
+                                const typeName = type ? type.name : 'Tipo removido';
+                                const roles = type ? ` (${type.roles.join(', ')})` : '';
+                                return `<span class="badge badge-success">${typeName}: ${qty}${roles}</span>`;
+                            }).join(' ')}
                         </div>
                     ` : ''}
                 </div>
@@ -274,19 +293,35 @@ function deleteContract(id) {
 }
 
 function addDeliverable() {
-    const type = document.getElementById('deliverable-type').value.trim();
+    const typeSelect = document.getElementById('deliverable-type-select');
+    const typeId = typeSelect?.value;
     const qty = parseInt(document.getElementById('deliverable-qty').value);
 
-    if (type && qty > 0) {
-        deliverables[type] = qty;
-        document.getElementById('deliverable-type').value = '';
-        document.getElementById('deliverable-qty').value = '';
-        renderDeliverables();
+    if (!typeId) {
+        alert('Selecione um tipo de entregável');
+        return;
     }
+
+    if (!qty || qty < 1) {
+        alert('Informe uma quantidade válida');
+        return;
+    }
+
+    const type = deliverableTypeService.getDeliverableType(typeId);
+    if (!type) {
+        alert('Tipo de entregável não encontrado');
+        return;
+    }
+
+    deliverables[typeId] = qty;
+    
+    if (typeSelect) typeSelect.value = '';
+    document.getElementById('deliverable-qty').value = '';
+    renderDeliverables();
 }
 
-function removeDeliverable(type) {
-    delete deliverables[type];
+function removeDeliverable(typeId) {
+    delete deliverables[typeId];
     renderDeliverables();
 }
 
@@ -301,12 +336,17 @@ function renderDeliverables() {
 
     container.innerHTML = `
         <div class="tag-container">
-            ${Object.entries(deliverables).map(([type, qty]) => `
-                <span class="tag">
-                    ${type}: ${qty}
-                    <button type="button" class="tag-remove" onclick="window.removeDeliverable('${type}')">&times;</button>
-                </span>
-            `).join('')}
+            ${Object.entries(deliverables).map(([typeId, qty]) => {
+                const type = deliverableTypeService.getDeliverableType(typeId);
+                const typeName = type ? type.name : 'Desconhecido';
+                const roles = type ? ` (${type.roles.join(', ')})` : '';
+                return `
+                    <span class="tag">
+                        ${typeName}: ${qty}${roles}
+                        <button type="button" class="tag-remove" onclick="window.removeDeliverable('${typeId}')">&times;</button>
+                    </span>
+                `;
+            }).join('')}
         </div>
     `;
 }

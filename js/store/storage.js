@@ -5,7 +5,8 @@ class Storage {
         this.keys = {
             CONTRACTS: 'agency_contracts',
             PEOPLE: 'agency_people',
-            SQUADS: 'agency_squads'
+            SQUADS: 'agency_squads',
+            DELIVERABLE_TYPES: 'agency_deliverable_types'
         };
         this.initStorage();
     }
@@ -20,6 +21,9 @@ class Storage {
         }
         if (!localStorage.getItem(this.keys.SQUADS)) {
             this.saveSquads([]);
+        }
+        if (!localStorage.getItem(this.keys.DELIVERABLE_TYPES)) {
+            this.saveDeliverableTypes([]);
         }
     }
 
@@ -173,6 +177,56 @@ class Storage {
         return this.getSquads().find(s => s.id === id);
     }
 
+    // Deliverable Types
+    getDeliverableTypes() {
+        try {
+            return JSON.parse(localStorage.getItem(this.keys.DELIVERABLE_TYPES)) || [];
+        } catch (e) {
+            console.error('Error loading deliverable types:', e);
+            return [];
+        }
+    }
+
+    saveDeliverableTypes(types) {
+        try {
+            localStorage.setItem(this.keys.DELIVERABLE_TYPES, JSON.stringify(types));
+            return true;
+        } catch (e) {
+            console.error('Error saving deliverable types:', e);
+            return false;
+        }
+    }
+
+    addDeliverableType(type) {
+        const types = this.getDeliverableTypes();
+        type.id = this.generateId();
+        type.createdAt = new Date().toISOString();
+        types.push(type);
+        this.saveDeliverableTypes(types);
+        return type;
+    }
+
+    updateDeliverableType(id, updates) {
+        const types = this.getDeliverableTypes();
+        const index = types.findIndex(t => t.id === id);
+        if (index !== -1) {
+            types[index] = { ...types[index], ...updates, updatedAt: new Date().toISOString() };
+            this.saveDeliverableTypes(types);
+            return types[index];
+        }
+        return null;
+    }
+
+    deleteDeliverableType(id) {
+        const types = this.getDeliverableTypes().filter(t => t.id !== id);
+        this.saveDeliverableTypes(types);
+        return true;
+    }
+
+    getDeliverableTypeById(id) {
+        return this.getDeliverableTypes().find(t => t.id === id);
+    }
+
     // Utilities
     generateId() {
         return Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -183,6 +237,7 @@ class Storage {
             contracts: this.getContracts(),
             people: this.getPeople(),
             squads: this.getSquads(),
+            deliverableTypes: this.getDeliverableTypes(),
             exportedAt: new Date().toISOString()
         };
     }
@@ -192,6 +247,7 @@ class Storage {
             if (data.contracts) this.saveContracts(data.contracts);
             if (data.people) this.savePeople(data.people);
             if (data.squads) this.saveSquads(data.squads);
+            if (data.deliverableTypes) this.saveDeliverableTypes(data.deliverableTypes);
             return true;
         } catch (e) {
             console.error('Error importing data:', e);
@@ -203,6 +259,7 @@ class Storage {
         localStorage.removeItem(this.keys.CONTRACTS);
         localStorage.removeItem(this.keys.PEOPLE);
         localStorage.removeItem(this.keys.SQUADS);
+        localStorage.removeItem(this.keys.DELIVERABLE_TYPES);
         this.initStorage();
     }
 }

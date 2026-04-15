@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guia Rápido - Agency Analytics</title>
+    <link rel="stylesheet" href="css/main.css">
+    <style>
+        .guide-container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .guide-section {
+            margin-bottom: 3rem;
+        }
+        .guide-section h2 {
+            color: var(--primary);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--border);
+        }
+        .step {
+            background: var(--bg-card);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--primary);
+        }
+        .step-number {
+            display: inline-block;
+            background: var(--primary);
+            color: var(--bg-darker);
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            font-weight: bold;
+            margin-right: 1rem;
+        }
+        .tip {
+            background: rgba(0, 255, 65, 0.1);
+            border: 1px solid var(--primary);
+            border-radius: 4px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+        .tip::before {
+            content: "💡 ";
+            font-size: 1.2rem;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .feature-card {
+            background: var(--bg-card);
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        code {
+            background: var(--bg-darker);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    <nav style="background: var(--bg-darker); padding: 1rem 2rem; border-bottom: 1px solid var(--border);">
+        <div style="max-width: 900px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center;">
+            <h1 style="color: var(--primary); margin: 0;">⚡ Agency Analytics - Guia Rápido</h1>
+            <a href="index.html" class="btn btn-primary">Ir para o Sistema</a>
+        </div>
+    </nav>
+
+    <div class="guide-container">
+        <!-- Introdução -->
+        <div class="guide-section">
+            <h2>🎯 O que é o Agency Analytics?</h2>
+            <p>Sistema completo para análise de <strong>produtividade</strong> e <strong>rentabilidade</strong> de agências criativas. Calcule ROI, compare profissionais e tome decisões baseadas em dados reais.</p>
+            
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Dashboard Inteligente</h3>
+                    <p>ROI geral, performance de squads e rankings em tempo real</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📋</div>
+                    <h3>Gestão de Contratos</h3>
+                    <p>Cadastre clientes, defina entregáveis e atribua equipes</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">👥</div>
+                    <h3>Equipes & Squads</h3>
+                    <p>Organize pessoas em squads e analise produtividade</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚖️</div>
+                    <h3>Comparações</h3>
+                    <p>Compare profissionais do mesmo cargo lado a lado</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Primeiros Passos -->
+        <div class="guide-section">
+            <h2>🚀 Primeiros Passos</h2>
+            
+            <div class="step">
+                <span class="step-number">1</span>
+                <strong>Carregar Dados de Exemplo</strong>
+                <p>No primeiro acesso, carregue dados de exemplo para explorar o sistema com dados da Fast Digital 360.</p>
+                <p style="margin-top: 0.5rem;">Ou abra o Console (F12) e digite:</p>
+                <code>loadSeedData()</code>
+            </div>
+
+            <div class="step">
+                <span class="step-number">2</span>
+                <strong>Cadastrar Pessoas</strong>
+                <p>Vá em <strong>Pessoas</strong> → Clique em "+ Nova Pessoa"</p>
+                <p>Preencha: Nome, Cargo e Salário Mensal</p>
+            </div>
+
+            <div class="step">
+                <span class="step-number">3</span>
+                <strong>Criar Squads (Opcional)</strong>
+                <p>Vá em <strong>Squads</strong> → Clique em "+ Novo Squad"</p>
+                <p>Dê um nome e selecione os membros do time</p>
+            </div>
+
+            <div class="step">
+                <span class="step-number">4</span>
+                <strong>Cadastrar Contratos</strong>
+                <p>Vá em <strong>Contratos</strong> → Clique em "+ Novo Contrato"</p>
+                <p>Preencha cliente, valor e entregáveis. Atribua um squad ou pessoas específicas.</p>
+            </div>
+
+            <div class="step">
+                <span class="step-number">5</span>
+                <strong>Analisar Resultados</strong>
+                <p>Volte para o <strong>Dashboard</strong> e veja todas as análises automaticamente calculadas!</p>
+            </div>
+        </div>
+
+        <!-- Funcionalidades Principais -->
+        <div class="guide-section">
+            <h2>⚙️ Funcionalidades Principais</h2>
+            
+            <h3 style="color: var(--primary); margin-top: 2rem;">Dashboard</h3>
+            <ul style="list-style: none; padding: 0;">
+                <li style="margin-bottom: 0.5rem;">✅ ROI geral (receita, custo, lucro, margem)</li>
+                <li style="margin-bottom: 0.5rem;">✅ Performance de cada squad</li>
+                <li style="margin-bottom: 0.5rem;">✅ Ranking de produtividade</li>
+                <li style="margin-bottom: 0.5rem;">✅ Contratos mais lucrativos</li>
+                <li style="margin-bottom: 0.5rem;">✅ Distribuição de entregáveis</li>
+            </ul>
+
+            <h3 style="color: var(--primary); margin-top: 2rem;">Comparações</h3>
+            <ul style="list-style: none; padding: 0;">
+                <li style="margin-bottom: 0.5rem;">✅ Compare designers, copywriters ou qualquer cargo</li>
+                <li style="margin-bottom: 0.5rem;">✅ Veja custo por entregável de cada profissional</li>
+                <li style="margin-bottom: 0.5rem;">✅ Análise head-to-head visual</li>
+                <li style="margin-bottom: 0.5rem;">✅ Ranking geral de eficiência</li>
+            </ul>
+        </div>
+
+        <!-- Cálculos -->
+        <div class="guide-section">
+            <h2>🧮 Como os Cálculos Funcionam</h2>
+            
+            <div class="card" style="margin-bottom: 1rem;">
+                <h3 style="margin-bottom: 0.5rem;">ROI por Contrato</h3>
+                <p><code>ROI = Receita - Custo das pessoas atribuídas</code></p>
+                <p style="margin-top: 0.5rem; color: var(--text-secondary);">Se um contrato de R$ 10.000 tem um squad de R$ 6.000, o lucro é R$ 4.000 (40% de margem)</p>
+            </div>
+
+            <div class="card" style="margin-bottom: 1rem;">
+                <h3 style="margin-bottom: 0.5rem;">Custo por Entregável</h3>
+                <p><code>Custo/Entrega = Salário Mensal / Total de Entregáveis</code></p>
+                <p style="margin-top: 0.5rem; color: var(--text-secondary);">Se um designer ganha R$ 4.000 e produz 50 criativos/mês, cada criativo custa R$ 80</p>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-bottom: 0.5rem;">ROI de Squad</h3>
+                <p><code>ROI Squad = Receita Total - Custo Total do Squad</code></p>
+                <p style="margin-top: 0.5rem; color: var(--text-secondary);">Soma todos os contratos do squad e subtrai a soma dos salários</p>
+            </div>
+        </div>
+
+        <!-- Dicas -->
+        <div class="guide-section">
+            <h2>💡 Dicas de Uso</h2>
+            
+            <div class="tip">
+                <strong>Use Squads para contratos recorrentes</strong><br>
+                Atribua squads fixos aos clientes que têm demanda previsível. Isso facilita o cálculo de ROI do time.
+            </div>
+
+            <div class="tip">
+                <strong>Atribua pessoas individuais para projetos pontuais</strong><br>
+                Para trabalhos específicos, atribua pessoas individuais ao invés de squads completos.
+            </div>
+
+            <div class="tip">
+                <strong>Compare profissionais do mesmo cargo</strong><br>
+                Vá em Comparações → Selecione um cargo para ver quem é mais eficiente em custo por entrega.
+            </div>
+
+            <div class="tip">
+                <strong>Exporte seus dados regularmente</strong><br>
+                Em Contratos → Clique em "Exportar Dados" para fazer backup do seu trabalho.
+            </div>
+        </div>
+
+        <!-- Console -->
+        <div class="guide-section">
+            <h2>🛠️ Comandos do Console</h2>
+            <p>Abra o Console do navegador (F12) e use estes comandos:</p>
+            
+            <div class="card" style="margin-bottom: 1rem;">
+                <code>loadSeedData()</code>
+                <p style="margin-top: 0.5rem; color: var(--text-secondary);">Carrega dados de exemplo da Fast Digital 360</p>
+            </div>
+
+            <div class="card" style="margin-bottom: 1rem;">
+                <code>clearAllData()</code>
+                <p style="margin-top: 0.5rem; color: var(--text-secondary);">Apaga TODOS os dados (cuidado!)</p>
+            </div>
+
+            <div class="card">
+                <code>window.exportContracts()</code>
+                <p style="margin-top: 0.5rem; color: var(--text-secondary);">Exporta dados em JSON (mesmo que o botão na interface)</p>
+            </div>
+        </div>
+
+        <!-- Suporte -->
+        <div class="guide-section">
+            <h2>❓ Suporte</h2>
+            <p>O sistema roda 100% no seu navegador. Seus dados ficam salvos no <strong>localStorage</strong>.</p>
+            
+            <div class="tip">
+                <strong>Dados não aparecem após refresh?</strong><br>
+                Verifique se o localStorage está habilitado nas configurações do navegador.
+            </div>
+
+            <div class="tip">
+                <strong>Erro ao importar módulos?</strong><br>
+                Use um servidor HTTP local. Não abra os arquivos diretamente (file://).
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 3rem; padding: 2rem; border-top: 1px solid var(--border);">
+            <a href="index.html" class="btn btn-primary" style="font-size: 1.1rem; padding: 1rem 2rem;">
+                Começar a Usar Agora →
+            </a>
+        </div>
+    </div>
+</body>
+</html>

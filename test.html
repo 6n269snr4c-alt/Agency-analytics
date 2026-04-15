@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Testes - Agency Analytics</title>
+    <link rel="stylesheet" href="css/main.css">
+    <style>
+        .test-container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 2rem;
+        }
+        .test-output {
+            background: var(--bg-darker);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <nav style="background: var(--bg-darker); padding: 1rem 2rem; border-bottom: 1px solid var(--border);">
+        <div style="max-width: 800px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center;">
+            <h1 style="color: var(--primary); margin: 0;">⚡ Testes - Agency Analytics</h1>
+            <a href="index.html" class="btn btn-secondary">Voltar</a>
+        </div>
+    </nav>
+
+    <div class="test-container">
+        <div class="card" style="margin-bottom: 2rem;">
+            <h2 style="margin-bottom: 1rem;">🧪 Suite de Testes</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                Esta página executa testes automatizados para validar que todos os componentes
+                do sistema estão funcionando corretamente.
+            </p>
+            <button class="btn btn-primary" onclick="runTests()">▶️ Executar Testes</button>
+        </div>
+
+        <div id="output" class="test-output" style="display: none;">
+            Aguardando execução dos testes...
+        </div>
+    </div>
+
+    <script type="module">
+        import storage from './js/store/storage.js';
+        import contractService from './js/services/contractService.js';
+        import personService from './js/services/personService.js';
+        import squadService from './js/services/squadService.js';
+        import analyticsService from './js/services/analyticsService.js';
+
+        window.runTests = async function() {
+            const output = document.getElementById('output');
+            output.style.display = 'block';
+            output.textContent = '';
+
+            let log = '';
+            const originalLog = console.log;
+            const originalError = console.error;
+
+            console.log = (...args) => {
+                const text = args.join(' ') + '\n';
+                log += text;
+                output.textContent = log;
+                originalLog(...args);
+            };
+
+            console.error = (...args) => {
+                const text = args.join(' ') + '\n';
+                log += text;
+                output.textContent = log;
+                originalError(...args);
+            };
+
+            try {
+                await import('./js/test.js');
+            } catch (error) {
+                console.error('Erro ao executar testes:', error);
+            }
+
+            console.log = originalLog;
+            console.error = originalError;
+        };
+    </script>
+</body>
+</html>

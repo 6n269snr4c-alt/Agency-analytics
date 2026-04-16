@@ -190,6 +190,13 @@ function renderHeadSelect(selectedHeadId = null) {
                 ${head.name} - R$ ${formatCurrency(head.salary)}
             </option>
         `).join('');
+    
+    // Add event listener to update members list when head changes
+    headSelect.addEventListener('change', () => {
+        const squad = currentEditId ? squadService.getSquad(currentEditId) : null;
+        const selectedMembers = squad ? squad.members : [];
+        renderMembersCheckboxes(selectedMembers);
+    });
 }
 
 function editSquad(id) {
@@ -209,13 +216,27 @@ function editSquad(id) {
 function renderMembersCheckboxes(selectedMembers = []) {
     const container = document.getElementById('members-checkboxes');
     const availablePeople = squadService.getAvailablePeople(currentEditId);
+    
+    // Get current selected head
+    const headSelect = document.getElementById('head-select');
+    const selectedHeadId = headSelect ? headSelect.value : null;
 
     if (availablePeople.length === 0) {
         container.innerHTML = '<p style="color: var(--text-secondary);">Nenhuma pessoa cadastrada</p>';
         return;
     }
 
-    container.innerHTML = availablePeople.map(person => {
+    // Filter out the selected head from members list
+    const selectableMembers = availablePeople.filter(person => 
+        person.id !== selectedHeadId
+    );
+
+    if (selectableMembers.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary);">Nenhuma pessoa disponível (Head já selecionado)</p>';
+        return;
+    }
+
+    container.innerHTML = selectableMembers.map(person => {
         const personSquads = personService.getPersonSquadNames(person.id);
         const otherSquads = currentEditId ? 
             personSquads.filter(name => {

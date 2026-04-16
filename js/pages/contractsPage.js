@@ -201,9 +201,16 @@ function renderTeamAssignment(people) {
         return '<p style="color: var(--text-secondary);">Nenhuma pessoa cadastrada</p>';
     }
 
+    // Filter out Head Executivo - they are assigned via squad
+    const selectablePeople = people.filter(p => p.role !== 'Head Executivo');
+    
+    if (selectablePeople.length === 0) {
+        return '<p style="color: var(--text-secondary);">Nenhuma pessoa disponível (Heads são atribuídos via squad)</p>';
+    }
+
     // Group people by role
     const peopleByRole = {};
-    people.forEach(person => {
+    selectablePeople.forEach(person => {
         if (!peopleByRole[person.role]) {
             peopleByRole[person.role] = [];
         }

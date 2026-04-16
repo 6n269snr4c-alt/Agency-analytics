@@ -50,6 +50,16 @@ export function renderSquadsPage() {
                     </div>
 
                     <div class="form-group">
+                        <label class="form-label">Head Executivo</label>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.5rem;">
+                            Líder do squad - custo será rateado entre todos os contratos
+                        </p>
+                        <select class="form-select" id="head-select">
+                            <option value="">Nenhum</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
                         <label class="form-label">Membros</label>
                         <div id="members-checkboxes"></div>
                     </div>
@@ -79,6 +89,7 @@ function renderSquadsList(squads) {
 
     return squads.map(squad => {
         const members = squadService.getSquadMembers(squad.id);
+        const head = squadService.getSquadHead(squad.id);
         const squadCost = squadService.getSquadCost(squad.id);
         const roi = analyticsService.getSquadROI(squad.id);
 
@@ -86,7 +97,10 @@ function renderSquadsList(squads) {
             <div class="list-item">
                 <div class="list-item-header">
                     <div>
-                        <div class="list-item-title">${squad.name}</div>
+                        <div class="list-item-title">
+                            ${squad.name}
+                            ${head ? `<span class="badge badge-success" style="margin-left: 0.5rem;">Head: ${head.name}</span>` : ''}
+                        </div>
                         ${squad.description ? `
                             <div style="color: var(--text-secondary); font-size: 0.9rem;">${squad.description}</div>
                         ` : ''}
@@ -101,8 +115,13 @@ function renderSquadsList(squads) {
                         <div class="list-item-meta-item">
                             <strong>Membros:</strong> ${members.length}
                         </div>
+                        ${head ? `
+                            <div class="list-item-meta-item">
+                                <strong>Custo Head:</strong> R$ ${formatCurrency(head.salary)}
+                            </div>
+                        ` : ''}
                         <div class="list-item-meta-item">
-                            <strong>Custo Total:</strong> R$ ${formatCurrency(squadCost)}
+                            <strong>Custo Time:</strong> R$ ${formatCurrency(squadCost)}
                         </div>
                         <div class="list-item-meta-item">
                             <strong>Contratos:</strong> ${roi.contractCount}
@@ -149,12 +168,28 @@ function openSquadModal() {
     document.getElementById('squad-modal').classList.add('active');
     document.getElementById('modal-title').textContent = 'Novo Squad';
     document.getElementById('squad-form').reset();
+    renderHeadSelect();
     renderMembersCheckboxes();
 }
 
 function closeSquadModal() {
     document.getElementById('squad-modal').classList.remove('active');
     currentEditId = null;
+}
+
+function renderHeadSelect(selectedHeadId = null) {
+    const headSelect = document.getElementById('head-select');
+    const people = personService.getAllPeople();
+    
+    // Filter only Head Executivo role
+    const heads = people.filter(p => p.role === 'Head Executivo');
+    
+    headSelect.innerHTML = '<option value="">Nenhum</option>' + 
+        heads.map(head => `
+            <option value="${head.id}" ${selectedHeadId === head.id ? 'selected' : ''}>
+                ${head.name} - R$ ${formatCurrency(head.salary)}
+            </option>
+        `).join('');
 }
 
 function editSquad(id) {
@@ -164,6 +199,7 @@ function editSquad(id) {
     document.getElementById('name').value = squad.name;
     document.getElementById('description').value = squad.description || '';
 
+    renderHeadSelect(squad.headId);
     renderMembersCheckboxes(squad.members);
 
     document.getElementById('modal-title').textContent = 'Editar Squad';
@@ -207,10 +243,12 @@ function handleSquadSubmit(e) {
 
     const checkboxes = document.querySelectorAll('.member-checkbox:checked');
     const members = Array.from(checkboxes).map(cb => cb.value);
+    const headId = document.getElementById('head-select').value;
 
     const formData = {
         name: document.getElementById('name').value,
         description: document.getElementById('description').value,
+        headId: headId || null,
         members: members
     };
 

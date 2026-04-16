@@ -9,6 +9,14 @@ class SquadService {
             throw new Error('Nome do squad é obrigatório');
         }
 
+        // Validate head if provided
+        if (squadData.headId) {
+            const head = storage.getPersonById(squadData.headId);
+            if (!head) {
+                throw new Error('Head não encontrado');
+            }
+        }
+
         // Validate members exist
         if (squadData.members && squadData.members.length > 0) {
             const people = storage.getPeople();
@@ -23,6 +31,7 @@ class SquadService {
         // Create squad
         const squad = storage.addSquad({
             name: squadData.name,
+            headId: squadData.headId || null,
             members: squadData.members,
             description: squadData.description || ''
         });
@@ -34,6 +43,16 @@ class SquadService {
         const squad = storage.getSquadById(id);
         if (!squad) {
             throw new Error('Squad não encontrado');
+        }
+
+        // Validate head if being updated
+        if (updates.headId !== undefined) {
+            if (updates.headId) {
+                const head = storage.getPersonById(updates.headId);
+                if (!head) {
+                    throw new Error('Head não encontrado');
+                }
+            }
         }
 
         // Validate members if being updated
@@ -150,6 +169,25 @@ class SquadService {
     getPersonSquads(personId) {
         const squads = storage.getSquads();
         return squads.filter(squad => squad.members.includes(personId));
+    }
+
+    // NEW: Get head of a squad
+    getSquadHead(squadId) {
+        const squad = storage.getSquadById(squadId);
+        if (!squad || !squad.headId) return null;
+        return storage.getPersonById(squad.headId);
+    }
+
+    // NEW: Check if person is head of any squad
+    isPersonHead(personId) {
+        const squads = storage.getSquads();
+        return squads.some(squad => squad.headId === personId);
+    }
+
+    // NEW: Get squad where person is head
+    getSquadWherePersonIsHead(personId) {
+        const squads = storage.getSquads();
+        return squads.find(squad => squad.headId === personId);
     }
 }
 

@@ -83,6 +83,17 @@ export function renderContractsPage() {
                     </div>
 
                     <div class="form-group">
+                        <label class="form-label">Squad Responsável (Tag Organizacional)</label>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.5rem;">
+                            Marque qual squad é responsável por este contrato (para análises e relatórios)
+                        </p>
+                        <select class="form-select" id="squad-tag">
+                            <option value="">Nenhum</option>
+                            ${squads.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
                         <label class="form-label">Equipe do Contrato</label>
                         <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
                             Selecione as pessoas específicas que trabalharão neste contrato
@@ -125,11 +136,15 @@ function renderContractsList(contracts) {
     return contracts.map(contract => {
         const roi = analyticsService.getContractROI(contract.id);
         const assignedPeople = contract.assignedPeople || [];
+        const squad = contract.squadTag ? squadService.getSquad(contract.squadTag) : null;
         
         return `
             <div class="list-item">
                 <div class="list-item-header">
-                    <div class="list-item-title">${contract.client}</div>
+                    <div class="list-item-title">
+                        ${contract.client}
+                        ${squad ? `<span class="badge badge-success" style="margin-left: 0.5rem;">${squad.name}</span>` : ''}
+                    </div>
                     <div class="list-item-actions">
                         <button class="btn btn-small btn-secondary" onclick="window.editContract('${contract.id}')">✏️ Editar</button>
                         <button class="btn btn-small btn-danger" onclick="window.deleteContract('${contract.id}')">🗑️</button>
@@ -260,6 +275,11 @@ function editContract(id) {
     deliverables = { ...contract.deliverables };
     renderDeliverables();
 
+    // Set squad tag
+    if (contract.squadTag) {
+        document.getElementById('squad-tag').value = contract.squadTag;
+    }
+
     // Check assigned people
     if (contract.assignedPeople && contract.assignedPeople.length > 0) {
         contract.assignedPeople.forEach(personId => {
@@ -283,7 +303,8 @@ function handleContractSubmit(e) {
         value: parseFloat(document.getElementById('value').value),
         deliverables: deliverables,
         notes: document.getElementById('notes').value,
-        assignedPeople: assignedPeople
+        assignedPeople: assignedPeople,
+        squadTag: document.getElementById('squad-tag').value || null
     };
 
     try {

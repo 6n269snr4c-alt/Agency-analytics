@@ -31,19 +31,60 @@ class AnalyticsService {
         });
     }
 
-    // Get all contracts for a squad (based on people in that squad)
+    // Get all contracts tagged for a squad
     getSquadContracts(squadId) {
-        const squad = storage.getSquadById(squadId);
-        if (!squad) return [];
-        
         const contracts = storage.getContracts();
-        return contracts.filter(contract => {
-            if (!contract.assignedPeople) return false;
-            // Contract is "in squad" if ANY of its assigned people are in this squad
-            return contract.assignedPeople.some(personId => 
-                squad.members.includes(personId)
-            );
+        return contracts.filter(contract => contract.squadTag === squadId);
+    }
+
+    // Calculate prorated cost for a person across squads
+    getPersonProratedCostBySquad(personId) {
+        const person = storage.getPersonById(personId);
+        if (!person) return {};
+
+        const breakdown = this.getPersonDeliverablesBreakdown(personId);
+        const squads = storage.getSquads().filter(s => s.members.includes(personId));
+        
+        if (squads.length === 0) return {};
+        if (squads.length === 1) {
+            // Person in only one squad - full cost goes there
+            return { [squads[0].id]: person.salary };
+        }
+
+        // Person in multiple squads - prorate by deliverables
+        const contracts = storage.getContracts();
+        const deliverablesBySquad = {};
+        let totalDeliverables = 0;
+
+        contracts.forEach(contract => {
+            if (!contract.squadTag || !contract.assignedPeople?.includes(personId)) return;
+            if (!contract.deliverables) return;
+
+            let contractDeliverables = 0;
+            Object.entries(contract.deliverables).forEach(([typeId, qty]) => {
+                const type = storage.getDeliverableTypeById(typeId);
+                if (type && type.roles.includes(person.role)) {
+                    contractDeliverables += qty;
+                }
+            });
+
+            if (contractDeliverables > 0) {
+                if (!deliverablesBySquad[contract.squadTag]) {
+                    deliverablesBySquad[contract.squadTag] = 0;
+                }
+                deliverablesBySquad[contract.squadTag] += contractDeliverables;
+                totalDeliverables += contractDeliverables;
+            }
         });
+
+        // Prorate salary by deliverable proportion
+        const proratedCosts = {};
+        Object.entries(deliverablesBySquad).forEach(([squadId, count]) => {
+            const proportion = totalDeliverables > 0 ? count / totalDeliverables : 0;
+            proratedCosts[squadId] = person.salary * proportion;
+        });
+
+        return proratedCosts;
     }
 
     // Calculate total deliverables for a person (considering their role in each type)
@@ -156,18 +197,26 @@ class AnalyticsService {
         };
     }
 
-    // Calculate ROI for a squad
+    // Calculate ROI for a squad (with prorated costs)
     getSquadROI(squadId) {
         const contracts = this.getSquadContracts(squadId);
-        const squadCost = this.getSquadCost(squadId);
+        const squad = storage.getSquadById(squadId);
+        if (!squad) return { revenue: 0, cost: 0, profit: 0, margin: 0, contractCount: 0 };
         
         const totalRevenue = contracts.reduce((sum, contract) => sum + contract.value, 0);
         
+        // Calculate prorated cost for each member
+        let totalCost = 0;
+        squad.members.forEach(personId => {
+            const proratedCosts = this.getPersonProratedCostBySquad(personId);
+            totalCost += proratedCosts[squadId] || 0;
+        });
+
         return {
             revenue: totalRevenue,
-            cost: squadCost,
-            profit: totalRevenue - squadCost,
-            margin: totalRevenue > 0 ? ((totalRevenue - squadCost) / totalRevenue) * 100 : 0,
+            cost: totalCost,
+            profit: totalRevenue - totalCost,
+            margin: totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue) * 100 : 0,
             contractCount: contracts.length
         };
     }
@@ -258,12 +307,75 @@ class AnalyticsService {
                 memberCount: squad.members.length,
                 contractCount: roi.contractCount,
                 revenue: roi.revenue,
-                cost: cost,
+                cost: roi.cost, // Now prorated!
                 profit: roi.profit,
                 margin: roi.margin,
                 revenuePerMember: squad.members.length > 0 ? roi.revenue / squad.members.length : 0
             };
         }).sort((a, b) => b.profit - a.profit);
+    }
+
+    // Strategic squad analysis (detailed)
+    getSquadStrategicAnalysis(squadId) {
+        const squad = storage.getSquadById(squadId);
+        if (!squad) return null;
+
+        const contracts = this.getSquadContracts(squadId);
+        const roi = this.getSquadROI(squadId);
+
+        // Average ticket
+        const avgTicket = contracts.length > 0 ? roi.revenue / contracts.length : 0;
+
+        // Deliverables breakdown by type
+        const deliverablesByType = {};
+        contracts.forEach(contract => {
+            if (!contract.deliverables) return;
+            Object.entries(contract.deliverables).forEach(([typeId, qty]) => {
+                const type = storage.getDeliverableTypeById(typeId);
+                const typeName = type ? type.name : 'Desconhecido';
+                if (!deliverablesByType[typeName]) {
+                    deliverablesByType[typeName] = 0;
+                }
+                deliverablesByType[typeName] += qty;
+            });
+        });
+
+        // Cost composition (with proration details)
+        const costBreakdown = {};
+        squad.members.forEach(personId => {
+            const person = storage.getPersonById(personId);
+            if (!person) return;
+
+            const proratedCosts = this.getPersonProratedCostBySquad(personId);
+            const squadCost = proratedCosts[squadId] || 0;
+            const percentage = person.salary > 0 ? (squadCost / person.salary) * 100 : 0;
+
+            costBreakdown[person.name] = {
+                role: person.role,
+                totalSalary: person.salary,
+                allocatedToSquad: squadCost,
+                allocationPercentage: percentage
+            };
+        });
+
+        return {
+            squad: {
+                id: squad.id,
+                name: squad.name,
+                memberCount: squad.members.length
+            },
+            performance: {
+                contractCount: contracts.length,
+                revenue: roi.revenue,
+                cost: roi.cost,
+                profit: roi.profit,
+                margin: roi.margin,
+                avgTicket: avgTicket,
+                revenuePerContract: avgTicket
+            },
+            deliverables: deliverablesByType,
+            costBreakdown: costBreakdown
+        };
     }
 
     // Get contract profitability ranking

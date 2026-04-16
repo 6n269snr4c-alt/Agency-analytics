@@ -46,15 +46,32 @@ class AnalyticsService {
         });
     }
 
-    // Calculate total deliverables for a person
+    // Calculate total deliverables for a person (considering their role in each type)
     getPersonTotalDeliverables(personId) {
+        const person = storage.getPersonById(personId);
+        if (!person) return 0;
+
         const contracts = this.getPersonContracts(personId);
-        return contracts.reduce((total, contract) => {
-            return total + this.getContractTotalDeliverables(contract);
-        }, 0);
+        let total = 0;
+
+        contracts.forEach(contract => {
+            if (!contract.deliverables) return;
+
+            // For each deliverable type in the contract
+            Object.entries(contract.deliverables).forEach(([typeId, quantity]) => {
+                const type = storage.getDeliverableTypeById(typeId);
+                
+                // Only count if this person's role is involved in this deliverable type
+                if (type && type.roles.includes(person.role)) {
+                    total += quantity;
+                }
+            });
+        });
+
+        return total;
     }
 
-    // Calculate total deliverables for a contract
+    // Calculate total deliverables for a contract (unchanged - just sum all)
     getContractTotalDeliverables(contract) {
         if (!contract.deliverables) return 0;
         return Object.values(contract.deliverables).reduce((sum, qty) => sum + qty, 0);
@@ -67,6 +84,53 @@ class AnalyticsService {
         
         if (totalDeliverables === 0) return 0;
         return salary / totalDeliverables;
+    }
+
+    // Get detailed breakdown of deliverables for a person
+    getPersonDeliverablesBreakdown(personId) {
+        const person = storage.getPersonById(personId);
+        if (!person) return { total: 0, byType: {}, byContract: {} };
+
+        const contracts = this.getPersonContracts(personId);
+        const breakdown = {
+            total: 0,
+            byType: {},
+            byContract: {}
+        };
+
+        contracts.forEach(contract => {
+            if (!contract.deliverables) return;
+
+            let contractTotal = 0;
+            const contractBreakdown = {};
+
+            Object.entries(contract.deliverables).forEach(([typeId, quantity]) => {
+                const type = storage.getDeliverableTypeById(typeId);
+                
+                // Only count if this person's role is involved
+                if (type && type.roles.includes(person.role)) {
+                    // Aggregate by type
+                    if (!breakdown.byType[type.name]) {
+                        breakdown.byType[type.name] = 0;
+                    }
+                    breakdown.byType[type.name] += quantity;
+                    breakdown.total += quantity;
+
+                    // Track for this contract
+                    contractTotal += quantity;
+                    contractBreakdown[type.name] = quantity;
+                }
+            });
+
+            if (contractTotal > 0) {
+                breakdown.byContract[contract.client] = {
+                    total: contractTotal,
+                    breakdown: contractBreakdown
+                };
+            }
+        });
+
+        return breakdown;
     }
 
     // Calculate ROI for a contract

@@ -87,6 +87,7 @@ function renderPeopleList(people) {
     return people.map(person => {
         const contracts = analyticsService.getPersonContracts(person.id);
         const totalDeliverables = analyticsService.getPersonTotalDeliverables(person.id);
+        const breakdown = analyticsService.getPersonDeliverablesBreakdown(person.id);
         const costPerDeliverable = analyticsService.getPersonCostPerDeliverable(person.id);
         const avgTicket = analyticsService.getPersonAverageTicket(person.id);
         const squads = personService.getPersonSquads(person.id);
@@ -125,6 +126,14 @@ function renderPeopleList(people) {
                             </div>
                         ` : ''}
                     </div>
+                    ${Object.keys(breakdown.byType).length > 0 ? `
+                        <div style="margin-top: 0.5rem;">
+                            <strong>Entregas por tipo:</strong> 
+                            ${Object.entries(breakdown.byType).map(([type, qty]) => 
+                                `<span class="badge badge-success">${type}: ${qty}</span>`
+                            ).join(' ')}
+                        </div>
+                    ` : ''}
                     ${squads.length > 0 ? `
                         <div style="margin-top: 0.5rem;">
                             <strong>Squads:</strong> 

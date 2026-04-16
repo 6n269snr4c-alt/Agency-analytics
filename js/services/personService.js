@@ -39,17 +39,7 @@ class PersonService {
             throw new Error('Pessoa não encontrada');
         }
 
-        // Check if person is in any squad
-        const squads = storage.getSquads();
-        const isInSquad = squads.some(squad => 
-            squad.members.includes(id)
-        );
-
-        if (isInSquad) {
-            throw new Error('Não é possível excluir uma pessoa que está em um squad. Remova-a do squad primeiro.');
-        }
-
-        // Check if person is assigned to any contract
+        // Check if person is assigned to any contract directly
         const contracts = storage.getContracts();
         const isAssigned = contracts.some(contract => 
             contract.assignedPeople && contract.assignedPeople.includes(id)
@@ -108,6 +98,11 @@ class PersonService {
     getPersonSquads(personId) {
         const squads = storage.getSquads();
         return squads.filter(squad => squad.members.includes(personId));
+    }
+
+    getPersonSquadNames(personId) {
+        const squads = this.getPersonSquads(personId);
+        return squads.map(s => s.name);
     }
 }
 

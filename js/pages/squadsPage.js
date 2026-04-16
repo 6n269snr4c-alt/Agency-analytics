@@ -175,17 +175,31 @@ function renderMembersCheckboxes(selectedMembers = []) {
     const availablePeople = squadService.getAvailablePeople(currentEditId);
 
     if (availablePeople.length === 0) {
-        container.innerHTML = '<p style="color: var(--text-secondary);">Todas as pessoas já estão em squads</p>';
+        container.innerHTML = '<p style="color: var(--text-secondary);">Nenhuma pessoa cadastrada</p>';
         return;
     }
 
-    container.innerHTML = availablePeople.map(person => `
-        <label style="display: block; margin: 0.5rem 0;">
-            <input type="checkbox" value="${person.id}" class="member-checkbox" 
-                ${selectedMembers.includes(person.id) ? 'checked' : ''}>
-            ${person.name} (${person.role}) - R$ ${formatCurrency(person.salary)}
-        </label>
-    `).join('');
+    container.innerHTML = availablePeople.map(person => {
+        const personSquads = personService.getPersonSquadNames(person.id);
+        const otherSquads = currentEditId ? 
+            personSquads.filter(name => {
+                const currentSquad = squadService.getSquad(currentEditId);
+                return currentSquad && name !== currentSquad.name;
+            }) : personSquads;
+
+        return `
+            <label style="display: block; margin: 0.5rem 0;">
+                <input type="checkbox" value="${person.id}" class="member-checkbox" 
+                    ${selectedMembers.includes(person.id) ? 'checked' : ''}>
+                ${person.name} (${person.role}) - R$ ${formatCurrency(person.salary)}
+                ${otherSquads.length > 0 ? `
+                    <span style="color: var(--text-secondary); font-size: 0.85rem;">
+                        • Também em: ${otherSquads.join(', ')}
+                    </span>
+                ` : ''}
+            </label>
+        `;
+    }).join('');
 }
 
 function handleSquadSubmit(e) {

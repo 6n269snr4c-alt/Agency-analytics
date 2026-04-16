@@ -132,28 +132,24 @@ class SquadService {
         return storage.getSquads().length;
     }
 
+    // NEW: Get all available people (anyone can be in multiple squads now)
     getAvailablePeople(squadId = null) {
         const people = storage.getPeople();
-        const squads = storage.getSquads();
         
-        // Get all people who are in squads
-        const peopleInSquads = new Set();
-        squads.forEach(squad => {
-            // Skip current squad if editing
-            if (squadId && squad.id === squadId) return;
-            squad.members.forEach(memberId => peopleInSquads.add(memberId));
-        });
-
-        // Return people not in any squad (or in current squad if editing)
         if (squadId) {
-            const currentSquad = storage.getSquadById(squadId);
-            return people.filter(person => 
-                !peopleInSquads.has(person.id) || 
-                (currentSquad && currentSquad.members.includes(person.id))
-            );
+            // When editing, show all people
+            // They can be in multiple squads
+            return people;
         }
 
-        return people.filter(person => !peopleInSquads.has(person.id));
+        // When creating new squad, show all people
+        return people;
+    }
+
+    // NEW: Check which squads a person belongs to
+    getPersonSquads(personId) {
+        const squads = storage.getSquads();
+        return squads.filter(squad => squad.members.includes(personId));
     }
 }
 

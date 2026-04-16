@@ -83,31 +83,13 @@ export function renderContractsPage() {
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">Atribuição</label>
-                        <select class="form-select" id="assignment-type" onchange="window.toggleAssignment()">
-                            <option value="">Nenhuma</option>
-                            <option value="squad">Squad</option>
-                            <option value="people">Pessoas</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group" id="squad-select-group" style="display: none;">
-                        <label class="form-label">Squad</label>
-                        <select class="form-select" id="squad-select">
-                            <option value="">Selecione um squad</option>
-                            ${squads.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
-                        </select>
-                    </div>
-
-                    <div class="form-group" id="people-select-group" style="display: none;">
-                        <label class="form-label">Pessoas</label>
-                        <div id="people-checkboxes">
-                            ${people.map(p => `
-                                <label style="display: block; margin: 0.5rem 0;">
-                                    <input type="checkbox" value="${p.id}" class="person-checkbox">
-                                    ${p.name} (${p.role})
-                                </label>
-                            `).join('')}
+                        <label class="form-label">Equipe do Contrato</label>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1rem;">
+                            Selecione as pessoas específicas que trabalharão neste contrato
+                        </p>
+                        
+                        <div id="team-assignment">
+                            ${renderTeamAssignment(people)}
                         </div>
                     </div>
 
@@ -142,7 +124,6 @@ function renderContractsList(contracts) {
 
     return contracts.map(contract => {
         const roi = analyticsService.getContractROI(contract.id);
-        const squad = contract.squadId ? squadService.getSquad(contract.squadId) : null;
         const assignedPeople = contract.assignedPeople || [];
         
         return `
@@ -168,17 +149,21 @@ function renderContractsList(contracts) {
                         <div class="list-item-meta-item">
                             <strong>Margem:</strong> ${roi.margin.toFixed(1)}%
                         </div>
-                        ${squad ? `
-                            <div class="list-item-meta-item">
-                                <strong>Squad:</strong> ${squad.name}
-                            </div>
-                        ` : ''}
                         ${assignedPeople.length > 0 ? `
                             <div class="list-item-meta-item">
-                                <strong>Pessoas:</strong> ${assignedPeople.length}
+                                <strong>Equipe:</strong> ${assignedPeople.length} ${assignedPeople.length === 1 ? 'pessoa' : 'pessoas'}
                             </div>
                         ` : ''}
                     </div>
+                    ${assignedPeople.length > 0 ? `
+                        <div style="margin-top: 0.5rem;">
+                            <strong>Equipe:</strong> 
+                            ${assignedPeople.map(personId => {
+                                const person = personService.getPerson(personId);
+                                return person ? `<span class="badge badge-success">${person.name} (${person.role})</span>` : '';
+                            }).join(' ')}
+                        </div>
+                    ` : ''}
                     ${Object.keys(contract.deliverables || {}).length > 0 ? `
                         <div style="margin-top: 0.5rem;">
                             <strong>Entregáveis:</strong> 
@@ -196,6 +181,45 @@ function renderContractsList(contracts) {
     }).join('');
 }
 
+function renderTeamAssignment(people) {
+    if (people.length === 0) {
+        return '<p style="color: var(--text-secondary);">Nenhuma pessoa cadastrada</p>';
+    }
+
+    // Group people by role
+    const peopleByRole = {};
+    people.forEach(person => {
+        if (!peopleByRole[person.role]) {
+            peopleByRole[person.role] = [];
+        }
+        peopleByRole[person.role].push(person);
+    });
+
+    return `
+        <div style="display: grid; gap: 1rem;">
+            ${Object.entries(peopleByRole).map(([role, rolePeople]) => `
+                <div style="background: var(--bg-darker); border: 1px solid var(--border); border-radius: 4px; padding: 1rem;">
+                    <strong style="display: block; margin-bottom: 0.75rem; color: var(--primary);">${role}</strong>
+                    ${rolePeople.map(person => {
+                        const squads = personService.getPersonSquadNames(person.id);
+                        return `
+                            <label style="display: block; margin: 0.5rem 0; cursor: pointer;">
+                                <input type="checkbox" value="${person.id}" class="person-checkbox" style="margin-right: 0.5rem;">
+                                ${person.name} - R$ ${formatCurrency(person.salary)}
+                                ${squads.length > 0 ? `
+                                    <span style="color: var(--text-secondary); font-size: 0.85rem;">
+                                        (${squads.join(', ')})
+                                    </span>
+                                ` : ''}
+                            </label>
+                        `;
+                    }).join('')}
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
 function attachContractHandlers() {
     const form = document.getElementById('contract-form');
     form.addEventListener('submit', handleContractSubmit);
@@ -207,7 +231,6 @@ function attachContractHandlers() {
     window.deleteContract = deleteContract;
     window.addDeliverable = addDeliverable;
     window.removeDeliverable = removeDeliverable;
-    window.toggleAssignment = toggleAssignment;
     window.exportContracts = exportContracts;
 }
 
@@ -237,17 +260,12 @@ function editContract(id) {
     deliverables = { ...contract.deliverables };
     renderDeliverables();
 
-    if (contract.squadId) {
-        document.getElementById('assignment-type').value = 'squad';
-        document.getElementById('squad-select').value = contract.squadId;
-        toggleAssignment();
-    } else if (contract.assignedPeople && contract.assignedPeople.length > 0) {
-        document.getElementById('assignment-type').value = 'people';
+    // Check assigned people
+    if (contract.assignedPeople && contract.assignedPeople.length > 0) {
         contract.assignedPeople.forEach(personId => {
             const checkbox = document.querySelector(`.person-checkbox[value="${personId}"]`);
             if (checkbox) checkbox.checked = true;
         });
-        toggleAssignment();
     }
 
     document.getElementById('modal-title').textContent = 'Editar Contrato';
@@ -257,20 +275,16 @@ function editContract(id) {
 function handleContractSubmit(e) {
     e.preventDefault();
 
+    const checkboxes = document.querySelectorAll('.person-checkbox:checked');
+    const assignedPeople = Array.from(checkboxes).map(cb => cb.value);
+
     const formData = {
         client: document.getElementById('client').value,
         value: parseFloat(document.getElementById('value').value),
         deliverables: deliverables,
-        notes: document.getElementById('notes').value
+        notes: document.getElementById('notes').value,
+        assignedPeople: assignedPeople
     };
-
-    const assignmentType = document.getElementById('assignment-type').value;
-    if (assignmentType === 'squad') {
-        formData.squadId = document.getElementById('squad-select').value;
-    } else if (assignmentType === 'people') {
-        const checkboxes = document.querySelectorAll('.person-checkbox:checked');
-        formData.assignedPeople = Array.from(checkboxes).map(cb => cb.value);
-    }
 
     try {
         if (currentEditId) {
@@ -349,12 +363,6 @@ function renderDeliverables() {
             }).join('')}
         </div>
     `;
-}
-
-function toggleAssignment() {
-    const type = document.getElementById('assignment-type').value;
-    document.getElementById('squad-select-group').style.display = type === 'squad' ? 'block' : 'none';
-    document.getElementById('people-select-group').style.display = type === 'people' ? 'block' : 'none';
 }
 
 function exportContracts() {

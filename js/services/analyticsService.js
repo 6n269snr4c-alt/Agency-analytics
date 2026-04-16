@@ -23,21 +23,27 @@ class AnalyticsService {
     getPersonContracts(personId) {
         const contracts = storage.getContracts();
         return contracts.filter(contract => {
+            // Direct assignment
             if (contract.assignedPeople && contract.assignedPeople.includes(personId)) {
                 return true;
-            }
-            if (contract.squadId) {
-                const squad = storage.getSquadById(contract.squadId);
-                return squad && squad.members.includes(personId);
             }
             return false;
         });
     }
 
-    // Get all contracts for a squad
+    // Get all contracts for a squad (based on people in that squad)
     getSquadContracts(squadId) {
+        const squad = storage.getSquadById(squadId);
+        if (!squad) return [];
+        
         const contracts = storage.getContracts();
-        return contracts.filter(contract => contract.squadId === squadId);
+        return contracts.filter(contract => {
+            if (!contract.assignedPeople) return false;
+            // Contract is "in squad" if ANY of its assigned people are in this squad
+            return contract.assignedPeople.some(personId => 
+                squad.members.includes(personId)
+            );
+        });
     }
 
     // Calculate total deliverables for a person
@@ -71,10 +77,8 @@ class AnalyticsService {
         const revenue = contract.value;
         let cost = 0;
 
-        // Calculate cost based on assignment type
-        if (contract.squadId) {
-            cost = this.getSquadCost(contract.squadId);
-        } else if (contract.assignedPeople && contract.assignedPeople.length > 0) {
+        // Calculate cost based on assigned people
+        if (contract.assignedPeople && contract.assignedPeople.length > 0) {
             cost = contract.assignedPeople.reduce((total, personId) => {
                 return total + this.getPersonCost(personId);
             }, 0);

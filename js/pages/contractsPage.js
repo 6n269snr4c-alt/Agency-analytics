@@ -422,23 +422,29 @@ function filterContracts() {
 function validateContractConsistency(contract) {
     const warnings = [];
     
-    // Get all roles needed for deliverables
+    // Get all roles needed for deliverables (excluding Head Executivo)
     const rolesNeeded = new Set();
     if (contract.deliverables) {
         Object.keys(contract.deliverables).forEach(typeId => {
             const type = deliverableTypeService.getDeliverableType(typeId);
             if (type && type.roles) {
-                type.roles.forEach(role => rolesNeeded.add(role));
+                type.roles.forEach(role => {
+                    if (role !== 'Head Executivo') {
+                        rolesNeeded.add(role);
+                    }
+                });
             }
         });
     }
     
-    // Get all roles assigned to contract
+    // Get all roles assigned to contract (excluding Head Executivo)
     const rolesAssigned = new Set();
     if (contract.assignedPeople) {
         contract.assignedPeople.forEach(personId => {
             const person = personService.getPerson(personId);
-            if (person) rolesAssigned.add(person.role);
+            if (person && person.role !== 'Head Executivo') {
+                rolesAssigned.add(person.role);
+            }
         });
     }
     
@@ -596,20 +602,26 @@ function updateFormValidationWarnings() {
     const warningsContainer = document.getElementById('form-validation-warnings');
     if (!warningsContainer) return;
     
-    // Get selected people roles
+    // Get selected people roles (excluding Head Executivo)
     const selectedPeople = Array.from(document.querySelectorAll('.person-checkbox:checked')).map(cb => cb.value);
     const rolesAssigned = new Set();
     selectedPeople.forEach(personId => {
         const person = personService.getPerson(personId);
-        if (person) rolesAssigned.add(person.role);
+        if (person && person.role !== 'Head Executivo') {
+            rolesAssigned.add(person.role);
+        }
     });
     
-    // Get roles needed for deliverables
+    // Get roles needed for deliverables (excluding Head Executivo)
     const rolesNeeded = new Set();
     Object.keys(deliverables).forEach(typeId => {
         const type = deliverableTypeService.getDeliverableType(typeId);
         if (type && type.roles) {
-            type.roles.forEach(role => rolesNeeded.add(role));
+            type.roles.forEach(role => {
+                if (role !== 'Head Executivo') {
+                    rolesNeeded.add(role);
+                }
+            });
         }
     });
     

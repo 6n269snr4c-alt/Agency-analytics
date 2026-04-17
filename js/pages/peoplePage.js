@@ -80,62 +80,60 @@ function renderPeopleList(people) {
         `;
     }
 
-    return people.map(person => {
-        const contracts = analyticsService.getPersonContracts(person.id);
-        const totalDeliverables = analyticsService.getPersonTotalDeliverables(person.id);
-        const breakdown = analyticsService.getPersonDeliverablesBreakdown(person.id);
-        const costPerDeliverable = analyticsService.getPersonCostPerDeliverable(person.id);
-        const avgTicket = analyticsService.getPersonAverageTicket(person.id);
-        const squads = personService.getPersonSquads(person.id);
+    // Group people by role
+    const peopleByRole = {};
+    people.forEach(person => {
+        if (!peopleByRole[person.role]) {
+            peopleByRole[person.role] = [];
+        }
+        peopleByRole[person.role].push(person);
+    });
+
+    // Sort roles alphabetically
+    const sortedRoles = Object.keys(peopleByRole).sort();
+
+    return sortedRoles.map(role => {
+        const peopleInRole = peopleByRole[role];
 
         return `
-            <div class="list-item">
-                <div class="list-item-header">
-                    <div>
-                        <div class="list-item-title">${person.name}</div>
-                        <div style="color: var(--text-secondary); font-size: 0.9rem;">${person.role}</div>
+            <div style="margin-bottom: 3rem;">
+                <h3 style="color: var(--primary); margin-bottom: 1rem; font-size: 1.3rem; text-transform: uppercase; letter-spacing: 0.05em;">
+                    ${role}
+                </h3>
+                
+                <div style="background: var(--bg-darker); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+                    <!-- Table Header -->
+                    <div style="display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr 1.5fr auto; gap: 1rem; padding: 1rem; background: var(--bg); border-bottom: 2px solid var(--border); font-weight: bold; font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase;">
+                        <div>Nome</div>
+                        <div>Salário</div>
+                        <div>Contratos</div>
+                        <div>Entregas</div>
+                        <div>Custo/Entrega</div>
+                        <div>Ações</div>
                     </div>
-                    <div class="list-item-actions">
-                        <button class="btn btn-small btn-secondary" onclick="window.editPerson('${person.id}')">✏️ Editar</button>
-                        <button class="btn btn-small btn-danger" onclick="window.deletePerson('${person.id}')">🗑️</button>
-                    </div>
-                </div>
-                <div class="list-item-body">
-                    <div class="list-item-meta">
-                        <div class="list-item-meta-item">
-                            <strong>Salário:</strong> R$ ${formatCurrency(person.salary)}
-                        </div>
-                        <div class="list-item-meta-item">
-                            <strong>Contratos:</strong> ${contracts.length}
-                        </div>
-                        <div class="list-item-meta-item">
-                            <strong>Entregas:</strong> ${totalDeliverables}
-                        </div>
-                        ${costPerDeliverable > 0 ? `
-                            <div class="list-item-meta-item">
-                                <strong>Custo/Entrega:</strong> R$ ${formatCurrency(costPerDeliverable)}
+                    
+                    <!-- Table Rows -->
+                    ${peopleInRole.map(person => {
+                        const contracts = analyticsService.getPersonContracts(person.id);
+                        const totalDeliverables = analyticsService.getPersonTotalDeliverables(person.id);
+                        const costPerDeliverable = analyticsService.getPersonCostPerDeliverable(person.id);
+
+                        return `
+                            <div style="display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr 1.5fr auto; gap: 1rem; padding: 1rem; border-bottom: 1px solid var(--border); align-items: center;">
+                                <div style="font-weight: 500;">${person.name}</div>
+                                <div>R$ ${formatCurrency(person.salary)}</div>
+                                <div>${contracts.length}</div>
+                                <div>${totalDeliverables}</div>
+                                <div style="color: var(--primary); font-weight: bold;">
+                                    ${costPerDeliverable > 0 ? `R$ ${formatCurrency(costPerDeliverable)}` : '-'}
+                                </div>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button class="btn btn-small btn-secondary" onclick="window.editPerson('${person.id}')">✏️</button>
+                                    <button class="btn btn-small btn-danger" onclick="window.deletePerson('${person.id}')">🗑️</button>
+                                </div>
                             </div>
-                        ` : ''}
-                        ${avgTicket > 0 ? `
-                            <div class="list-item-meta-item">
-                                <strong>Ticket Médio:</strong> R$ ${formatCurrency(avgTicket)}
-                            </div>
-                        ` : ''}
-                    </div>
-                    ${Object.keys(breakdown.byType).length > 0 ? `
-                        <div style="margin-top: 0.5rem;">
-                            <strong>Entregas por tipo:</strong> 
-                            ${Object.entries(breakdown.byType).map(([type, qty]) => 
-                                `<span class="badge badge-success">${type}: ${qty}</span>`
-                            ).join(' ')}
-                        </div>
-                    ` : ''}
-                    ${squads.length > 0 ? `
-                        <div style="margin-top: 0.5rem;">
-                            <strong>Squads:</strong> 
-                            ${squads.map(s => `<span class="badge badge-success">${s.name}</span>`).join(' ')}
-                        </div>
-                    ` : ''}
+                        `;
+                    }).join('')}
                 </div>
             </div>
         `;

@@ -199,6 +199,19 @@ function renderContractsList(contracts) {
                         </div>
                     </div>
 
+                    <!-- Team Members -->
+                    ${assignedPeople.length > 0 ? `
+                        <div style="margin-bottom: 1rem;">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.5rem;">Equipe:</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                                ${assignedPeople.map(personId => {
+                                    const person = personService.getPerson(personId);
+                                    return person ? `<span class="badge" style="background: var(--bg-darker); border: 1px solid var(--border);">${person.name} (${person.role})</span>` : '';
+                                }).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+
                     <!-- Deliverables (collapsed by default) -->
                     ${Object.keys(contract.deliverables || {}).length > 0 ? `
                         <details style="margin-top: 0.5rem;">
@@ -513,56 +526,73 @@ function exportContracts() {
         return;
     }
 
+    // Get all unique roles and deliverable types
+    const allRoles = new Set();
+    const allDeliverables = new Set();
+    
+    contracts.forEach(contract => {
+        if (contract.assignedPeople) {
+            contract.assignedPeople.forEach(personId => {
+                const person = personService.getPerson(personId);
+                if (person) allRoles.add(person.role);
+            });
+        }
+        if (contract.deliverables) {
+            Object.keys(contract.deliverables).forEach(typeId => {
+                const type = deliverableTypeService.getDeliverableType(typeId);
+                if (type) allDeliverables.add(type.name);
+            });
+        }
+    });
+
     // Prepare data for export
     const exportData = contracts.map(contract => {
         const squad = contract.squadTag ? squadService.getSquad(contract.squadTag) : null;
         const head = squad && squad.headId ? personService.getPerson(squad.headId) : null;
         
-        // Get all unique roles from assigned people
-        const peopleByRole = {};
-        if (contract.assignedPeople) {
-            contract.assignedPeople.forEach(personId => {
-                const person = personService.getPerson(personId);
-                if (person) {
-                    if (!peopleByRole[person.role]) {
-                        peopleByRole[person.role] = [];
-                    }
-                    peopleByRole[person.role].push(person.name);
-                }
-            });
-        }
-        
-        // Get deliverables
-        const deliverablesList = {};
-        if (contract.deliverables) {
-            Object.entries(contract.deliverables).forEach(([typeId, qty]) => {
-                const type = deliverableTypeService.getDeliverableType(typeId);
-                if (type) {
-                    deliverablesList[type.name] = qty;
-                }
-            });
-        }
-        
-        return {
-            Cliente: contract.client,
-            Valor: contract.value,
-            Squad: squad ? squad.name : '',
-            'Head Executivo': head ? head.name : '',
-            ...peopleByRole,
-            ...deliverablesList
+        const row = {
+            'Cliente': contract.client,
+            'Valor': `R$ ${formatCurrency(contract.value)}`,
+            'Squad': squad ? squad.name : '',
+            'Head Executivo': head ? head.name : ''
         };
+        
+        // Add people by role (in fixed order)
+        Array.from(allRoles).sort().forEach(role => {
+            const peopleInRole = [];
+            if (contract.assignedPeople) {
+                contract.assignedPeople.forEach(personId => {
+                    const person = personService.getPerson(personId);
+                    if (person && person.role === role) {
+                        peopleInRole.push(person.name);
+                    }
+                });
+            }
+            row[role] = peopleInRole.join(', ');
+        });
+        
+        // Add deliverables (in fixed order)
+        Array.from(allDeliverables).sort().forEach(deliverableName => {
+            let qty = '';
+            if (contract.deliverables) {
+                Object.entries(contract.deliverables).forEach(([typeId, quantity]) => {
+                    const type = deliverableTypeService.getDeliverableType(typeId);
+                    if (type && type.name === deliverableName) {
+                        qty = quantity;
+                    }
+                });
+            }
+            row[deliverableName] = qty;
+        });
+        
+        return row;
     });
 
-    // Convert to CSV
-    if (exportData.length === 0) return;
-    
-    // Get all unique column headers
-    const allKeys = new Set();
-    exportData.forEach(row => {
-        Object.keys(row).forEach(key => allKeys.add(key));
-    });
-    
-    const headers = Array.from(allKeys);
+    // Create CSV with ordered headers
+    const baseHeaders = ['Cliente', 'Valor', 'Squad', 'Head Executivo'];
+    const roleHeaders = Array.from(allRoles).sort();
+    const deliverableHeaders = Array.from(allDeliverables).sort();
+    const headers = [...baseHeaders, ...roleHeaders, ...deliverableHeaders];
     
     // Create CSV content
     let csv = headers.map(h => `"${h}"`).join(',') + '\n';
@@ -570,10 +600,7 @@ function exportContracts() {
     exportData.forEach(row => {
         const values = headers.map(header => {
             const value = row[header];
-            if (Array.isArray(value)) {
-                return `"${value.join(', ')}"`;
-            }
-            return value !== undefined ? `"${value}"` : '""';
+            return value !== undefined && value !== '' ? `"${value}"` : '""';
         });
         csv += values.join(',') + '\n';
     });

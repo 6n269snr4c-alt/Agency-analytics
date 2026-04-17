@@ -166,58 +166,53 @@ function renderContractsList(contracts) {
                 <div class="list-item-header">
                     <div class="list-item-title">
                         ${contract.client}
-                        ${squad ? `<span class="badge badge-success" style="margin-left: 0.5rem;">${squad.name}</span>` : ''}
+                        ${squad ? `<span class="badge badge-success" style="margin-left: 0.5rem; font-size: 0.85rem;">${squad.name}</span>` : ''}
                     </div>
-                    <div class="list-item-actions">
-                        <button class="btn btn-small btn-secondary" onclick="window.editContract('${contract.id}')">✏️ Editar</button>
+                    <div class="list-item-actions" style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-small btn-secondary" onclick="window.showContractBreakdown('${contract.id}')" style="display: flex; align-items: center; gap: 0.5rem;">
+                            <span>📊</span>
+                        </button>
+                        <button class="btn btn-small btn-secondary" onclick="window.editContract('${contract.id}')">✏️</button>
                         <button class="btn btn-small btn-danger" onclick="window.deleteContract('${contract.id}')">🗑️</button>
                     </div>
                 </div>
                 <div class="list-item-body">
-                    <div class="list-item-meta">
-                        <div class="list-item-meta-item">
-                            <strong>Valor:</strong> R$ ${formatCurrency(contract.value)}
+                    <!-- Main Metrics Row -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.25rem;">Valor</div>
+                            <div style="font-size: 1.1rem; font-weight: bold;">R$ ${formatCurrency(contract.value)}</div>
                         </div>
-                        <div class="list-item-meta-item">
-                            <strong>Lucro:</strong> 
-                            <span class="badge ${roi.profit > 0 ? 'badge-success' : 'badge-error'}">
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.25rem;">Lucro</div>
+                            <div style="font-size: 1.1rem; font-weight: bold; color: ${roi.profit > 0 ? 'var(--success)' : 'var(--error)'};">
                                 R$ ${formatCurrency(roi.profit)}
-                            </span>
-                        </div>
-                        <div class="list-item-meta-item">
-                            <strong>Margem:</strong> ${roi.margin.toFixed(1)}%
-                        </div>
-                        ${assignedPeople.length > 0 ? `
-                            <div class="list-item-meta-item">
-                                <strong>Equipe:</strong> ${assignedPeople.length} ${assignedPeople.length === 1 ? 'pessoa' : 'pessoas'}
                             </div>
-                        ` : ''}
-                        <div class="list-item-meta-item">
-                            <button class="btn btn-small btn-secondary" onclick="window.showContractBreakdown('${contract.id}')" style="display: flex; align-items: center; gap: 0.5rem;">
-                                <span>📊</span>
-                                <span>Detalhes</span>
-                            </button>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.25rem;">Margem</div>
+                            <div style="font-size: 1.1rem; font-weight: bold;">${roi.margin.toFixed(1)}%</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 0.25rem;">Equipe</div>
+                            <div style="font-size: 1.1rem; font-weight: bold;">${assignedPeople.length} ${assignedPeople.length === 1 ? 'pessoa' : 'pessoas'}</div>
                         </div>
                     </div>
-                    ${assignedPeople.length > 0 ? `
-                        <div style="margin-top: 0.5rem;">
-                            <strong>Equipe:</strong> 
-                            ${assignedPeople.map(personId => {
-                                const person = personService.getPerson(personId);
-                                return person ? `<span class="badge badge-success">${person.name} (${person.role})</span>` : '';
-                            }).join(' ')}
-                        </div>
-                    ` : ''}
+
+                    <!-- Deliverables (collapsed by default) -->
                     ${Object.keys(contract.deliverables || {}).length > 0 ? `
-                        <div style="margin-top: 0.5rem;">
-                            <strong>Entregáveis:</strong> 
-                            ${Object.entries(contract.deliverables).map(([typeId, qty]) => {
-                                const type = deliverableTypeService.getDeliverableType(typeId);
-                                const typeName = type ? type.name : 'Tipo removido';
-                                const roles = type ? ` (${type.roles.join(', ')})` : '';
-                                return `<span class="badge badge-success">${typeName}: ${qty}${roles}</span>`;
-                            }).join(' ')}
-                        </div>
+                        <details style="margin-top: 0.5rem;">
+                            <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.9rem; user-select: none;">
+                                Ver entregáveis (${Object.keys(contract.deliverables).length})
+                            </summary>
+                            <div style="margin-top: 0.5rem; display: flex; flex-wrap: gap; gap: 0.5rem;">
+                                ${Object.entries(contract.deliverables).map(([typeId, qty]) => {
+                                    const type = deliverableTypeService.getDeliverableType(typeId);
+                                    const typeName = type ? type.name : 'Tipo removido';
+                                    return `<span class="badge" style="background: var(--bg-darker); border: 1px solid var(--border);">${typeName}: ${qty}</span>`;
+                                }).join(' ')}
+                            </div>
+                        </details>
                     ` : ''}
                 </div>
             </div>
@@ -511,14 +506,90 @@ function renderDeliverables() {
 }
 
 function exportContracts() {
-    const data = storage.exportData();
-    const dataStr = JSON.stringify(data, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
+    const contracts = contractService.getAllContracts();
+    
+    if (contracts.length === 0) {
+        alert('Nenhum contrato para exportar');
+        return;
+    }
+
+    // Prepare data for export
+    const exportData = contracts.map(contract => {
+        const squad = contract.squadTag ? squadService.getSquad(contract.squadTag) : null;
+        const head = squad && squad.headId ? personService.getPerson(squad.headId) : null;
+        
+        // Get all unique roles from assigned people
+        const peopleByRole = {};
+        if (contract.assignedPeople) {
+            contract.assignedPeople.forEach(personId => {
+                const person = personService.getPerson(personId);
+                if (person) {
+                    if (!peopleByRole[person.role]) {
+                        peopleByRole[person.role] = [];
+                    }
+                    peopleByRole[person.role].push(person.name);
+                }
+            });
+        }
+        
+        // Get deliverables
+        const deliverablesList = {};
+        if (contract.deliverables) {
+            Object.entries(contract.deliverables).forEach(([typeId, qty]) => {
+                const type = deliverableTypeService.getDeliverableType(typeId);
+                if (type) {
+                    deliverablesList[type.name] = qty;
+                }
+            });
+        }
+        
+        return {
+            Cliente: contract.client,
+            Valor: contract.value,
+            Squad: squad ? squad.name : '',
+            'Head Executivo': head ? head.name : '',
+            ...peopleByRole,
+            ...deliverablesList
+        };
+    });
+
+    // Convert to CSV
+    if (exportData.length === 0) return;
+    
+    // Get all unique column headers
+    const allKeys = new Set();
+    exportData.forEach(row => {
+        Object.keys(row).forEach(key => allKeys.add(key));
+    });
+    
+    const headers = Array.from(allKeys);
+    
+    // Create CSV content
+    let csv = headers.map(h => `"${h}"`).join(',') + '\n';
+    
+    exportData.forEach(row => {
+        const values = headers.map(header => {
+            const value = row[header];
+            if (Array.isArray(value)) {
+                return `"${value.join(', ')}"`;
+            }
+            return value !== undefined ? `"${value}"` : '""';
+        });
+        csv += values.join(',') + '\n';
+    });
+    
+    // Download CSV
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    link.href = url;
-    link.download = `agency-analytics-export-${new Date().toISOString().split('T')[0]}.json`;
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `contratos_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
 }
 
 function formatCurrency(value) {

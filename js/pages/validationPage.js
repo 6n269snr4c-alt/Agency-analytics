@@ -38,6 +38,18 @@ export function renderValidationPage() {
             <p class="page-subtitle">Prova real: a soma dos custos dos contratos deve igualar a folha de pagamento</p>
         </div>
 
+        <div class="action-bar">
+            <div class="action-bar-left">
+                <button class="btn btn-secondary" onclick="window.exportBackup()">
+                    💾 Fazer Backup
+                </button>
+                <button class="btn btn-secondary" onclick="window.importBackup()">
+                    📥 Restaurar Backup
+                </button>
+                <input type="file" id="backup-file-input" accept=".json" style="display: none;" onchange="window.handleBackupFile(event)">
+            </div>
+        </div>
+
         <!-- Summary Cards -->
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
             <!-- Total Contract Costs -->
@@ -159,4 +171,61 @@ export function renderValidationPage() {
 
 function formatCurrency(value) {
     return value.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+// Backup/Restore functions
+function exportBackup() {
+    const data = localStorage.getItem('agency-analytics-data');
+    if (!data) {
+        alert('Não há dados para fazer backup');
+        return;
+    }
+    
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const timestamp = new Date().toISOString().split('T')[0];
+    
+    link.href = url;
+    link.download = `agency-analytics-backup-${timestamp}.json`;
+    link.click();
+    
+    URL.revokeObjectURL(url);
+    alert('✅ Backup realizado com sucesso!');
+}
+
+function importBackup() {
+    document.getElementById('backup-file-input').click();
+}
+
+function handleBackupFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    if (confirm('⚠️ ATENÇÃO: Isso vai substituir TODOS os dados atuais. Deseja continuar?')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = e.target.result;
+                // Validate JSON
+                JSON.parse(data);
+                localStorage.setItem('agency-analytics-data', data);
+                alert('✅ Backup restaurado com sucesso! A página será recarregada.');
+                window.location.reload();
+            } catch (error) {
+                alert('❌ Erro ao restaurar backup: arquivo inválido');
+            }
+        };
+        reader.readAsText(file);
+    }
+    
+    // Reset input
+    event.target.value = '';
+}
+
+// Expose functions to window
+if (typeof window !== 'undefined') {
+    window.exportBackup = exportBackup;
+    window.importBackup = importBackup;
+    window.handleBackupFile = handleBackupFile;
 }

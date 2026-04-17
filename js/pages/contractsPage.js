@@ -491,10 +491,15 @@ function editContract(id) {
 
     // Check assigned people
     if (contract.assignedPeople && contract.assignedPeople.length > 0) {
-        contract.assignedPeople.forEach(personId => {
-            const checkbox = document.querySelector(`.person-checkbox[value="${personId}"]`);
-            if (checkbox) checkbox.checked = true;
-        });
+        // Wait for DOM to be ready
+        setTimeout(() => {
+            contract.assignedPeople.forEach(personId => {
+                const checkbox = document.querySelector(`.person-checkbox[value="${personId}"]`);
+                if (checkbox) checkbox.checked = true;
+            });
+            // Update validation warnings after checkboxes are marked
+            updateFormValidationWarnings();
+        }, 100);
     }
 
     document.getElementById('modal-title').textContent = 'Editar Contrato';
@@ -506,6 +511,8 @@ function handleContractSubmit(e) {
 
     const checkboxes = document.querySelectorAll('.person-checkbox:checked');
     const assignedPeople = Array.from(checkboxes).map(cb => cb.value);
+    
+    const squadTagValue = document.getElementById('squad-tag').value;
 
     const formData = {
         client: document.getElementById('client').value,
@@ -513,7 +520,7 @@ function handleContractSubmit(e) {
         deliverables: deliverables,
         notes: document.getElementById('notes').value,
         assignedPeople: assignedPeople,
-        squadTag: document.getElementById('squad-tag').value || null
+        squadTag: squadTagValue && squadTagValue !== '' ? squadTagValue : null
     };
 
     try {

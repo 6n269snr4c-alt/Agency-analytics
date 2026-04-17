@@ -119,6 +119,9 @@ export function renderContractsPage() {
                         <textarea class="form-textarea" id="notes"></textarea>
                     </div>
 
+                    <!-- Validation Warnings -->
+                    <div id="form-validation-warnings"></div>
+
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" onclick="window.closeContractModal()">Cancelar</button>
                         <button type="submit" class="btn btn-primary">Salvar</button>
@@ -160,13 +163,15 @@ function renderContractsList(contracts) {
         const roi = analyticsService.getContractROI(contract.id);
         const assignedPeople = contract.assignedPeople || [];
         const squad = contract.squadTag ? squadService.getSquad(contract.squadTag) : null;
+        const warnings = validateContractConsistency(contract);
         
         return `
-            <div class="list-item">
+            <div class="list-item ${warnings.length > 0 ? 'has-warnings' : ''}">
                 <div class="list-item-header">
                     <div class="list-item-title">
                         ${contract.client}
                         ${squad ? `<span class="badge badge-success" style="margin-left: 0.5rem; font-size: 0.85rem;">${squad.name}</span>` : ''}
+                        ${warnings.length > 0 ? `<span class="badge badge-error" style="margin-left: 0.5rem; font-size: 0.85rem;">⚠️ ${warnings.length} ${warnings.length === 1 ? 'alerta' : 'alertas'}</span>` : ''}
                     </div>
                     <div class="list-item-actions" style="display: flex; gap: 0.5rem;">
                         <button class="btn btn-small btn-secondary" onclick="window.showContractBreakdown('${contract.id}')" style="display: flex; align-items: center; gap: 0.5rem;">
@@ -177,6 +182,16 @@ function renderContractsList(contracts) {
                     </div>
                 </div>
                 <div class="list-item-body">
+                    <!-- Warnings -->
+                    ${warnings.length > 0 ? `
+                        <div style="background: var(--error); border: 2px solid var(--error); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; color: white;">
+                            <div style="font-weight: bold; margin-bottom: 0.5rem;">⚠️ Inconsistências Detectadas:</div>
+                            <ul style="margin: 0; padding-left: 1.5rem;">
+                                ${warnings.map(w => `<li style="margin: 0.25rem 0;">${w.message}</li>`).join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
+
                     <!-- Main Metrics Row -->
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
                         <div>
@@ -282,6 +297,14 @@ function renderTeamAssignment(people) {
 function attachContractHandlers() {
     const form = document.getElementById('contract-form');
     form.addEventListener('submit', handleContractSubmit);
+    
+    // Add listeners to person checkboxes for real-time validation
+    setTimeout(() => {
+        const checkboxes = document.querySelectorAll('.person-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', updateFormValidationWarnings);
+        });
+    }, 100);
 
     // Global functions
     window.openContractModal = openContractModal;
@@ -394,6 +417,54 @@ function filterContracts() {
     });
     
     document.getElementById('contracts-list').innerHTML = renderContractsList(filtered);
+}
+
+function validateContractConsistency(contract) {
+    const warnings = [];
+    
+    // Get all roles needed for deliverables
+    const rolesNeeded = new Set();
+    if (contract.deliverables) {
+        Object.keys(contract.deliverables).forEach(typeId => {
+            const type = deliverableTypeService.getDeliverableType(typeId);
+            if (type && type.roles) {
+                type.roles.forEach(role => rolesNeeded.add(role));
+            }
+        });
+    }
+    
+    // Get all roles assigned to contract
+    const rolesAssigned = new Set();
+    if (contract.assignedPeople) {
+        contract.assignedPeople.forEach(personId => {
+            const person = personService.getPerson(personId);
+            if (person) rolesAssigned.add(person.role);
+        });
+    }
+    
+    // Check 1: Missing roles for deliverables
+    rolesNeeded.forEach(role => {
+        if (!rolesAssigned.has(role)) {
+            warnings.push({
+                type: 'missing_person',
+                role: role,
+                message: `Falta ${role} na equipe`
+            });
+        }
+    });
+    
+    // Check 2: People without relevant deliverables
+    rolesAssigned.forEach(role => {
+        if (!rolesNeeded.has(role)) {
+            warnings.push({
+                type: 'unused_person',
+                role: role,
+                message: `${role} sem entregável correspondente`
+            });
+        }
+    });
+    
+    return warnings;
 }
 
 function editContract(id) {
@@ -516,6 +587,60 @@ function renderDeliverables() {
             }).join('')}
         </div>
     `;
+    
+    // Show validation warnings in modal
+    updateFormValidationWarnings();
+}
+
+function updateFormValidationWarnings() {
+    const warningsContainer = document.getElementById('form-validation-warnings');
+    if (!warningsContainer) return;
+    
+    // Get selected people roles
+    const selectedPeople = Array.from(document.querySelectorAll('.person-checkbox:checked')).map(cb => cb.value);
+    const rolesAssigned = new Set();
+    selectedPeople.forEach(personId => {
+        const person = personService.getPerson(personId);
+        if (person) rolesAssigned.add(person.role);
+    });
+    
+    // Get roles needed for deliverables
+    const rolesNeeded = new Set();
+    Object.keys(deliverables).forEach(typeId => {
+        const type = deliverableTypeService.getDeliverableType(typeId);
+        if (type && type.roles) {
+            type.roles.forEach(role => rolesNeeded.add(role));
+        }
+    });
+    
+    const warnings = [];
+    
+    // Check missing roles
+    rolesNeeded.forEach(role => {
+        if (!rolesAssigned.has(role)) {
+            warnings.push(`⚠️ Falta <strong>${role}</strong> na equipe`);
+        }
+    });
+    
+    // Check unused people
+    rolesAssigned.forEach(role => {
+        if (!rolesNeeded.has(role)) {
+            warnings.push(`⚠️ <strong>${role}</strong> selecionado mas sem entregável correspondente`);
+        }
+    });
+    
+    if (warnings.length > 0) {
+        warningsContainer.innerHTML = `
+            <div style="background: rgba(255, 59, 48, 0.1); border: 2px solid var(--error); border-radius: 8px; padding: 1rem; margin-top: 1rem;">
+                <div style="font-weight: bold; color: var(--error); margin-bottom: 0.5rem;">⚠️ Atenção:</div>
+                <ul style="margin: 0; padding-left: 1.5rem; color: var(--error);">
+                    ${warnings.map(w => `<li style="margin: 0.25rem 0;">${w}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    } else {
+        warningsContainer.innerHTML = '';
+    }
 }
 
 function exportContracts() {

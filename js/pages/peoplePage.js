@@ -103,12 +103,13 @@ function renderPeopleList(people) {
                 
                 <div style="background: var(--bg-darker); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
                     <!-- Table Header -->
-                    <div style="display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr 1.5fr auto; gap: 1rem; padding: 1rem; background: var(--bg); border-bottom: 2px solid var(--border); font-weight: bold; font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase;">
+                    <div style="display: grid; grid-template-columns: 2fr 1.2fr 0.8fr 0.8fr 1.2fr 1.2fr auto; gap: 1rem; padding: 1rem; background: var(--bg); border-bottom: 2px solid var(--border); font-weight: bold; font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase;">
                         <div>Nome</div>
                         <div>Salário</div>
-                        <div>Contratos</div>
-                        <div>Entregas</div>
-                        <div>Custo/Entrega</div>
+                        <div>Contr.</div>
+                        <div>Entreg.</div>
+                        <div>Custo/Ent</div>
+                        <div>Ticket Médio</div>
                         <div>Ações</div>
                     </div>
                     
@@ -117,20 +118,44 @@ function renderPeopleList(people) {
                         const contracts = analyticsService.getPersonContracts(person.id);
                         const totalDeliverables = analyticsService.getPersonTotalDeliverables(person.id);
                         const costPerDeliverable = analyticsService.getPersonCostPerDeliverable(person.id);
+                        const avgTicket = analyticsService.getPersonAverageTicket(person.id);
+                        const breakdown = analyticsService.getPersonDeliverablesBreakdown(person.id);
 
                         return `
-                            <div style="display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr 1.5fr auto; gap: 1rem; padding: 1rem; border-bottom: 1px solid var(--border); align-items: center;">
-                                <div style="font-weight: 500;">${person.name}</div>
-                                <div>R$ ${formatCurrency(person.salary)}</div>
-                                <div>${contracts.length}</div>
-                                <div>${totalDeliverables}</div>
-                                <div style="color: var(--primary); font-weight: bold;">
-                                    ${costPerDeliverable > 0 ? `R$ ${formatCurrency(costPerDeliverable)}` : '-'}
+                            <div style="border-bottom: 1px solid var(--border);">
+                                <div style="display: grid; grid-template-columns: 2fr 1.2fr 0.8fr 0.8fr 1.2fr 1.2fr auto; gap: 1rem; padding: 1rem; align-items: center;">
+                                    <div style="font-weight: 500;">${person.name}</div>
+                                    <div>R$ ${formatCurrency(person.salary)}</div>
+                                    <div>${contracts.length}</div>
+                                    <div>${totalDeliverables}</div>
+                                    <div style="color: var(--primary); font-weight: bold;">
+                                        ${costPerDeliverable > 0 ? `R$ ${formatCurrency(costPerDeliverable)}` : '-'}
+                                    </div>
+                                    <div style="color: var(--success); font-weight: bold;">
+                                        ${avgTicket > 0 ? `R$ ${formatCurrency(avgTicket)}` : '-'}
+                                    </div>
+                                    <div style="display: flex; gap: 0.5rem;">
+                                        <button class="btn btn-small btn-secondary" onclick="window.editPerson('${person.id}')">✏️</button>
+                                        <button class="btn btn-small btn-danger" onclick="window.deletePerson('${person.id}')">🗑️</button>
+                                    </div>
                                 </div>
-                                <div style="display: flex; gap: 0.5rem;">
-                                    <button class="btn btn-small btn-secondary" onclick="window.editPerson('${person.id}')">✏️</button>
-                                    <button class="btn btn-small btn-danger" onclick="window.deletePerson('${person.id}')">🗑️</button>
-                                </div>
+                                
+                                <!-- Expandable Breakdown -->
+                                ${Object.keys(breakdown.byType).length > 0 ? `
+                                    <details style="padding: 0 1rem 1rem 1rem;">
+                                        <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.9rem; padding: 0.5rem; user-select: none;">
+                                            📊 Ver breakdown de entregas
+                                        </summary>
+                                        <div style="margin-top: 0.5rem; padding: 1rem; background: var(--bg); border-radius: 4px; display: grid; gap: 0.5rem;">
+                                            ${Object.entries(breakdown.byType).map(([type, qty]) => `
+                                                <div style="display: flex; justify-content: space-between;">
+                                                    <span>${type}</span>
+                                                    <strong style="color: var(--primary);">${qty}</strong>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </details>
+                                ` : ''}
                             </div>
                         `;
                     }).join('')}

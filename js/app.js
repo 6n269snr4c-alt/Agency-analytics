@@ -7,6 +7,7 @@ import { renderContractsPage } from './pages/contractsPage.js';
 import { renderPeoplePage } from './pages/peoplePage.js';
 import { renderSquadsPage } from './pages/squadsPage.js';
 import { renderComparisonPage } from './pages/comparisonPage.js';
+import { renderSquadComparisonPage } from './pages/squadComparisonPage.js';
 import { renderDeliverableTypesPage } from './pages/deliverableTypesPage.js';
 import { renderValidationPage } from './pages/validationPage.js';
 
@@ -20,7 +21,7 @@ function init() {
     router.register('/contracts', renderContractsPage);
     router.register('/people', renderPeoplePage);
     router.register('/squads', renderSquadsPage);
-    router.register('/comparison', renderComparisonPage);
+    router.register('/comparison', renderSquadComparisonPage); // Nova comparação de squads
     router.register('/deliverables', renderDeliverableTypesPage);
     router.register('/validation', renderValidationPage);
 

@@ -45,6 +45,30 @@ export function renderSquadsPage() {
                     </div>
 
                     <div class="form-group">
+                        <label class="form-label">Ícone</label>
+                        <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 0.5rem;">
+                            Escolha um emoji para representar o squad
+                        </p>
+                        <select class="form-select" id="icon">
+                            <option value="">Nenhum</option>
+                            <option value="🦁">🦁 Leão</option>
+                            <option value="🦅">🦅 Águia</option>
+                            <option value="🐯">🐯 Tigre</option>
+                            <option value="🐺">🐺 Lobo</option>
+                            <option value="🦈">🦈 Tubarão</option>
+                            <option value="🐉">🐉 Dragão</option>
+                            <option value="🦊">🦊 Raposa</option>
+                            <option value="🐆">🐆 Leopardo</option>
+                            <option value="🦎">🦎 Lagarto</option>
+                            <option value="⚡">⚡ Raio</option>
+                            <option value="🔥">🔥 Fogo</option>
+                            <option value="💎">💎 Diamante</option>
+                            <option value="🚀">🚀 Foguete</option>
+                            <option value="⭐">⭐ Estrela</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
                         <label class="form-label">Descrição</label>
                         <textarea class="form-textarea" id="description"></textarea>
                     </div>
@@ -98,6 +122,7 @@ function renderSquadsList(squads) {
                 <div class="list-item-header">
                     <div>
                         <div class="list-item-title">
+                            ${squad.icon ? `<span style="font-size: 1.5rem; margin-right: 0.5rem;">${squad.icon}</span>` : ''}
                             ${squad.name}
                             ${head ? `<span class="badge badge-success" style="margin-left: 0.5rem;">Head: ${head.name}</span>` : ''}
                         </div>
@@ -204,6 +229,7 @@ function editSquad(id) {
     const squad = squadService.getSquad(id);
     
     document.getElementById('name').value = squad.name;
+    document.getElementById('icon').value = squad.icon || '';
     document.getElementById('description').value = squad.description || '';
 
     renderHeadSelect(squad.headId);
@@ -268,6 +294,7 @@ function handleSquadSubmit(e) {
 
     const formData = {
         name: document.getElementById('name').value,
+        icon: document.getElementById('icon').value || null,
         description: document.getElementById('description').value,
         headId: headId || null,
         members: members

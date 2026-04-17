@@ -170,7 +170,7 @@ function renderContractsList(contracts) {
                 <div class="list-item-header">
                     <div class="list-item-title">
                         ${contract.client}
-                        ${squad ? `<span class="badge badge-success" style="margin-left: 0.5rem; font-size: 0.85rem;">${squad.name}</span>` : ''}
+                        ${squad ? `<span class="badge badge-success" style="margin-left: 0.5rem; font-size: 0.85rem;">${squad.icon ? squad.icon + ' ' : ''}${squad.name}</span>` : ''}
                         ${warnings.length > 0 ? `<span class="badge badge-error" style="margin-left: 0.5rem; font-size: 0.85rem;">⚠️ ${warnings.length} ${warnings.length === 1 ? 'alerta' : 'alertas'}</span>` : ''}
                     </div>
                     <div class="list-item-actions" style="display: flex; gap: 0.5rem;">

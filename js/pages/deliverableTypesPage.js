@@ -46,7 +46,7 @@ export function renderDeliverableTypesPage() {
                     <div class="form-group">
                         <label class="form-label">Cargos Envolvidos * (selecione todos que participam)</label>
                         <div style="background: var(--bg-darker); border: 1px solid var(--border); border-radius: 4px; padding: 1rem; max-height: 300px; overflow-y: auto;">
-                            ${ROLES.map(role => `
+                            ${ROLES.filter(role => role !== 'Head Executivo').map(role => `
                                 <label style="display: block; margin: 0.75rem 0; cursor: pointer;">
                                     <input type="checkbox" value="${role}" class="role-checkbox" style="margin-right: 0.5rem;">
                                     <strong>${role}</strong>
@@ -54,7 +54,8 @@ export function renderDeliverableTypesPage() {
                             `).join('')}
                         </div>
                         <small style="color: var(--text-secondary); display: block; margin-top: 0.5rem;">
-                            Exemplo: "Criativo Estático" = Designer + Copywriter
+                            Exemplo: "Criativo Estático" = Designer + Copywriter<br>
+                            <em>Heads não fazem entregas específicas - custo é calculado por entregas totais do squad</em>
                         </small>
                     </div>
 

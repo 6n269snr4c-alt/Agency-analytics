@@ -181,6 +181,7 @@ class AnalyticsService {
 
         const revenue = contract.value;
         let cost = 0;
+        const costBreakdown = []; // For detailed breakdown
 
         // Calculate cost based on deliverables per person
         if (contract.assignedPeople && contract.assignedPeople.length > 0) {
@@ -211,18 +212,63 @@ class AnalyticsService {
                 // Cost = deliverables in this contract × cost per deliverable
                 const personCostInContract = personDeliverablesInContract * costPerDeliverable;
                 cost += personCostInContract;
+
+                // Add to breakdown
+                if (personDeliverablesInContract > 0) {
+                    costBreakdown.push({
+                        personId: person.id,
+                        name: person.name,
+                        role: person.role,
+                        costPerDeliverable: costPerDeliverable,
+                        deliverablesInContract: personDeliverablesInContract,
+                        totalCost: personCostInContract
+                    });
+                }
             });
         }
 
-        // Add prorated head cost if contract has squad tag
+        // Add Head cost if contract has squad tag
+        // Head cost = (total deliverables in contract) × (head salary / total squad deliverables)
         if (contract.squadTag) {
             const squad = storage.getSquadById(contract.squadTag);
             if (squad && squad.headId) {
-                const squadContracts = this.getSquadContracts(contract.squadTag);
                 const head = storage.getPersonById(squad.headId);
-                if (head && squadContracts.length > 0) {
-                    const headCostPerContract = head.salary / squadContracts.length;
-                    cost += headCostPerContract;
+                if (head) {
+                    // Calculate total deliverables in this squad
+                    const squadContracts = this.getSquadContracts(contract.squadTag);
+                    let totalSquadDeliverables = 0;
+                    
+                    squadContracts.forEach(squadContract => {
+                        if (squadContract.deliverables) {
+                            totalSquadDeliverables += Object.values(squadContract.deliverables)
+                                .reduce((sum, qty) => sum + qty, 0);
+                        }
+                    });
+
+                    if (totalSquadDeliverables > 0) {
+                        // Head cost per deliverable
+                        const headCostPerDeliverable = head.salary / totalSquadDeliverables;
+                        
+                        // Total deliverables in THIS contract
+                        const contractTotalDeliverables = contract.deliverables 
+                            ? Object.values(contract.deliverables).reduce((sum, qty) => sum + qty, 0)
+                            : 0;
+                        
+                        const headCostInContract = contractTotalDeliverables * headCostPerDeliverable;
+                        cost += headCostInContract;
+
+                        // Add to breakdown
+                        if (contractTotalDeliverables > 0) {
+                            costBreakdown.push({
+                                personId: head.id,
+                                name: head.name,
+                                role: head.role,
+                                costPerDeliverable: headCostPerDeliverable,
+                                deliverablesInContract: contractTotalDeliverables,
+                                totalCost: headCostInContract
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -231,7 +277,8 @@ class AnalyticsService {
             revenue,
             cost,
             profit: revenue - cost,
-            margin: revenue > 0 ? ((revenue - cost) / revenue) * 100 : 0
+            margin: revenue > 0 ? ((revenue - cost) / revenue) * 100 : 0,
+            costBreakdown // Include breakdown for popup
         };
     }
 

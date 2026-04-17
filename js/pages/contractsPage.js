@@ -116,6 +116,19 @@ export function renderContractsPage() {
                 </form>
             </div>
         </div>
+
+        <!-- Breakdown Modal -->
+        <div id="breakdown-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="breakdown-title">Detalhamento de Custo</h2>
+                    <button class="modal-close" onclick="window.closeBreakdownModal()">&times;</button>
+                </div>
+                <div id="breakdown-content" style="padding: 1.5rem;">
+                    <!-- Content populated by JS -->
+                </div>
+            </div>
+        </div>
     `;
 
     attachContractHandlers();
@@ -169,6 +182,11 @@ function renderContractsList(contracts) {
                                 <strong>Equipe:</strong> ${assignedPeople.length} ${assignedPeople.length === 1 ? 'pessoa' : 'pessoas'}
                             </div>
                         ` : ''}
+                        <div class="list-item-meta-item">
+                            <button class="btn btn-small" onclick="window.showContractBreakdown('${contract.id}')" style="background: var(--primary); color: white;">
+                                📊 Ver Detalhes
+                            </button>
+                        </div>
                     </div>
                     ${assignedPeople.length > 0 ? `
                         <div style="margin-top: 0.5rem;">
@@ -254,6 +272,8 @@ function attachContractHandlers() {
     window.addDeliverable = addDeliverable;
     window.removeDeliverable = removeDeliverable;
     window.exportContracts = exportContracts;
+    window.showContractBreakdown = showContractBreakdown;
+    window.closeBreakdownModal = closeBreakdownModal;
 }
 
 function openContractModal() {
@@ -269,6 +289,77 @@ function closeContractModal() {
     document.getElementById('contract-modal').classList.remove('active');
     currentEditId = null;
     deliverables = {};
+}
+
+function showContractBreakdown(contractId) {
+    const contract = contractService.getContract(contractId);
+    const roi = analyticsService.getContractROI(contractId);
+    
+    document.getElementById('breakdown-title').textContent = `${contract.client} - Detalhamento de Custo`;
+    
+    const breakdownContent = document.getElementById('breakdown-content');
+    
+    breakdownContent.innerHTML = `
+        <div style="background: var(--bg-darker); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem;">
+            <h3 style="margin: 0 0 1rem 0; color: var(--primary);">Receita</h3>
+            <div style="font-size: 1.5rem; font-weight: bold;">R$ ${formatCurrency(contract.value)}</div>
+        </div>
+
+        <div style="background: var(--bg-darker); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem;">
+            <h3 style="margin: 0 0 1rem 0; color: var(--primary);">Custo Detalhado</h3>
+            
+            ${roi.costBreakdown && roi.costBreakdown.length > 0 ? `
+                <div style="display: grid; gap: 1rem;">
+                    ${roi.costBreakdown.map(item => `
+                        <div style="padding: 1rem; background: var(--bg); border: 1px solid var(--border); border-radius: 4px;">
+                            <div style="font-weight: bold; margin-bottom: 0.5rem;">
+                                ${item.name} (${item.role})
+                            </div>
+                            <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.5rem;">
+                                R$ ${formatCurrency(item.costPerDeliverable)}/entrega × ${item.deliverablesInContract} entregas
+                            </div>
+                            <div style="font-size: 1.2rem; color: var(--primary);">
+                                = R$ ${formatCurrency(item.totalCost)}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 2px solid var(--border);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong style="font-size: 1.1rem;">CUSTO TOTAL:</strong>
+                        <strong style="font-size: 1.3rem; color: var(--primary);">R$ ${formatCurrency(roi.cost)}</strong>
+                    </div>
+                </div>
+            ` : `
+                <p style="color: var(--text-secondary);">Sem custos registrados</p>
+            `}
+        </div>
+
+        <div style="background: var(--bg-darker); border: 1px solid ${roi.profit > 0 ? 'var(--success)' : 'var(--error)'}; border-radius: 8px; padding: 1.5rem;">
+            <h3 style="margin: 0 0 1rem 0; color: ${roi.profit > 0 ? 'var(--success)' : 'var(--error)'};">
+                ${roi.profit > 0 ? '✅ Lucro' : '⚠️ Prejuízo'}
+            </h3>
+            <div style="font-size: 1.8rem; font-weight: bold; color: ${roi.profit > 0 ? 'var(--success)' : 'var(--error)'};">
+                R$ ${formatCurrency(roi.profit)}
+            </div>
+            <div style="margin-top: 0.5rem; font-size: 1.1rem; color: var(--text-secondary);">
+                Margem: ${roi.margin.toFixed(1)}%
+            </div>
+        </div>
+        
+        <div style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-darker); border-radius: 8px;">
+            <small style="color: var(--text-secondary);">
+                💡 <strong>Prova Real:</strong> A soma de todos os custos dos contratos deve bater com a folha de pagamento total da empresa.
+            </small>
+        </div>
+    `;
+    
+    document.getElementById('breakdown-modal').classList.add('active');
+}
+
+function closeBreakdownModal() {
+    document.getElementById('breakdown-modal').classList.remove('active');
 }
 
 function editContract(id) {

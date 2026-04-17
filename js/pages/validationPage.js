@@ -175,13 +175,20 @@ function formatCurrency(value) {
 
 // Backup/Restore functions
 function exportBackup() {
-    const data = localStorage.getItem('agency-analytics-data');
-    if (!data) {
+    const backup = {
+        contracts: localStorage.getItem('agency_contracts'),
+        people: localStorage.getItem('agency_people'),
+        squads: localStorage.getItem('agency_squads'),
+        deliverableTypes: localStorage.getItem('agency_deliverable_types'),
+        timestamp: new Date().toISOString()
+    };
+    
+    if (!backup.contracts && !backup.people && !backup.squads && !backup.deliverableTypes) {
         alert('Não há dados para fazer backup');
         return;
     }
     
-    const blob = new Blob([data], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     const timestamp = new Date().toISOString().split('T')[0];
@@ -206,14 +213,19 @@ function handleBackupFile(event) {
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
-                const data = e.target.result;
-                // Validate JSON
-                JSON.parse(data);
-                localStorage.setItem('agency-analytics-data', data);
+                const backup = JSON.parse(e.target.result);
+                
+                // Restore all data
+                if (backup.contracts) localStorage.setItem('agency_contracts', backup.contracts);
+                if (backup.people) localStorage.setItem('agency_people', backup.people);
+                if (backup.squads) localStorage.setItem('agency_squads', backup.squads);
+                if (backup.deliverableTypes) localStorage.setItem('agency_deliverable_types', backup.deliverableTypes);
+                
                 alert('✅ Backup restaurado com sucesso! A página será recarregada.');
                 window.location.reload();
             } catch (error) {
                 alert('❌ Erro ao restaurar backup: arquivo inválido');
+                console.error(error);
             }
         };
         reader.readAsText(file);

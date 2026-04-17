@@ -1,6 +1,7 @@
 // deliverableTypesPage.js - Deliverable types management page
 
 import deliverableTypeService from '../services/deliverableTypeService.js';
+import ROLES from '../utils/roles.js';
 
 let currentEditId = null;
 let selectedRoles = [];
@@ -9,7 +10,6 @@ export function renderDeliverableTypesPage() {
     const contentEl = document.getElementById('content');
     
     const types = deliverableTypeService.getAllDeliverableTypes();
-    const availableRoles = deliverableTypeService.getAvailableRoles();
 
     contentEl.innerHTML = `
         <div class="page-header">
@@ -46,7 +46,7 @@ export function renderDeliverableTypesPage() {
                     <div class="form-group">
                         <label class="form-label">Cargos Envolvidos * (selecione todos que participam)</label>
                         <div style="background: var(--bg-darker); border: 1px solid var(--border); border-radius: 4px; padding: 1rem; max-height: 300px; overflow-y: auto;">
-                            ${availableRoles.map(role => `
+                            ${ROLES.map(role => `
                                 <label style="display: block; margin: 0.75rem 0; cursor: pointer;">
                                     <input type="checkbox" value="${role}" class="role-checkbox" style="margin-right: 0.5rem;">
                                     <strong>${role}</strong>

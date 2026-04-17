@@ -2,6 +2,7 @@
 
 import personService from '../services/personService.js';
 import analyticsService from '../services/analyticsService.js';
+import ROLES from '../utils/roles.js';
 
 let currentEditId = null;
 
@@ -45,15 +46,10 @@ export function renderPeoplePage() {
 
                     <div class="form-group">
                         <label class="form-label">Cargo *</label>
-                        <input type="text" class="form-input" id="role" list="role-suggestions" required>
-                        <datalist id="role-suggestions">
-                            ${roles.map(role => `<option value="${role}">`).join('')}
-                            <option value="Designer">
-                            <option value="Copy">
-                            <option value="Head Executivo">
-                            <option value="Gestor de Tráfego">
-                            <option value="Editor de Vídeo">
-                        </datalist>
+                        <select class="form-select" id="role" required>
+                            <option value="">Selecione um cargo</option>
+                            ${ROLES.map(role => `<option value="${role}">${role}</option>`).join('')}
+                        </select>
                     </div>
 
                     <div class="form-group">

@@ -174,7 +174,7 @@ class AnalyticsService {
         return breakdown;
     }
 
-    // Calculate ROI for a contract (including prorated head cost)
+    // Calculate ROI for a contract (using cost per deliverable)
     getContractROI(contractId) {
         const contract = storage.getContractById(contractId);
         if (!contract) return null;
@@ -182,11 +182,36 @@ class AnalyticsService {
         const revenue = contract.value;
         let cost = 0;
 
-        // Calculate cost based on assigned people
+        // Calculate cost based on deliverables per person
         if (contract.assignedPeople && contract.assignedPeople.length > 0) {
-            cost = contract.assignedPeople.reduce((total, personId) => {
-                return total + this.getPersonCost(personId);
-            }, 0);
+            contract.assignedPeople.forEach(personId => {
+                const person = storage.getPersonById(personId);
+                if (!person) return;
+
+                // Count how many deliverables THIS person has in THIS contract
+                let personDeliverablesInContract = 0;
+                
+                if (contract.deliverables) {
+                    Object.entries(contract.deliverables).forEach(([typeId, quantity]) => {
+                        const type = storage.getDeliverableTypeById(typeId);
+                        
+                        // Only count if person's role is involved in this deliverable type
+                        if (type && type.roles.includes(person.role)) {
+                            personDeliverablesInContract += quantity;
+                        }
+                    });
+                }
+
+                // Calculate cost per deliverable for this person
+                const totalPersonDeliverables = this.getPersonTotalDeliverables(personId);
+                const costPerDeliverable = totalPersonDeliverables > 0 
+                    ? person.salary / totalPersonDeliverables 
+                    : 0;
+
+                // Cost = deliverables in this contract × cost per deliverable
+                const personCostInContract = personDeliverablesInContract * costPerDeliverable;
+                cost += personCostInContract;
+            });
         }
 
         // Add prorated head cost if contract has squad tag

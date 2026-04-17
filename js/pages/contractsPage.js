@@ -33,6 +33,16 @@ export function renderContractsPage() {
                     📥 Exportar Dados
                 </button>
             </div>
+            <div class="action-bar-right">
+                <input 
+                    type="text" 
+                    class="form-input" 
+                    id="contract-search" 
+                    placeholder="🔍 Buscar contrato..."
+                    style="max-width: 300px;"
+                    oninput="window.filterContracts()"
+                >
+            </div>
         </div>
 
         <!-- Contracts List -->
@@ -183,8 +193,9 @@ function renderContractsList(contracts) {
                             </div>
                         ` : ''}
                         <div class="list-item-meta-item">
-                            <button class="btn btn-small" onclick="window.showContractBreakdown('${contract.id}')" style="background: var(--primary); color: white;">
-                                📊 Ver Detalhes
+                            <button class="btn btn-small btn-secondary" onclick="window.showContractBreakdown('${contract.id}')" style="display: flex; align-items: center; gap: 0.5rem;">
+                                <span>📊</span>
+                                <span>Detalhes</span>
                             </button>
                         </div>
                     </div>
@@ -274,6 +285,7 @@ function attachContractHandlers() {
     window.exportContracts = exportContracts;
     window.showContractBreakdown = showContractBreakdown;
     window.closeBreakdownModal = closeBreakdownModal;
+    window.filterContracts = filterContracts;
 }
 
 function openContractModal() {
@@ -347,12 +359,6 @@ function showContractBreakdown(contractId) {
                 Margem: ${roi.margin.toFixed(1)}%
             </div>
         </div>
-        
-        <div style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-darker); border-radius: 8px;">
-            <small style="color: var(--text-secondary);">
-                💡 <strong>Prova Real:</strong> A soma de todos os custos dos contratos deve bater com a folha de pagamento total da empresa.
-            </small>
-        </div>
     `;
     
     document.getElementById('breakdown-modal').classList.add('active');
@@ -360,6 +366,26 @@ function showContractBreakdown(contractId) {
 
 function closeBreakdownModal() {
     document.getElementById('breakdown-modal').classList.remove('active');
+}
+
+function filterContracts() {
+    const searchTerm = document.getElementById('contract-search').value.toLowerCase();
+    const contracts = contractService.getAllContracts();
+    
+    const filtered = contracts.filter(contract => {
+        const client = contract.client.toLowerCase();
+        const squad = contract.squadTag ? squadService.getSquad(contract.squadTag)?.name.toLowerCase() : '';
+        const people = contract.assignedPeople?.map(id => {
+            const person = personService.getPerson(id);
+            return person ? person.name.toLowerCase() : '';
+        }).join(' ') || '';
+        
+        return client.includes(searchTerm) || 
+               squad.includes(searchTerm) || 
+               people.includes(searchTerm);
+    });
+    
+    document.getElementById('contracts-list').innerHTML = renderContractsList(filtered);
 }
 
 function editContract(id) {

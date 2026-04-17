@@ -15,6 +15,7 @@ export function renderNavbar() {
                 <li><a href="#/people" data-route="/people">Pessoas</a></li>
                 <li><a href="#/squads" data-route="/squads">Squads</a></li>
                 <li><a href="#/comparison" data-route="/comparison">Comparação</a></li>
+                <li><a href="#/validation" data-route="/validation">Validação</a></li>
             </ul>
         </div>
     `;

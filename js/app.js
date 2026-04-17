@@ -8,6 +8,7 @@ import { renderPeoplePage } from './pages/peoplePage.js';
 import { renderSquadsPage } from './pages/squadsPage.js';
 import { renderComparisonPage } from './pages/comparisonPage.js';
 import { renderDeliverableTypesPage } from './pages/deliverableTypesPage.js';
+import { renderValidationPage } from './pages/validationPage.js';
 
 // Initialize app
 function init() {
@@ -21,6 +22,7 @@ function init() {
     router.register('/squads', renderSquadsPage);
     router.register('/comparison', renderComparisonPage);
     router.register('/deliverables', renderDeliverableTypesPage);
+    router.register('/validation', renderValidationPage);
 
     // Initialize router
     router.init();

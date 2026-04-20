@@ -551,16 +551,21 @@ class AnalyticsService {
     // Get deliverables breakdown
     getDeliverablesBreakdown() {
         const contracts = storage.getContracts();
+        const deliverableTypes = storage.getDeliverableTypes();
         const breakdown = {};
         
         contracts.forEach(contract => {
             if (contract.deliverables) {
-                Object.entries(contract.deliverables).forEach(([type, quantity]) => {
-                    if (!breakdown[type]) {
-                        breakdown[type] = { type, total: 0, contracts: 0 };
+                Object.entries(contract.deliverables).forEach(([typeId, quantity]) => {
+                    // Get the actual type name
+                    const deliverableType = deliverableTypes.find(dt => dt.id === typeId);
+                    const typeName = deliverableType ? deliverableType.name : 'Tipo removido';
+                    
+                    if (!breakdown[typeName]) {
+                        breakdown[typeName] = { type: typeName, total: 0, contracts: 0 };
                     }
-                    breakdown[type].total += quantity;
-                    breakdown[type].contracts += 1;
+                    breakdown[typeName].total += quantity;
+                    breakdown[typeName].contracts += 1;
                 });
             }
         });

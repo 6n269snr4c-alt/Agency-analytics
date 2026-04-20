@@ -110,21 +110,35 @@ function renderOverallStats(roi) {
     const profitClass = roi.profit > 0 ? 'positive' : 'negative';
 
     return `
-        <div class="stat-card">
-            <div class="stat-value">R$ ${formatCurrency(roi.revenue)}</div>
-            <div class="stat-label">Receita Total</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">R$ ${formatCurrency(roi.cost)}</div>
-            <div class="stat-label">Custo Total</div>
-        </div>
-        <div class="stat-card ${profitClass}">
-            <div class="stat-value">R$ ${formatCurrency(roi.profit)}</div>
-            <div class="stat-label">Lucro</div>
-        </div>
-        <div class="stat-card ${marginClass}">
-            <div class="stat-value">${roi.margin.toFixed(1)}%</div>
-            <div class="stat-label">Margem</div>
+        <div style="display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 1.5rem; align-items: center;">
+            <!-- Receita -->
+            <div class="stat-card">
+                <div class="stat-value">R$ ${formatCurrency(roi.revenue)}</div>
+                <div class="stat-label">Receita Total</div>
+            </div>
+            
+            <!-- Operador Menos -->
+            <div style="font-size: 3rem; font-weight: bold; color: var(--text-secondary);">−</div>
+            
+            <!-- Custo -->
+            <div class="stat-card">
+                <div class="stat-value">R$ ${formatCurrency(roi.cost)}</div>
+                <div class="stat-label">Custo Total</div>
+            </div>
+            
+            <!-- Operador Igual -->
+            <div style="font-size: 3rem; font-weight: bold; color: var(--text-secondary);">=</div>
+            
+            <!-- Lucro -->
+            <div class="stat-card ${profitClass}">
+                <div class="stat-value">R$ ${formatCurrency(roi.profit)}</div>
+                <div class="stat-label">Lucro</div>
+                <div class="stat-label" style="margin-top: 0.25rem; font-size: 0.9rem;">
+                    <span class="badge ${marginClass}" style="font-size: 1rem; padding: 0.5rem 1rem;">
+                        ${roi.margin.toFixed(1)}% margem
+                    </span>
+                </div>
+            </div>
         </div>
     `;
 }

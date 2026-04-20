@@ -4,6 +4,9 @@ import contractService from '../services/contractService.js';
 import personService from '../services/personService.js';
 import analyticsService from '../services/analyticsService.js';
 
+let validationSortColumn = 'client';
+let validationSortDirection = 'asc';
+
 export function renderValidationPage() {
     const contentEl = document.getElementById('content');
     
@@ -19,8 +22,23 @@ export function renderValidationPage() {
         totalContractCost += roi.cost;
         contractBreakdown.push({
             client: contract.client,
-            cost: roi.cost
+            cost: roi.cost,
+            value: contract.value,
+            profit: roi.profit
         });
+    });
+    
+    // Sort breakdown
+    contractBreakdown.sort((a, b) => {
+        let comparison = 0;
+        
+        if (validationSortColumn === 'client') {
+            comparison = a.client.toLowerCase().localeCompare(b.client.toLowerCase());
+        } else {
+            comparison = a[validationSortColumn] - b[validationSortColumn];
+        }
+        
+        return validationSortDirection === 'asc' ? comparison : -comparison;
     });
     
     // Calculate total payroll
@@ -31,6 +49,9 @@ export function renderValidationPage() {
     const differencePercentage = totalPayroll > 0 ? (difference / totalPayroll) * 100 : 0;
     
     const isValid = Math.abs(difference) < 0.01; // tolerance of 1 cent
+    
+    // Expose sort function
+    window.sortValidationBy = sortValidationBy;
     
     contentEl.innerHTML = `
         <div class="page-header">
@@ -55,7 +76,7 @@ export function renderValidationPage() {
             <!-- Total Contract Costs -->
             <div class="card" style="background: var(--bg-darker); border: 2px solid var(--border); padding: 1.5rem; border-radius: 8px;">
                 <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.5rem;">
-                    📊 Soma de Todos os Contratos
+                    📊 Soma de CUSTO de Todos os Contratos
                 </div>
                 <div style="font-size: 2rem; font-weight: bold; color: var(--primary);">
                     R$ ${formatCurrency(totalContractCost)}
@@ -106,14 +127,32 @@ export function renderValidationPage() {
 
         <!-- Breakdown by Contract -->
         <div style="background: var(--bg-darker); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem;">
-            <h3 style="margin: 0 0 1.5rem 0; color: var(--primary);">Breakdown por Contrato</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h3 style="margin: 0; color: var(--primary);">Breakdown por Contrato</h3>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-small" onclick="window.sortValidationBy('client')" id="sort-client-btn">
+                        Cliente ↕
+                    </button>
+                    <button class="btn btn-small" onclick="window.sortValidationBy('cost')" id="sort-cost-btn">
+                        Custo ↕
+                    </button>
+                    <button class="btn btn-small" onclick="window.sortValidationBy('value')" id="sort-value-btn">
+                        Faturamento ↕
+                    </button>
+                    <button class="btn btn-small" onclick="window.sortValidationBy('profit')" id="sort-profit-btn">
+                        Lucro ↕
+                    </button>
+                </div>
+            </div>
             
             ${contractBreakdown.length > 0 ? `
                 <div style="display: grid; gap: 0.75rem;">
                     ${contractBreakdown.map(item => `
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 4px;">
+                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 1rem; padding: 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; align-items: center;">
                             <span style="font-weight: 500;">${item.client}</span>
+                            <span style="color: var(--text-secondary);">R$ ${formatCurrency(item.value)}</span>
                             <span style="color: var(--primary); font-weight: bold;">R$ ${formatCurrency(item.cost)}</span>
+                            <span style="color: ${item.profit > 0 ? 'var(--success)' : 'var(--error)'}; font-weight: bold;">R$ ${formatCurrency(item.profit)}</span>
                         </div>
                     `).join('')}
                 </div>
@@ -127,6 +166,7 @@ export function renderValidationPage() {
             ` : `
                 <p style="color: var(--text-secondary); text-align: center;">Nenhum contrato cadastrado</p>
             `}
+        </div>
         </div>
 
         <!-- Breakdown by Person -->
@@ -235,9 +275,20 @@ function handleBackupFile(event) {
     event.target.value = '';
 }
 
+function sortValidationBy(column) {
+    if (validationSortColumn === column) {
+        validationSortDirection = validationSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        validationSortColumn = column;
+        validationSortDirection = 'asc';
+    }
+    renderValidationPage();
+}
+
 // Expose functions to window
 if (typeof window !== 'undefined') {
     window.exportBackup = exportBackup;
     window.importBackup = importBackup;
     window.handleBackupFile = handleBackupFile;
+    window.sortValidationBy = sortValidationBy;
 }

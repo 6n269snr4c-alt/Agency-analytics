@@ -103,13 +103,14 @@ function renderPeopleList(people) {
                 
                 <div style="background: var(--bg-darker); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
                     <!-- Table Header -->
-                    <div style="display: grid; grid-template-columns: 2fr 1.2fr 0.8fr 0.8fr 1.2fr 1.2fr auto; gap: 1rem; padding: 1rem; background: var(--bg); border-bottom: 2px solid var(--border); font-weight: bold; font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase;">
+                    <div style="display: grid; grid-template-columns: 2fr 1.2fr 0.8fr 0.8fr 1.5fr 1.2fr 1.3fr auto; gap: 1rem; padding: 1rem; background: var(--bg); border-bottom: 2px solid var(--border); font-weight: bold; font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase;">
                         <div>Nome</div>
                         <div>Salário</div>
                         <div>Contr.</div>
                         <div>Entreg.</div>
+                        <div>Tipo de Entrega</div>
                         <div>Custo/Ent</div>
-                        <div>Ticket Médio</div>
+                        <div>Ticket Médio Clientes</div>
                         <div>Ações</div>
                     </div>
                     
@@ -122,32 +123,38 @@ function renderPeopleList(people) {
                         const breakdown = analyticsService.getPersonDeliverablesBreakdown(person.id);
 
                         return `
-                            <div style="border-bottom: 1px solid var(--border);">
-                                <div style="display: grid; grid-template-columns: 2fr 1.2fr 0.8fr 0.8fr 1.2fr 1.2fr auto; gap: 1rem; padding: 1rem; align-items: center;">
-                                    <div style="font-weight: 500;">${person.name}</div>
-                                    <div>R$ ${formatCurrency(person.salary)}</div>
-                                    <div>${contracts.length}</div>
-                                    <div>${totalDeliverables}</div>
-                                    <div style="color: var(--primary); font-weight: bold;">
-                                        ${costPerDeliverable > 0 ? `R$ ${formatCurrency(costPerDeliverable)}` : '-'}
-                                    </div>
-                                    <div style="color: var(--success); font-weight: bold;">
-                                        ${avgTicket > 0 ? `R$ ${formatCurrency(avgTicket)}` : '-'}
-                                    </div>
-                                    <div style="display: flex; gap: 0.5rem;">
-                                        <button class="btn btn-small btn-secondary" onclick="window.editPerson('${person.id}')">✏️</button>
-                                        <button class="btn btn-small btn-danger" onclick="window.deletePerson('${person.id}')">🗑️</button>
-                                    </div>
+                            <div style="display: grid; grid-template-columns: 2fr 1.2fr 0.8fr 0.8fr 1.5fr 1.2fr 1.3fr auto; gap: 1rem; padding: 1rem; border-bottom: 1px solid var(--border); align-items: center;">
+                                <div style="font-weight: 500;">${person.name}</div>
+                                <div>R$ ${formatCurrency(person.salary)}</div>
+                                <div>${contracts.length}</div>
+                                <div>${totalDeliverables}</div>
+                                <div style="font-size: 0.85rem;">
+                                    ${Object.keys(breakdown.byType).length > 0 ? 
+                                        Object.entries(breakdown.byType)
+                                            .sort((a, b) => b[1] - a[1])
+                                            .slice(0, 3)
+                                            .map(([type, qty]) => `<div>${type}: <strong>${qty}</strong></div>`)
+                                            .join('')
+                                    : '<span style="color: var(--text-secondary);">-</span>'}
                                 </div>
-                                
-                                <!-- Expandable Breakdown -->
-                                ${Object.keys(breakdown.byType).length > 0 ? `
-                                    <details style="padding: 0 1rem 1rem 1rem;">
-                                        <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.9rem; padding: 0.5rem; user-select: none;">
-                                            📊 Ver breakdown de entregas
-                                        </summary>
-                                        <div style="margin-top: 0.5rem; padding: 1rem; background: var(--bg); border-radius: 4px; display: grid; gap: 0.5rem;">
-                                            ${Object.entries(breakdown.byType).map(([type, qty]) => `
+                                <div style="color: var(--primary); font-weight: bold;">
+                                    ${costPerDeliverable > 0 ? `R$ ${formatCurrency(costPerDeliverable)}` : '-'}
+                                </div>
+                                <div style="color: var(--success); font-weight: bold;">
+                                    ${avgTicket > 0 ? `R$ ${formatCurrency(avgTicket)}` : '-'}
+                                </div>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button class="btn btn-small btn-secondary" onclick="window.editPerson('${person.id}')">✏️</button>
+                                    <button class="btn btn-small btn-danger" onclick="window.deletePerson('${person.id}')">🗑️</button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
                                                 <div style="display: flex; justify-content: space-between;">
                                                     <span>${type}</span>
                                                     <strong style="color: var(--primary);">${qty}</strong>

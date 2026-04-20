@@ -155,22 +155,6 @@ function renderPeopleList(people) {
         `;
     }).join('');
 }
-                                                <div style="display: flex; justify-content: space-between;">
-                                                    <span>${type}</span>
-                                                    <strong style="color: var(--primary);">${qty}</strong>
-                                                </div>
-                                            `).join('')}
-                                        </div>
-                                    </details>
-                                ` : ''}
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            </div>
-        `;
-    }).join('');
-}
 
 function attachPeopleHandlers() {
     const form = document.getElementById('person-form');

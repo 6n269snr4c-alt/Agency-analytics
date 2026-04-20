@@ -177,6 +177,7 @@ function renderContractsList(contracts) {
             warnings,
             // Sortable values
             clientName: contract.client.toLowerCase(),
+            cost: roi.cost,
             squadName: squad ? squad.name.toLowerCase() : 'zzz',
             value: contract.value,
             profit: roi.profit,
@@ -198,6 +199,7 @@ function renderContractsList(contracts) {
                 comparison = a.squadName.localeCompare(b.squadName);
                 break;
             case 'value':
+            case 'cost':
             case 'profit':
             case 'margin':
             case 'peopleCount':
@@ -222,6 +224,9 @@ function renderContractsList(contracts) {
                         </th>
                         <th style="padding: 0.4rem 0.75rem; text-align: right; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer; border-right: 1px solid var(--border);" onclick="window.sortContractsBy('value')">
                             VALOR ${sortColumn === 'value' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        </th>
+                        <th style="padding: 0.4rem 0.75rem; text-align: right; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer; border-right: 1px solid var(--border);" onclick="window.sortContractsBy('cost')">
+                            CUSTO ${sortColumn === 'cost' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
                         </th>
                         <th style="padding: 0.4rem 0.75rem; text-align: right; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer; border-right: 1px solid var(--border);" onclick="window.sortContractsBy('profit')">
                             LUCRO ${sortColumn === 'profit' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
@@ -260,10 +265,13 @@ function renderContractsList(contracts) {
                                     ${warnings.length > 0 ? ` <span style="color: var(--error); font-size: 0.8rem;">⚠️</span>` : ''}
                                 </td>
                                 <td style="padding: 0.4rem 0.6rem; border-right: 1px solid var(--border);">
-                                    ${squad ? `<span style="font-size: 0.8rem; background: var(--success); color: white; padding: 0.2rem 0.5rem; border-radius: 3px; white-space: nowrap;">${squad.icon ? squad.icon + ' ' : ''}${squad.name}</span>` : '<span style="color: var(--text-secondary); font-size: 0.8rem;">-</span>'}
+                                    ${squad ? `<span style="font-size: 0.8rem; background: var(--success); color: #000; padding: 0.2rem 0.5rem; border-radius: 3px; white-space: nowrap; font-weight: 500;">${squad.icon ? squad.icon + ' ' : ''}${squad.name}</span>` : '<span style="color: var(--text-secondary); font-size: 0.8rem;">-</span>'}
                                 </td>
                                 <td style="padding: 0.4rem 0.6rem; text-align: right; border-right: 1px solid var(--border); white-space: nowrap;">
                                     R$ ${formatCurrency(contract.value)}
+                                </td>
+                                <td style="padding: 0.4rem 0.6rem; text-align: right; border-right: 1px solid var(--border); white-space: nowrap; color: var(--text-secondary);">
+                                    R$ ${formatCurrency(roi.cost)}
                                 </td>
                                 <td style="padding: 0.4rem 0.6rem; text-align: right; border-right: 1px solid var(--border); white-space: nowrap; color: ${roi.profit > 0 ? 'var(--success)' : 'var(--error)'}; font-weight: 500;">
                                     R$ ${formatCurrency(roi.profit)}
@@ -271,11 +279,11 @@ function renderContractsList(contracts) {
                                 <td style="padding: 0.4rem 0.6rem; text-align: center; border-right: 1px solid var(--border);">
                                     ${roi.margin.toFixed(1)}%
                                 </td>
-                                <td style="padding: 0.4rem 0.6rem; text-align: center; border-right: 1px solid var(--border);">
-                                    ${assignedPeople.length}
+                                <td style="padding: 0.4rem 0.6rem; text-align: center; border-right: 1px solid var(--border);" title="${assignedPeople.map(id => {const p = personService.getPerson(id); return p ? p.name : '';}).filter(Boolean).join('\\n')}">
+                                    <span style="cursor: help;">👥 ${assignedPeople.length}</span>
                                 </td>
-                                <td style="padding: 0.4rem 0.6rem; border-right: 1px solid var(--border); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 250px;" title="${deliverablesText}">
-                                    ${deliverablesText}
+                                <td style="padding: 0.4rem 0.6rem; text-align: center; border-right: 1px solid var(--border);" title="${deliverablesText}">
+                                    <span style="cursor: help;">🔍 ${Object.keys(deliverables).length}</span>
                                 </td>
                                 <td style="padding: 0.4rem 0.6rem; text-align: center;">
                                     <div style="display: flex; gap: 0.25rem; justify-content: center;">

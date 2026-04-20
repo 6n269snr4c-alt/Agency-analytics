@@ -210,122 +210,85 @@ function renderContractsList(contracts) {
     });
 
     return `
-        <div style="background: var(--bg-darker); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
-            <!-- Table Header -->
-            <div style="display: grid; grid-template-columns: 2fr 1.5fr 1.2fr 1.2fr 1fr 1fr 1.5fr auto; gap: 1rem; padding: 1rem; background: var(--bg); border-bottom: 2px solid var(--border); font-weight: bold; font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase;">
-                <div style="cursor: pointer; user-select: none;" onclick="window.sortContractsBy('client')">
-                    Cliente ${sortColumn === 'client' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                </div>
-                <div style="cursor: pointer; user-select: none;" onclick="window.sortContractsBy('squad')">
-                    Squad ${sortColumn === 'squad' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                </div>
-                <div style="cursor: pointer; user-select: none;" onclick="window.sortContractsBy('value')">
-                    Valor ${sortColumn === 'value' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                </div>
-                <div style="cursor: pointer; user-select: none;" onclick="window.sortContractsBy('profit')">
-                    Lucro ${sortColumn === 'profit' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                </div>
-                <div style="cursor: pointer; user-select: none;" onclick="window.sortContractsBy('margin')">
-                    Margem ${sortColumn === 'margin' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                </div>
-                <div style="cursor: pointer; user-select: none;" onclick="window.sortContractsBy('peopleCount')">
-                    Pessoas ${sortColumn === 'peopleCount' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                </div>
-                <div style="cursor: pointer; user-select: none;" onclick="window.sortContractsBy('deliverablesCount')">
-                    Entregáveis ${sortColumn === 'deliverablesCount' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                </div>
-                <div>Ações</div>
-            </div>
-            
-            <!-- Table Rows -->
-            ${contractsData.map(data => {
-                const { contract, roi, assignedPeople, squad, warnings } = data;
-                const deliverables = contract.deliverables || {};
-                
-                return `
-                    <div style="border-bottom: 1px solid var(--border); ${warnings.length > 0 ? 'background: rgba(220, 38, 38, 0.1);' : ''}">
-                        <div style="display: grid; grid-template-columns: 2fr 1.5fr 1.2fr 1.2fr 1fr 1fr 1.5fr auto; gap: 1rem; padding: 1rem; align-items: center;">
-                            <!-- Cliente -->
-                            <div>
-                                <div style="font-weight: 500;">${contract.client}</div>
-                                ${warnings.length > 0 ? `<div style="color: var(--error); font-size: 0.85rem; margin-top: 0.25rem;">⚠️ ${warnings.length} ${warnings.length === 1 ? 'alerta' : 'alertas'}</div>` : ''}
-                            </div>
-                            
-                            <!-- Squad -->
-                            <div>
-                                ${squad ? `
-                                    <span class="badge badge-success" style="font-size: 0.85rem;">
-                                        ${squad.icon ? squad.icon + ' ' : ''}${squad.name}
-                                    </span>
-                                ` : '<span style="color: var(--text-secondary); font-size: 0.85rem;">Sem squad</span>'}
-                            </div>
-                            
-                            <!-- Valor -->
-                            <div style="font-weight: 500;">R$ ${formatCurrency(contract.value)}</div>
-                            
-                            <!-- Lucro -->
-                            <div style="font-weight: 500; color: ${roi.profit > 0 ? 'var(--success)' : 'var(--error)'};">
-                                R$ ${formatCurrency(roi.profit)}
-                            </div>
-                            
-                            <!-- Margem -->
-                            <div style="font-weight: 500;">${roi.margin.toFixed(1)}%</div>
-                            
-                            <!-- Pessoas -->
-                            <div style="font-weight: 500;">${assignedPeople.length}</div>
-                            
-                            <!-- Entregáveis -->
-                            <div style="font-size: 0.9rem;">
-                                ${Object.entries(deliverables).length > 0 ? 
-                                    Object.entries(deliverables).map(([typeId, qty]) => {
-                                        const type = deliverableTypeService.getDeliverableType(typeId);
-                                        const typeName = type ? type.name : 'Removido';
-                                        return `<div style="margin: 0.1rem 0;">${typeName}: <strong>${qty}</strong></div>`;
-                                    }).join('')
-                                : '<span style="color: var(--text-secondary);">-</span>'}
-                            </div>
-                            
-                            <!-- Ações -->
-                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                                <button class="btn btn-small btn-secondary" onclick="window.showContractBreakdown('${contract.id}')" title="Ver breakdown">📊</button>
-                                <button class="btn btn-small btn-secondary" onclick="window.editContract('${contract.id}')" title="Editar">✏️</button>
-                                <button class="btn btn-small btn-danger" onclick="window.deleteContract('${contract.id}')" title="Excluir">🗑️</button>
-                            </div>
-                        </div>
+        <div style="background: var(--bg-darker); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+                <thead>
+                    <tr style="background: var(--bg); border-bottom: 2px solid var(--border);">
+                        <th style="padding: 0.4rem 0.75rem; text-align: left; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer; border-right: 1px solid var(--border);" onclick="window.sortContractsBy('client')">
+                            CLIENTE ${sortColumn === 'client' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        </th>
+                        <th style="padding: 0.4rem 0.75rem; text-align: left; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer; border-right: 1px solid var(--border);" onclick="window.sortContractsBy('squad')">
+                            SQUAD ${sortColumn === 'squad' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        </th>
+                        <th style="padding: 0.4rem 0.75rem; text-align: right; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer; border-right: 1px solid var(--border);" onclick="window.sortContractsBy('value')">
+                            VALOR ${sortColumn === 'value' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        </th>
+                        <th style="padding: 0.4rem 0.75rem; text-align: right; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer; border-right: 1px solid var(--border);" onclick="window.sortContractsBy('profit')">
+                            LUCRO ${sortColumn === 'profit' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        </th>
+                        <th style="padding: 0.4rem 0.75rem; text-align: center; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer; border-right: 1px solid var(--border);" onclick="window.sortContractsBy('margin')">
+                            MARGEM ${sortColumn === 'margin' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        </th>
+                        <th style="padding: 0.4rem 0.75rem; text-align: center; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer; border-right: 1px solid var(--border);" onclick="window.sortContractsBy('peopleCount')">
+                            PESSOAS ${sortColumn === 'peopleCount' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        </th>
+                        <th style="padding: 0.4rem 0.75rem; text-align: left; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer; border-right: 1px solid var(--border);" onclick="window.sortContractsBy('deliverablesCount')">
+                            ENTREGÁVEIS ${sortColumn === 'deliverablesCount' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        </th>
+                        <th style="padding: 0.4rem 0.75rem; text-align: center; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">
+                            AÇÕES
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${contractsData.map(data => {
+                        const { contract, roi, assignedPeople, squad, warnings } = data;
+                        const deliverables = contract.deliverables || {};
                         
-                        <!-- Expandable Team Details -->
-                        ${assignedPeople.length > 0 ? `
-                            <details style="padding: 0 1rem 1rem 1rem;">
-                                <summary style="cursor: pointer; color: var(--text-secondary); font-size: 0.9rem; padding: 0.5rem; user-select: none;">
-                                    👥 Ver equipe (${assignedPeople.length} ${assignedPeople.length === 1 ? 'pessoa' : 'pessoas'})
-                                </summary>
-                                <div style="margin-top: 0.5rem; padding: 1rem; background: var(--bg); border-radius: 4px; display: flex; flex-wrap: wrap; gap: 0.5rem;">
-                                    ${assignedPeople.map(personId => {
-                                        const person = personService.getPerson(personId);
-                                        return person ? `
-                                            <span class="badge" style="background: var(--bg-darker); border: 1px solid var(--border);">
-                                                ${person.name} <span style="color: var(--text-secondary);">(${person.role})</span>
-                                            </span>
-                                        ` : '';
-                                    }).join('')}
-                                </div>
-                            </details>
-                        ` : ''}
+                        const deliverablesText = Object.entries(deliverables).length > 0 
+                            ? Object.entries(deliverables).map(([typeId, qty]) => {
+                                const type = deliverableTypeService.getDeliverableType(typeId);
+                                const typeName = type ? type.name : 'Removido';
+                                return `${typeName}: ${qty}`;
+                            }).join(', ')
+                            : '-';
                         
-                        <!-- Warnings Details -->
-                        ${warnings.length > 0 ? `
-                            <div style="padding: 0 1rem 1rem 1rem;">
-                                <div style="background: var(--error); border-radius: 4px; padding: 0.75rem; color: white; font-size: 0.9rem;">
-                                    <strong>⚠️ Inconsistências:</strong>
-                                    <ul style="margin: 0.5rem 0 0 1.5rem; padding: 0;">
-                                        ${warnings.map(w => `<li style="margin: 0.25rem 0;">${w.message}</li>`).join('')}
-                                    </ul>
-                                </div>
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
-            }).join('')}
+                        return `
+                            <tr style="border-bottom: 1px solid var(--border); ${warnings.length > 0 ? 'background: rgba(220, 38, 38, 0.05);' : ''} transition: background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='${warnings.length > 0 ? 'rgba(220, 38, 38, 0.05)' : 'transparent'}'">
+                                <td style="padding: 0.4rem 0.6rem; border-right: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;">
+                                    <span style="font-weight: 500;">${contract.client}</span>
+                                    ${warnings.length > 0 ? ` <span style="color: var(--error); font-size: 0.8rem;">⚠️</span>` : ''}
+                                </td>
+                                <td style="padding: 0.4rem 0.6rem; border-right: 1px solid var(--border);">
+                                    ${squad ? `<span style="font-size: 0.8rem; background: var(--success); color: white; padding: 0.2rem 0.5rem; border-radius: 3px; white-space: nowrap;">${squad.icon ? squad.icon + ' ' : ''}${squad.name}</span>` : '<span style="color: var(--text-secondary); font-size: 0.8rem;">-</span>'}
+                                </td>
+                                <td style="padding: 0.4rem 0.6rem; text-align: right; border-right: 1px solid var(--border); white-space: nowrap;">
+                                    R$ ${formatCurrency(contract.value)}
+                                </td>
+                                <td style="padding: 0.4rem 0.6rem; text-align: right; border-right: 1px solid var(--border); white-space: nowrap; color: ${roi.profit > 0 ? 'var(--success)' : 'var(--error)'}; font-weight: 500;">
+                                    R$ ${formatCurrency(roi.profit)}
+                                </td>
+                                <td style="padding: 0.4rem 0.6rem; text-align: center; border-right: 1px solid var(--border);">
+                                    ${roi.margin.toFixed(1)}%
+                                </td>
+                                <td style="padding: 0.4rem 0.6rem; text-align: center; border-right: 1px solid var(--border);">
+                                    ${assignedPeople.length}
+                                </td>
+                                <td style="padding: 0.4rem 0.6rem; border-right: 1px solid var(--border); font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 250px;" title="${deliverablesText}">
+                                    ${deliverablesText}
+                                </td>
+                                <td style="padding: 0.4rem 0.6rem; text-align: center;">
+                                    <div style="display: flex; gap: 0.25rem; justify-content: center;">
+                                        <button class="btn btn-small btn-secondary" onclick="window.showContractBreakdown('${contract.id}')" title="Ver breakdown" style="padding: 0.25rem 0.5rem; font-size: 0.85rem;">📊</button>
+                                        <button class="btn btn-small btn-secondary" onclick="window.editContract('${contract.id}')" title="Editar" style="padding: 0.25rem 0.5rem; font-size: 0.85rem;">✏️</button>
+                                        <button class="btn btn-small btn-danger" onclick="window.deleteContract('${contract.id}')" title="Excluir" style="padding: 0.25rem 0.5rem; font-size: 0.85rem;">🗑️</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
         </div>
     `;
 }

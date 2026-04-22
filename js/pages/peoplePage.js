@@ -1,4 +1,5 @@
 // peoplePage.js - People management page
+import { renderPeriodSelector } from '../components/periodSelector.js';
 
 import personService from '../services/personService.js';
 import analyticsService from '../services/analyticsService.js';
@@ -17,6 +18,9 @@ export function renderPeoplePage() {
             <h1 class="page-title">Pessoas</h1>
             <p class="page-subtitle">Gerenciar equipe e colaboradores</p>
         </div>
+
+        <!-- Period Selector -->
+        ${renderPeriodSelector()}
 
         <div class="action-bar">
             <div class="action-bar-left">

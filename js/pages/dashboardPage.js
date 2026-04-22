@@ -5,6 +5,7 @@ import contractService from '../services/contractService.js';
 import personService from '../services/personService.js';
 import squadService from '../services/squadService.js';
 import insightsService from '../services/insightsService.js';
+import { renderPeriodSelector } from '../components/periodSelector.js';
 
 export function renderDashboard() {
     const contentEl = document.getElementById('content');
@@ -23,6 +24,9 @@ export function renderDashboard() {
             <h1 class="page-title">Dashboard</h1>
             <p class="page-subtitle">Visão geral da performance da agência</p>
         </div>
+
+        <!-- Period Selector -->
+        ${renderPeriodSelector()}
 
         <!-- Insights and Alerts -->
         ${renderInsights(insights, opportunities)}

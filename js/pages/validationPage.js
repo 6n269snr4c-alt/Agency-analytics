@@ -1,4 +1,5 @@
 // validationPage.js - Validation page for cost verification
+import { renderPeriodSelector } from '../components/periodSelector.js';
 
 import contractService from '../services/contractService.js';
 import personService from '../services/personService.js';
@@ -58,6 +59,9 @@ export function renderValidationPage() {
             <h1 class="page-title">Validação de Custos</h1>
             <p class="page-subtitle">Prova real: a soma dos custos dos contratos deve igualar a folha de pagamento</p>
         </div>
+
+        <!-- Period Selector -->
+        ${renderPeriodSelector()}
 
         <div class="action-bar">
             <div class="action-bar-left">

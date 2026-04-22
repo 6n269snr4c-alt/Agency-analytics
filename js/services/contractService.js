@@ -1,8 +1,20 @@
 // contractService.js - Contract management business logic
 
 import storage from '../store/storage.js';
+import periodService from './periodService.js';
 
 class ContractService {
+    // Get contracts for current period
+    getAllContracts() {
+        const currentPeriod = periodService.getCurrentPeriod();
+        return storage.getContractsForPeriod(currentPeriod);
+    }
+
+    getContractById(id) {
+        const contracts = this.getAllContracts();
+        return contracts.find(c => c.id === id);
+    }
+
     createContract(contractData) {
         // Validate required fields
         if (!contractData.client || !contractData.value) {
@@ -14,22 +26,32 @@ class ContractService {
             contractData.deliverables = {};
         }
 
-        // Create contract
-        const contract = storage.addContract({
+        // Create contract object
+        const contract = {
+            id: storage.generateId(),
             client: contractData.client,
             value: parseFloat(contractData.value),
             deliverables: contractData.deliverables,
-            squadId: contractData.squadId || null,
+            squadTag: contractData.squadTag || null,
             assignedPeople: contractData.assignedPeople || [],
-            notes: contractData.notes || ''
-        });
+            notes: contractData.notes || '',
+            createdAt: new Date().toISOString()
+        };
+
+        // Save to current period
+        const currentPeriod = periodService.getCurrentPeriod();
+        const contracts = this.getAllContracts();
+        contracts.push(contract);
+        storage.saveContractsForPeriod(currentPeriod, contracts);
 
         return contract;
     }
 
     updateContract(id, updates) {
-        const contract = storage.getContractById(id);
-        if (!contract) {
+        const contracts = this.getAllContracts();
+        const contractIndex = contracts.findIndex(c => c.id === id);
+        
+        if (contractIndex === -1) {
             throw new Error('Contrato não encontrado');
         }
 
@@ -38,23 +60,33 @@ class ContractService {
             updates.value = parseFloat(updates.value);
         }
 
-        return storage.updateContract(id, updates);
+        // Update contract
+        contracts[contractIndex] = { ...contracts[contractIndex], ...updates };
+        
+        // Save to current period
+        const currentPeriod = periodService.getCurrentPeriod();
+        storage.saveContractsForPeriod(currentPeriod, contracts);
+        
+        return contracts[contractIndex];
     }
 
     deleteContract(id) {
-        return storage.deleteContract(id);
+        const contracts = this.getAllContracts();
+        const filteredContracts = contracts.filter(c => c.id !== id);
+        
+        // Save to current period
+        const currentPeriod = periodService.getCurrentPeriod();
+        storage.saveContractsForPeriod(currentPeriod, filteredContracts);
+        
+        return true;
     }
 
     getContract(id) {
-        return storage.getContractById(id);
-    }
-
-    getAllContracts() {
-        return storage.getContracts();
+        return this.getContractById(id);
     }
 
     searchContracts(query) {
-        const contracts = storage.getContracts();
+        const contracts = this.getAllContracts();
         const lowerQuery = query.toLowerCase();
         
         return contracts.filter(contract => 

@@ -6,6 +6,7 @@ import personService from '../services/personService.js';
 import analyticsService from '../services/analyticsService.js';
 import deliverableTypeService from '../services/deliverableTypeService.js';
 import storage from '../store/storage.js';
+import { renderPeriodSelector } from '../components/periodSelector.js';
 
 let currentEditId = null;
 let deliverables = {};
@@ -23,6 +24,9 @@ export function renderContractsPage() {
             <h1 class="page-title">Contratos</h1>
             <p class="page-subtitle">Gerenciar contratos e clientes</p>
         </div>
+
+        <!-- Period Selector -->
+        ${renderPeriodSelector()}
 
         <div class="action-bar">
             <div class="action-bar-left">
@@ -279,11 +283,15 @@ function renderContractsList(contracts) {
                                 <td style="padding: 0.4rem 0.6rem; text-align: center; border-right: 1px solid var(--border);">
                                     ${roi.margin.toFixed(1)}%
                                 </td>
-                                <td style="padding: 0.4rem 0.6rem; text-align: center; border-right: 1px solid var(--border);" title="${assignedPeople.map(id => {const p = personService.getPerson(id); return p ? p.name : '';}).filter(Boolean).join('\\n')}">
-                                    <span style="cursor: help;">👥 ${assignedPeople.length}</span>
+                                <td style="padding: 0.4rem 0.6rem; text-align: center; border-right: 1px solid var(--border);">
+                                    <span style="cursor: pointer; color: var(--primary); text-decoration: underline;" onclick="alert('EQUIPE:\\n\\n${assignedPeople.map(id => {const p = personService.getPerson(id); return p ? '• ' + p.name + ' (' + p.role + ')' : '';}).filter(Boolean).join('\\n')}')">
+                                        👥 ${assignedPeople.length}
+                                    </span>
                                 </td>
-                                <td style="padding: 0.4rem 0.6rem; text-align: center; border-right: 1px solid var(--border);" title="${deliverablesText}">
-                                    <span style="cursor: help;">🔍 ${Object.keys(deliverables).length}</span>
+                                <td style="padding: 0.4rem 0.6rem; text-align: center; border-right: 1px solid var(--border);">
+                                    <span style="cursor: pointer; color: var(--primary); text-decoration: underline;" onclick="alert('ENTREGÁVEIS:\\n\\n${deliverablesText.replace(/• /g, '\\n• ')}')">
+                                        🔍 ${Object.keys(deliverables).length}
+                                    </span>
                                 </td>
                                 <td style="padding: 0.4rem 0.6rem; text-align: center;">
                                     <div style="display: flex; gap: 0.25rem; justify-content: center;">

@@ -10,9 +10,14 @@ import { renderComparisonPage } from './pages/comparisonPage.js';
 import { renderSquadComparisonPage } from './pages/squadComparisonPage.js';
 import { renderDeliverableTypesPage } from './pages/deliverableTypesPage.js';
 import { renderValidationPage } from './pages/validationPage.js';
+import { renderEvolutionPage } from './pages/evolutionPage.js';
+import { migrateToPeriods } from './migrateToPeriods.js';
 
 // Initialize app
 function init() {
+    // Run migration to period-based model
+    migrateToPeriods();
+    
     // Render navbar
     renderNavbar();
 
@@ -24,6 +29,7 @@ function init() {
     router.register('/comparison', renderSquadComparisonPage); // Nova comparação de squads
     router.register('/deliverables', renderDeliverableTypesPage);
     router.register('/validation', renderValidationPage);
+    router.register('/evolution', renderEvolutionPage);
 
     // Initialize router
     router.init();

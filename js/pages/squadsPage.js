@@ -1,4 +1,5 @@
 // squadsPage.js - Squads management page
+import { renderPeriodSelector } from '../components/periodSelector.js';
 
 import squadService from '../services/squadService.js';
 import personService from '../services/personService.js';
@@ -17,6 +18,9 @@ export function renderSquadsPage() {
             <h1 class="page-title">Squads</h1>
             <p class="page-subtitle">Gerenciar equipes e grupos de trabalho</p>
         </div>
+
+        <!-- Period Selector -->
+        ${renderPeriodSelector()}
 
         <div class="action-bar">
             <div class="action-bar-left">

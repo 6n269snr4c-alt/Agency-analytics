@@ -1,4 +1,5 @@
 // squadComparisonPage.js - Squad comparison page with detailed breakdown
+import { renderPeriodSelector } from '../components/periodSelector.js';
 
 import squadService from '../services/squadService.js';
 import analyticsService from '../services/analyticsService.js';
@@ -14,6 +15,9 @@ export function renderSquadComparisonPage() {
                 <h1 class="page-title">Comparação de Squads</h1>
                 <p class="page-subtitle">Compare o desempenho dos squads</p>
             </div>
+
+        <!-- Period Selector -->
+        ${renderPeriodSelector()}
             <div class="empty-state">
                 <div class="empty-state-icon">📊</div>
                 <h3>Nenhum squad cadastrado</h3>
@@ -45,6 +49,9 @@ export function renderSquadComparisonPage() {
             <h1 class="page-title">Comparação de Squads</h1>
             <p class="page-subtitle">Análise detalhada de desempenho por squad - lado a lado</p>
         </div>
+
+        <!-- Period Selector -->
+        ${renderPeriodSelector()}
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; align-items: start;">
             ${squadStats.map(stats => renderSquadCard(stats)).join('')}

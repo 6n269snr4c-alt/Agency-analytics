@@ -1,274 +1,173 @@
-// analyticsService.js - Business logic for ROI, productivity, and analytics
+// ============================================
+// ANALYTICS SERVICE - Agency Analytics v2
+// Cálculos com Sistema de Pesos
+// ============================================
 
 import storage from '../store/storage.js';
 
 class AnalyticsService {
-    // Calculate total cost of a person (monthly salary)
-    getPersonCost(personId) {
+    
+    // ========================================
+    // CÁLCULOS DE CUSTO POR PESSOA
+    // ========================================
+    
+    /**
+     * Calcula o custo PONDERADO por entregável de uma pessoa
+     * 
+     * Exemplo:
+     * - Pessoa: Filmmaker com salário R$ 3.000
+     * - Entregáveis: 5 vídeos editados (peso 5) + 80 clipes (peso 1)
+     * - Soma dos pesos: (5 × 5) + (80 × 1) = 25 + 80 = 105
+     * - Custo por unidade de peso: R$ 3.000 / 105 = R$ 28,57
+     */
+    getPersonWeightedDeliverableCost(personId) {
         const person = storage.getPersonById(personId);
-        return person ? person.salary : 0;
-    }
-
-    // Calculate total cost of a squad
-    getSquadCost(squadId) {
-        const squad = storage.getSquadById(squadId);
-        if (!squad) return 0;
-        
-        return squad.members.reduce((total, personId) => {
-            return total + this.getPersonCost(personId);
-        }, 0);
-    }
-
-    // Get all contracts for a person
-    getPersonContracts(personId) {
-        const contracts = storage.getContracts();
-        return contracts.filter(contract => {
-            // Direct assignment
-            if (contract.assignedPeople && contract.assignedPeople.includes(personId)) {
-                return true;
-            }
-            return false;
-        });
-    }
-
-    // Get all contracts tagged for a squad
-    getSquadContracts(squadId) {
-        const contracts = storage.getContracts();
-        return contracts.filter(contract => contract.squadTag === squadId);
-    }
-
-    // Calculate prorated cost for a person across squads
-    getPersonProratedCostBySquad(personId) {
-        const person = storage.getPersonById(personId);
-        if (!person) return {};
-
-        const breakdown = this.getPersonDeliverablesBreakdown(personId);
-        const squads = storage.getSquads().filter(s => s.members.includes(personId));
-        
-        if (squads.length === 0) return {};
-        if (squads.length === 1) {
-            // Person in only one squad - full cost goes there
-            return { [squads[0].id]: person.salary };
+        if (!person || person.salary === 0) {
+            return 0;
         }
 
-        // Person in multiple squads - prorate by deliverables
-        const contracts = storage.getContracts();
-        const deliverablesBySquad = {};
-        let totalDeliverables = 0;
+        // Pega a função da pessoa
+        const role = storage.getRoleByName(person.role);
+        if (!role) {
+            console.warn(`Função não encontrada para ${person.name}: ${person.role}`);
+            return 0;
+        }
 
-        contracts.forEach(contract => {
-            if (!contract.squadTag || !contract.assignedPeople?.includes(personId)) return;
-            if (!contract.deliverables) return;
-
-            let contractDeliverables = 0;
-            Object.entries(contract.deliverables).forEach(([typeId, qty]) => {
-                const type = storage.getDeliverableTypeById(typeId);
-                if (type && type.roles.includes(person.role)) {
-                    contractDeliverables += qty;
-                }
-            });
-
-            if (contractDeliverables > 0) {
-                if (!deliverablesBySquad[contract.squadTag]) {
-                    deliverablesBySquad[contract.squadTag] = 0;
-                }
-                deliverablesBySquad[contract.squadTag] += contractDeliverables;
-                totalDeliverables += contractDeliverables;
+        // Calcula a soma ponderada dos entregáveis
+        let totalWeightedDeliverables = 0;
+        
+        Object.entries(person.deliverables || {}).forEach(([deliverableTypeId, quantity]) => {
+            if (quantity > 0) {
+                // Pega o peso específico da função para este tipo de entregável
+                const weight = storage.getRoleDeliverableWeight(role.id, deliverableTypeId);
+                totalWeightedDeliverables += (quantity * weight);
             }
         });
 
-        // Prorate salary by deliverable proportion
-        const proratedCosts = {};
-        Object.entries(deliverablesBySquad).forEach(([squadId, count]) => {
-            const proportion = totalDeliverables > 0 ? count / totalDeliverables : 0;
-            proratedCosts[squadId] = person.salary * proportion;
-        });
+        if (totalWeightedDeliverables === 0) {
+            return 0;
+        }
 
-        return proratedCosts;
+        // Custo por unidade de peso
+        return person.salary / totalWeightedDeliverables;
     }
 
-    // Calculate total deliverables for a person (considering their role in each type)
-    getPersonTotalDeliverables(personId) {
+    /**
+     * Retorna detalhamento completo do custo de uma pessoa
+     */
+    getPersonCostBreakdown(personId) {
         const person = storage.getPersonById(personId);
-        if (!person) return 0;
+        if (!person) return null;
 
-        const contracts = this.getPersonContracts(personId);
-        let total = 0;
+        const role = storage.getRoleByName(person.role);
+        const costPerWeightUnit = this.getPersonWeightedDeliverableCost(personId);
 
-        contracts.forEach(contract => {
-            if (!contract.deliverables) return;
-
-            // For each deliverable type in the contract
-            Object.entries(contract.deliverables).forEach(([typeId, quantity]) => {
-                const type = storage.getDeliverableTypeById(typeId);
-                
-                // Only count if this person's role is involved in this deliverable type
-                if (type && type.roles.includes(person.role)) {
-                    total += quantity;
-                }
-            });
-        });
-
-        return total;
-    }
-
-    // Calculate total deliverables for a contract (unchanged - just sum all)
-    getContractTotalDeliverables(contract) {
-        if (!contract.deliverables) return 0;
-        return Object.values(contract.deliverables).reduce((sum, qty) => sum + qty, 0);
-    }
-
-    // Calculate cost per deliverable for a person
-    getPersonCostPerDeliverable(personId) {
-        const salary = this.getPersonCost(personId);
-        const totalDeliverables = this.getPersonTotalDeliverables(personId);
-        
-        if (totalDeliverables === 0) return 0;
-        return salary / totalDeliverables;
-    }
-
-    // Get detailed breakdown of deliverables for a person
-    getPersonDeliverablesBreakdown(personId) {
-        const person = storage.getPersonById(personId);
-        if (!person) return { total: 0, byType: {}, byContract: {} };
-
-        const contracts = this.getPersonContracts(personId);
         const breakdown = {
-            total: 0,
-            byType: {},
-            byContract: {}
+            personId: person.id,
+            personName: person.name,
+            role: person.role,
+            salary: person.salary,
+            deliverables: [],
+            totalWeightedDeliverables: 0,
+            costPerWeightUnit: costPerWeightUnit
         };
 
-        contracts.forEach(contract => {
-            if (!contract.deliverables) return;
+        // Detalha cada tipo de entregável
+        Object.entries(person.deliverables || {}).forEach(([deliverableTypeId, quantity]) => {
+            const deliverableType = storage.getDeliverableTypeById(deliverableTypeId);
+            if (!deliverableType || quantity === 0) return;
 
-            let contractTotal = 0;
-            const contractBreakdown = {};
+            const weight = role ? storage.getRoleDeliverableWeight(role.id, deliverableTypeId) : deliverableType.defaultWeight;
+            const totalWeight = quantity * weight;
 
-            Object.entries(contract.deliverables).forEach(([typeId, quantity]) => {
-                const type = storage.getDeliverableTypeById(typeId);
-                
-                // Only count if this person's role is involved
-                if (type && type.roles.includes(person.role)) {
-                    // Aggregate by type
-                    if (!breakdown.byType[type.name]) {
-                        breakdown.byType[type.name] = 0;
-                    }
-                    breakdown.byType[type.name] += quantity;
-                    breakdown.total += quantity;
-
-                    // Track for this contract
-                    contractTotal += quantity;
-                    contractBreakdown[type.name] = quantity;
-                }
+            breakdown.deliverables.push({
+                deliverableTypeId,
+                deliverableTypeName: deliverableType.name,
+                quantity,
+                weight,
+                totalWeight,
+                costForThisType: costPerWeightUnit * totalWeight
             });
 
-            if (contractTotal > 0) {
-                breakdown.byContract[contract.client] = {
-                    total: contractTotal,
-                    breakdown: contractBreakdown
-                };
-            }
+            breakdown.totalWeightedDeliverables += totalWeight;
         });
 
         return breakdown;
     }
 
-    // Calculate ROI for a contract (using cost per deliverable)
+    /**
+     * Custo simples da pessoa (apenas salário)
+     */
+    getPersonCost(personId) {
+        const person = storage.getPersonById(personId);
+        return person ? person.salary : 0;
+    }
+
+    // ========================================
+    // CÁLCULOS DE CUSTO POR CONTRATO
+    // ========================================
+    
+    /**
+     * Calcula o custo de uma pessoa em um contrato específico
+     * Baseado nos entregáveis que ela faz naquele contrato
+     */
+    getPersonCostInContract(personId, contractId) {
+        const person = storage.getPersonById(personId);
+        const contract = storage.getContractById(contractId);
+        
+        if (!person || !contract) return 0;
+
+        const role = storage.getRoleByName(person.role);
+        if (!role) return 0;
+
+        const costPerWeightUnit = this.getPersonWeightedDeliverableCost(personId);
+        if (costPerWeightUnit === 0) return 0;
+
+        // Calcula quantos entregáveis dessa pessoa estão no contrato
+        let personWeightInContract = 0;
+
+        Object.entries(contract.deliverables || {}).forEach(([deliverableTypeId, quantity]) => {
+            const deliverableType = storage.getDeliverableTypeById(deliverableTypeId);
+            if (!deliverableType) return;
+
+            // Verifica se a função da pessoa faz esse tipo de entregável
+            if (deliverableType.roles.includes(person.role)) {
+                const weight = storage.getRoleDeliverableWeight(role.id, deliverableTypeId);
+                personWeightInContract += (quantity * weight);
+            }
+        });
+
+        // Custo da pessoa no contrato = custo por unidade × peso no contrato
+        return costPerWeightUnit * personWeightInContract;
+    }
+
+    /**
+     * Calcula ROI de um contrato
+     */
     getContractROI(contractId) {
         const contract = storage.getContractById(contractId);
         if (!contract) return null;
 
         const revenue = contract.value;
         let cost = 0;
-        const costBreakdown = []; // For detailed breakdown
 
-        // Calculate cost based on deliverables per person
+        // PASSO 1: Soma o custo de cada pessoa selecionada no contrato
         if (contract.assignedPeople && contract.assignedPeople.length > 0) {
             contract.assignedPeople.forEach(personId => {
-                const person = storage.getPersonById(personId);
-                if (!person) return;
-
-                // Count how many deliverables THIS person has in THIS contract
-                let personDeliverablesInContract = 0;
-                
-                if (contract.deliverables) {
-                    Object.entries(contract.deliverables).forEach(([typeId, quantity]) => {
-                        const type = storage.getDeliverableTypeById(typeId);
-                        
-                        // Only count if person's role is involved in this deliverable type
-                        if (type && type.roles.includes(person.role)) {
-                            personDeliverablesInContract += quantity;
-                        }
-                    });
-                }
-
-                // Calculate cost per deliverable for this person
-                const totalPersonDeliverables = this.getPersonTotalDeliverables(personId);
-                const costPerDeliverable = totalPersonDeliverables > 0 
-                    ? person.salary / totalPersonDeliverables 
-                    : 0;
-
-                // Cost = deliverables in this contract × cost per deliverable
-                const personCostInContract = personDeliverablesInContract * costPerDeliverable;
-                cost += personCostInContract;
-
-                // Add to breakdown
-                if (personDeliverablesInContract > 0) {
-                    costBreakdown.push({
-                        personId: person.id,
-                        name: person.name,
-                        role: person.role,
-                        costPerDeliverable: costPerDeliverable,
-                        deliverablesInContract: personDeliverablesInContract,
-                        totalCost: personCostInContract
-                    });
-                }
+                cost += this.getPersonCostInContract(personId, contractId);
             });
         }
 
-        // Add Head cost if contract has squad tag
-        // Head cost = (total deliverables in contract) × (head salary / total squad deliverables)
+        // PASSO 2: Adiciona o custo rateado do Head (se tiver squad)
         if (contract.squadTag) {
             const squad = storage.getSquadById(contract.squadTag);
             if (squad && squad.headId) {
+                const squadContracts = this.getSquadContracts(contract.squadTag);
                 const head = storage.getPersonById(squad.headId);
-                if (head) {
-                    // Calculate total deliverables in this squad
-                    const squadContracts = this.getSquadContracts(contract.squadTag);
-                    let totalSquadDeliverables = 0;
-                    
-                    squadContracts.forEach(squadContract => {
-                        if (squadContract.deliverables) {
-                            totalSquadDeliverables += Object.values(squadContract.deliverables)
-                                .reduce((sum, qty) => sum + qty, 0);
-                        }
-                    });
-
-                    if (totalSquadDeliverables > 0) {
-                        // Head cost per deliverable
-                        const headCostPerDeliverable = head.salary / totalSquadDeliverables;
-                        
-                        // Total deliverables in THIS contract
-                        const contractTotalDeliverables = contract.deliverables 
-                            ? Object.values(contract.deliverables).reduce((sum, qty) => sum + qty, 0)
-                            : 0;
-                        
-                        const headCostInContract = contractTotalDeliverables * headCostPerDeliverable;
-                        cost += headCostInContract;
-
-                        // Add to breakdown
-                        if (contractTotalDeliverables > 0) {
-                            costBreakdown.push({
-                                personId: head.id,
-                                name: head.name,
-                                role: head.role,
-                                costPerDeliverable: headCostPerDeliverable,
-                                deliverablesInContract: contractTotalDeliverables,
-                                totalCost: headCostInContract
-                            });
-                        }
-                    }
+                
+                if (head && squadContracts.length > 0) {
+                    const headCostPerContract = head.salary / squadContracts.length;
+                    cost += headCostPerContract;
                 }
             }
         }
@@ -277,319 +176,163 @@ class AnalyticsService {
             revenue,
             cost,
             profit: revenue - cost,
-            margin: revenue > 0 ? ((revenue - cost) / revenue) * 100 : 0,
-            costBreakdown // Include breakdown for popup
+            margin: revenue > 0 ? ((revenue - cost) / revenue * 100) : 0
         };
     }
 
-    // Calculate ROI for a squad (with prorated costs)
-    getSquadROI(squadId) {
-        const contracts = this.getSquadContracts(squadId);
-        const squad = storage.getSquadById(squadId);
-        if (!squad) return { revenue: 0, cost: 0, profit: 0, margin: 0, contractCount: 0 };
-        
-        const totalRevenue = contracts.reduce((sum, contract) => sum + contract.value, 0);
-        
-        // Calculate prorated cost for each member
-        let totalCost = 0;
-        squad.members.forEach(personId => {
-            const proratedCosts = this.getPersonProratedCostBySquad(personId);
-            totalCost += proratedCosts[squadId] || 0;
+    /**
+     * Detalhamento completo do custo de um contrato
+     */
+    getContractCostBreakdown(contractId) {
+        const contract = storage.getContractById(contractId);
+        if (!contract) return null;
+
+        const breakdown = {
+            contractId: contract.id,
+            clientName: contract.clientName,
+            revenue: contract.value,
+            people: [],
+            headCost: 0,
+            totalCost: 0
+        };
+
+        // Detalha custo de cada pessoa
+        contract.assignedPeople.forEach(personId => {
+            const person = storage.getPersonById(personId);
+            const personCost = this.getPersonCostInContract(personId, contractId);
+            
+            breakdown.people.push({
+                personId,
+                personName: person.name,
+                role: person.role,
+                costInContract: personCost
+            });
+            
+            breakdown.totalCost += personCost;
         });
 
-        return {
-            revenue: totalRevenue,
-            cost: totalCost,
-            profit: totalRevenue - totalCost,
-            margin: totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue) * 100 : 0,
-            contractCount: contracts.length
-        };
+        // Adiciona custo do head
+        if (contract.squadTag) {
+            const squad = storage.getSquadById(contract.squadTag);
+            if (squad && squad.headId) {
+                const squadContracts = this.getSquadContracts(contract.squadTag);
+                const head = storage.getPersonById(squad.headId);
+                
+                if (head && squadContracts.length > 0) {
+                    breakdown.headCost = head.salary / squadContracts.length;
+                    breakdown.totalCost += breakdown.headCost;
+                }
+            }
+        }
+
+        breakdown.profit = breakdown.revenue - breakdown.totalCost;
+        breakdown.margin = breakdown.revenue > 0 ? ((breakdown.profit / breakdown.revenue) * 100) : 0;
+
+        return breakdown;
     }
 
-    // Calculate overall ROI
-    getOverallROI() {
-        const contracts = storage.getContracts();
-        const people = storage.getPeople();
-        
-        const totalRevenue = contracts.reduce((sum, contract) => sum + contract.value, 0);
-        const totalCost = people.reduce((sum, person) => sum + person.salary, 0);
-        
-        return {
-            revenue: totalRevenue,
-            cost: totalCost,
-            profit: totalRevenue - totalCost,
-            margin: totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue) * 100 : 0,
-            contractCount: contracts.length,
-            peopleCount: people.length
-        };
+    // ========================================
+    // CÁLCULOS DE SQUAD
+    // ========================================
+    
+    getSquadContracts(squadId) {
+        const period = storage.getCurrentPeriod();
+        return storage.getContracts().filter(c => 
+            c.squadTag === squadId && c.period === period
+        );
     }
 
-    // Get average ticket for a person's contracts
-    getPersonAverageTicket(personId) {
-        const contracts = this.getPersonContracts(personId);
-        if (contracts.length === 0) return 0;
-        
-        const totalValue = contracts.reduce((sum, contract) => sum + contract.value, 0);
-        return totalValue / contracts.length;
-    }
-
-    // Compare people by role
-    comparePeopleByRole(role) {
-        const people = storage.getPeople().filter(p => p.role === role);
-        
-        return people.map(person => {
-            const contracts = this.getPersonContracts(person.id);
-            const totalDeliverables = this.getPersonTotalDeliverables(person.id);
-            const costPerDeliverable = this.getPersonCostPerDeliverable(person.id);
-            const avgTicket = this.getPersonAverageTicket(person.id);
-            
-            return {
-                id: person.id,
-                name: person.name,
-                role: person.role,
-                salary: person.salary,
-                contractCount: contracts.length,
-                totalDeliverables,
-                costPerDeliverable,
-                averageTicket: avgTicket,
-                efficiency: totalDeliverables > 0 ? person.salary / totalDeliverables : 0
-            };
-        }).sort((a, b) => a.costPerDeliverable - b.costPerDeliverable);
-    }
-
-    // Get productivity ranking
-    getProductivityRanking() {
-        const people = storage.getPeople();
-        
-        return people.map(person => {
-            const totalDeliverables = this.getPersonTotalDeliverables(person.id);
-            const costPerDeliverable = this.getPersonCostPerDeliverable(person.id);
-            const contracts = this.getPersonContracts(person.id);
-            
-            return {
-                id: person.id,
-                name: person.name,
-                role: person.role,
-                totalDeliverables,
-                costPerDeliverable,
-                contractCount: contracts.length,
-                score: totalDeliverables > 0 ? 1 / costPerDeliverable : 0
-            };
-        }).sort((a, b) => b.score - a.score);
-    }
-
-    // Get squad performance comparison
-    getSquadComparison() {
-        const squads = storage.getSquads();
-        
-        return squads.map(squad => {
-            const roi = this.getSquadROI(squad.id);
-            const cost = this.getSquadCost(squad.id);
-            
-            return {
-                id: squad.id,
-                name: squad.name,
-                memberCount: squad.members.length,
-                contractCount: roi.contractCount,
-                revenue: roi.revenue,
-                cost: roi.cost, // Now prorated!
-                profit: roi.profit,
-                margin: roi.margin,
-                revenuePerMember: squad.members.length > 0 ? roi.revenue / squad.members.length : 0
-            };
-        }).sort((a, b) => b.profit - a.profit);
-    }
-
-    // Strategic squad analysis (detailed)
-    getSquadStrategicAnalysis(squadId) {
+    getSquadROI(squadId) {
         const squad = storage.getSquadById(squadId);
         if (!squad) return null;
 
         const contracts = this.getSquadContracts(squadId);
-        const roi = this.getSquadROI(squadId);
+        
+        let totalRevenue = 0;
+        let totalCost = 0;
 
-        // Average ticket
-        const avgTicket = contracts.length > 0 ? roi.revenue / contracts.length : 0;
-
-        // Deliverables breakdown by type
-        const deliverablesByType = {};
         contracts.forEach(contract => {
-            if (!contract.deliverables) return;
-            Object.entries(contract.deliverables).forEach(([typeId, qty]) => {
-                const type = storage.getDeliverableTypeById(typeId);
-                const typeName = type ? type.name : 'Desconhecido';
-                if (!deliverablesByType[typeName]) {
-                    deliverablesByType[typeName] = 0;
-                }
-                deliverablesByType[typeName] += qty;
-            });
-        });
-
-        // Cost composition (with proration details)
-        const costBreakdown = {};
-        squad.members.forEach(personId => {
-            const person = storage.getPersonById(personId);
-            if (!person) return;
-
-            const proratedCosts = this.getPersonProratedCostBySquad(personId);
-            const squadCost = proratedCosts[squadId] || 0;
-            const percentage = person.salary > 0 ? (squadCost / person.salary) * 100 : 0;
-
-            costBreakdown[person.name] = {
-                role: person.role,
-                totalSalary: person.salary,
-                allocatedToSquad: squadCost,
-                allocationPercentage: percentage
-            };
+            const roi = this.getContractROI(contract.id);
+            if (roi) {
+                totalRevenue += roi.revenue;
+                totalCost += roi.cost;
+            }
         });
 
         return {
-            squad: {
-                id: squad.id,
-                name: squad.name,
-                memberCount: squad.members.length
-            },
-            performance: {
-                contractCount: contracts.length,
-                revenue: roi.revenue,
-                cost: roi.cost,
-                profit: roi.profit,
-                margin: roi.margin,
-                avgTicket: avgTicket,
-                revenuePerContract: avgTicket
-            },
-            deliverables: deliverablesByType,
-            costBreakdown: costBreakdown
+            squadId,
+            squadName: squad.name,
+            contractCount: contracts.length,
+            totalRevenue,
+            totalCost,
+            profit: totalRevenue - totalCost,
+            margin: totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue * 100) : 0
         };
     }
 
-    // Head analysis - shows what a head manages
-    getHeadAnalysis(headId) {
-        const head = storage.getPersonById(headId);
-        if (!head) return null;
-
-        const squads = storage.getSquads();
-        const squad = squads.find(s => s.headId === headId);
+    // ========================================
+    // ANÁLISES COMPARATIVAS
+    // ========================================
+    
+    /**
+     * Compara pessoas da mesma função
+     */
+    comparePeopleByRole(roleName) {
+        const people = storage.getPeople().filter(p => p.role === roleName);
         
-        if (!squad) {
+        return people.map(person => {
+            const breakdown = this.getPersonCostBreakdown(person.id);
             return {
-                head: {
-                    id: head.id,
-                    name: head.name,
-                    salary: head.salary
-                },
-                squad: null,
-                contracts: [],
-                totalRevenue: 0,
-                totalDeliverables: 0,
-                deliverablesByType: {},
-                costPerContract: 0
+                ...breakdown,
+                efficiency: breakdown.costPerWeightUnit // Menor = mais eficiente
             };
-        }
-
-        const contracts = this.getSquadContracts(squad.id);
-        const totalRevenue = contracts.reduce((sum, c) => sum + c.value, 0);
-        
-        // Deliverables breakdown
-        const deliverablesByType = {};
-        let totalDeliverables = 0;
-        
-        contracts.forEach(contract => {
-            if (!contract.deliverables) return;
-            Object.entries(contract.deliverables).forEach(([typeId, qty]) => {
-                const type = storage.getDeliverableTypeById(typeId);
-                const typeName = type ? type.name : 'Desconhecido';
-                if (!deliverablesByType[typeName]) {
-                    deliverablesByType[typeName] = 0;
-                }
-                deliverablesByType[typeName] += qty;
-                totalDeliverables += qty;
-            });
-        });
-
-        const costPerContract = contracts.length > 0 ? head.salary / contracts.length : 0;
-
-        return {
-            head: {
-                id: head.id,
-                name: head.name,
-                salary: head.salary
-            },
-            squad: {
-                id: squad.id,
-                name: squad.name,
-                memberCount: squad.members.length
-            },
-            contracts: contracts.map(c => ({
-                id: c.id,
-                client: c.client,
-                value: c.value
-            })),
-            totalRevenue: totalRevenue,
-            totalDeliverables: totalDeliverables,
-            deliverablesByType: deliverablesByType,
-            costPerContract: costPerContract,
-            contractCount: contracts.length
-        };
+        }).sort((a, b) => a.efficiency - b.efficiency);
     }
 
-    // Get contract profitability ranking
-    getContractProfitabilityRanking() {
-        const contracts = storage.getContracts();
+    /**
+     * Ranking de contratos por margem
+     */
+    rankContractsByMargin() {
+        const period = storage.getCurrentPeriod();
+        const contracts = storage.getContractsByPeriod(period);
         
         return contracts.map(contract => {
             const roi = this.getContractROI(contract.id);
             return {
-                id: contract.id,
-                client: contract.client,
-                value: contract.value,
+                contractId: contract.id,
+                clientName: contract.clientName,
                 ...roi
             };
         }).sort((a, b) => b.margin - a.margin);
     }
 
-    // Get deliverables breakdown
-    getDeliverablesBreakdown() {
-        const contracts = storage.getContracts();
-        const deliverableTypes = storage.getDeliverableTypes();
-        const breakdown = {};
+    /**
+     * Estatísticas gerais da operação
+     */
+    getGeneralStats() {
+        const period = storage.getCurrentPeriod();
+        const contracts = storage.getContractsByPeriod(period);
         
-        contracts.forEach(contract => {
-            if (contract.deliverables) {
-                Object.entries(contract.deliverables).forEach(([typeId, quantity]) => {
-                    // Get the actual type name
-                    const deliverableType = deliverableTypes.find(dt => dt.id === typeId);
-                    const typeName = deliverableType ? deliverableType.name : 'Tipo removido';
-                    
-                    if (!breakdown[typeName]) {
-                        breakdown[typeName] = { type: typeName, total: 0, contracts: 0 };
-                    }
-                    breakdown[typeName].total += quantity;
-                    breakdown[typeName].contracts += 1;
-                });
-            }
-        });
-        
-        return Object.values(breakdown).sort((a, b) => b.total - a.total);
-    }
+        let totalRevenue = 0;
+        let totalCost = 0;
 
-    // Get role distribution
-    getRoleDistribution() {
-        const people = storage.getPeople();
-        const distribution = {};
-        
-        people.forEach(person => {
-            if (!distribution[person.role]) {
-                distribution[person.role] = { role: person.role, count: 0, totalSalary: 0 };
+        contracts.forEach(contract => {
+            const roi = this.getContractROI(contract.id);
+            if (roi) {
+                totalRevenue += roi.revenue;
+                totalCost += roi.cost;
             }
-            distribution[person.role].count += 1;
-            distribution[person.role].totalSalary += person.salary;
         });
-        
-        return Object.values(distribution).map(item => ({
-            ...item,
-            averageSalary: item.totalSalary / item.count
-        }));
+
+        return {
+            period,
+            contractCount: contracts.length,
+            totalRevenue,
+            totalCost,
+            profit: totalRevenue - totalCost,
+            margin: totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue * 100) : 0,
+            averageRevenuePerContract: contracts.length > 0 ? (totalRevenue / contracts.length) : 0
+        };
     }
 }
 

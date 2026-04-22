@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Pesos - Demonstração Visual</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 2rem;
+            font-size: 2.5rem;
+        }
+
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .card h2 {
+            color: #2c3e50;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 3px solid #ecf0f1;
+        }
+
+        .card.old-system {
+            border-top: 5px solid #e74c3c;
+        }
+
+        .card.new-system {
+            border-top: 5px solid #27ae60;
+        }
+
+        .example {
+            margin: 1.5rem 0;
+        }
+
+        .example h3 {
+            color: #34495e;
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+        }
+
+        .deliverables {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .deliverable-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem;
+            margin: 0.5rem 0;
+            background: white;
+            border-radius: 6px;
+        }
+
+        .deliverable-name {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .deliverable-value {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+        }
+
+        .weight-badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            margin-left: 0.5rem;
+        }
+
+        .weight-badge.high {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .weight-badge.medium {
+            background: #f39c12;
+            color: white;
+        }
+
+        .weight-badge.low {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .calculation {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin: 1.5rem 0;
+        }
+
+        .calculation h4 {
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }
+
+        .calc-line {
+            font-family: 'Courier New', monospace;
+            margin: 0.5rem 0;
+            font-size: 0.95rem;
+        }
+
+        .result {
+            background: rgba(255,255,255,0.2);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            text-align: center;
+            font-size: 1.3rem;
+            font-weight: bold;
+        }
+
+        .insight {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 1rem;
+            margin: 1.5rem 0;
+            border-radius: 6px;
+        }
+
+        .insight h4 {
+            color: #856404;
+            margin-bottom: 0.5rem;
+        }
+
+        .insight p {
+            color: #856404;
+            line-height: 1.6;
+        }
+
+        .comparison-table {
+            width: 100%;
+            margin: 2rem 0;
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .comparison-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem;
+            text-align: left;
+        }
+
+        .comparison-table td {
+            padding: 1rem;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        .comparison-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .comparison-table .old-value {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .comparison-table .new-value {
+            color: #27ae60;
+            font-weight: bold;
+        }
+
+        .emoji {
+            font-size: 1.5rem;
+            margin-right: 0.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .comparison {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Sistema de Pesos - Demonstração Visual</h1>
+
+        <div class="comparison">
+            <!-- SISTEMA ANTIGO -->
+            <div class="card old-system">
+                <h2>❌ Sistema Antigo (SEM Pesos)</h2>
+                
+                <div class="example">
+                    <h3>Filmmaker: João Silva</h3>
+                    
+                    <div class="deliverables">
+                        <div class="deliverable-item">
+                            <span class="deliverable-name">💰 Salário</span>
+                            <span class="deliverable-value">R$ 3.000,00</span>
+                        </div>
+                    </div>
+
+                    <div class="deliverables">
+                        <strong>Entregáveis:</strong>
+                        <div class="deliverable-item">
+                            <span class="deliverable-name">🎬 Vídeos Editados</span>
+                            <span class="deliverable-value">5 unidades</span>
+                        </div>
+                        <div class="deliverable-item">
+                            <span class="deliverable-name">✂️ Clipes (Cortes)</span>
+                            <span class="deliverable-value">80 unidades</span>
+                        </div>
+                        <div class="deliverable-item">
+                            <span class="deliverable-name"><strong>TOTAL</strong></span>
+                            <span class="deliverable-value"><strong>85 entregas</strong></span>
+                        </div>
+                    </div>
+
+                    <div class="calculation">
+                        <h4>Cálculo:</h4>
+                        <div class="calc-line">Custo/Entregável = Salário / Total Entregas</div>
+                        <div class="calc-line">Custo/Entregável = R$ 3.000 / 85</div>
+                        <div class="result">= R$ 35,29 por entregável</div>
+                    </div>
+
+                    <div class="insight">
+                        <h4>⚠️ Problema:</h4>
+                        <p><strong>Todos os entregáveis custam o mesmo!</strong></p>
+                        <p>1 Vídeo Editado completo = R$ 35,29</p>
+                        <p>1 Clipe simples = R$ 35,29</p>
+                        <p><strong>Isso não reflete a realidade do trabalho!</strong></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SISTEMA NOVO -->
+            <div class="card new-system">
+                <h2>✅ Sistema Novo (COM Pesos)</h2>
+                
+                <div class="example">
+                    <h3>Filmmaker: João Silva</h3>
+                    
+                    <div class="deliverables">
+                        <div class="deliverable-item">
+                            <span class="deliverable-name">💰 Salário</span>
+                            <span class="deliverable-value">R$ 3.000,00</span>
+                        </div>
+                    </div>
+
+                    <div class="deliverables">
+                        <strong>Entregáveis Ponderados:</strong>
+                        <div class="deliverable-item">
+                            <span class="deliverable-name">
+                                🎬 Vídeos Editados
+                                <span class="weight-badge high">Peso 5</span>
+                            </span>
+                            <span class="deliverable-value">5 × 5 = 25 pontos</span>
+                        </div>
+                        <div class="deliverable-item">
+                            <span class="deliverable-name">
+                                ✂️ Clipes (Cortes)
+                                <span class="weight-badge low">Peso 1</span>
+                            </span>
+                            <span class="deliverable-value">80 × 1 = 80 pontos</span>
+                        </div>
+                        <div class="deliverable-item">
+                            <span class="deliverable-name"><strong>TOTAL PONDERADO</strong></span>
+                            <span class="deliverable-value"><strong>105 pontos</strong></span>
+                        </div>
+                    </div>
+
+                    <div class="calculation">
+                        <h4>Cálculo Ponderado:</h4>
+                        <div class="calc-line">Custo/Ponto = Salário / Soma dos Pesos</div>
+                        <div class="calc-line">Custo/Ponto = R$ 3.000 / 105</div>
+                        <div class="result">= R$ 28,57 por ponto</div>
+                    </div>
+
+                    <div class="insight" style="background: #d4edda; border-left-color: #28a745;">
+                        <h4 style="color: #155724;">✅ Solução:</h4>
+                        <p style="color: #155724;"><strong>Cada entregável tem seu custo real!</strong></p>
+                        <p style="color: #155724;">1 Vídeo Editado = R$ 28,57 × 5 = <strong>R$ 142,85</strong></p>
+                        <p style="color: #155724;">1 Clipe = R$ 28,57 × 1 = <strong>R$ 28,57</strong></p>
+                        <p style="color: #155724;"><strong>Vídeo custa 5x mais, como deveria ser!</strong></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TABELA COMPARATIVA -->
+        <div class="card">
+            <h2>📊 Comparação Direta: Antigo vs Novo</h2>
+            
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Sistema Antigo</th>
+                        <th>Sistema Novo (Pesos)</th>
+                        <th>Diferença</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Custo de 1 Vídeo Editado</strong></td>
+                        <td class="old-value">R$ 35,29</td>
+                        <td class="new-value">R$ 142,85</td>
+                        <td><span class="emoji">📈</span> +304% (mais realista)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Custo de 1 Clipe</strong></td>
+                        <td class="old-value">R$ 35,29</td>
+                        <td class="new-value">R$ 28,57</td>
+                        <td><span class="emoji">📉</span> -19% (mais justo)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Custo de 5 Vídeos</strong></td>
+                        <td class="old-value">R$ 176,45</td>
+                        <td class="new-value">R$ 714,25</td>
+                        <td><span class="emoji">✅</span> Reflete complexidade real</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Custo de 80 Clipes</strong></td>
+                        <td class="old-value">R$ 2.823,20</td>
+                        <td class="new-value">R$ 2.285,60</td>
+                        <td><span class="emoji">✅</span> Mais adequado ao esforço</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="insight">
+                <h4><span class="emoji">💡</span> Insight Principal:</h4>
+                <p><strong>No sistema antigo:</strong> 80 clipes custavam R$ 2.823 (quase todo o salário!)</p>
+                <p><strong>No sistema novo:</strong> 80 clipes custam R$ 2.286, liberando R$ 714 para os 5 vídeos complexos</p>
+                <p><strong>Resultado:</strong> Distribuição justa do custo baseada no esforço real de cada tipo de trabalho!</p>
+            </div>
+        </div>
+
+        <!-- EXEMPLO 2: DESIGNER -->
+        <div class="card" style="margin-top: 2rem;">
+            <h2>🎨 Exemplo 2: Designer com Mix de Trabalhos</h2>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                <div>
+                    <h3>Designer: Maria Santos</h3>
+                    <div class="deliverables">
+                        <div class="deliverable-item">
+                            <span class="deliverable-name">💰 Salário</span>
+                            <span class="deliverable-value">R$ 2.500,00</span>
+                        </div>
+                    </div>
+
+                    <div class="deliverables">
+                        <strong>Entregáveis:</strong>
+                        <div class="deliverable-item">
+                            <span class="deliverable-name">
+                                📸 Criativos Estáticos
+                                <span class="weight-badge low">Peso 1</span>
+                            </span>
+                            <span class="deliverable-value">10 × 1 = 10 pts</span>
+                        </div>
+                        <div class="deliverable-item">
+                            <span class="deliverable-name">
+                                🎠 Carrosséis
+                                <span class="weight-badge medium">Peso 2</span>
+                            </span>
+                            <span class="deliverable-value">15 × 2 = 30 pts</span>
+                        </div>
+                        <div class="deliverable-item">
+                            <span class="deliverable-name">
+                                📱 Stories
+                                <span class="weight-badge low">Peso 0.5</span>
+                            </span>
+                            <span class="deliverable-value">20 × 0.5 = 10 pts</span>
+                        </div>
+                        <div class="deliverable-item">
+                            <span class="deliverable-name"><strong>TOTAL</strong></span>
+                            <span class="deliverable-value"><strong>50 pontos</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="calculation" style="margin-top: 0;">
+                        <h4>Cálculo:</h4>
+                        <div class="calc-line">Custo/Ponto = R$ 2.500 / 50</div>
+                        <div class="result">= R$ 50,00 por ponto</div>
+                    </div>
+
+                    <div class="deliverables" style="margin-top: 1rem;">
+                        <strong>Custo Real de Cada Tipo:</strong>
+                        <div class="deliverable-item">
+                            <span class="deliverable-name">1 Criativo Estático</span>
+                            <span class="deliverable-value" style="color: #27ae60;">R$ 50,00</span>
+                        </div>
+                        <div class="deliverable-item">
+                            <span class="deliverable-name">1 Carrossel</span>
+                            <span class="deliverable-value" style="color: #f39c12;">R$ 100,00</span>
+                        </div>
+                        <div class="deliverable-item">
+                            <span class="deliverable-name">1 Stories</span>
+                            <span class="deliverable-value" style="color: #95a5a6;">R$ 25,00</span>
+                        </div>
+                    </div>
+
+                    <div class="insight" style="background: #d4edda; border-left-color: #28a745; margin-top: 1rem;">
+                        <h4 style="color: #155724;">✅ Perfeito!</h4>
+                        <p style="color: #155724;">Carrossel custa 2x mais que criativo simples</p>
+                        <p style="color: #155724;">Stories custam metade (trabalho rápido)</p>
+                        <p style="color: #155724;"><strong>Custo proporcional ao esforço!</strong></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

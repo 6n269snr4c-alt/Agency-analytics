@@ -6,11 +6,11 @@ import { renderDashboard } from './pages/dashboardPage.js';
 import { renderContractsPage } from './pages/contractsPage.js';
 import { renderPeoplePage } from './pages/peoplePage.js';
 import { renderSquadsPage } from './pages/squadsPage.js';
+import { renderComparisonPage } from './pages/comparisonPage.js';
 import { renderSquadComparisonPage } from './pages/squadComparisonPage.js';
 import { renderDeliverableTypesPage } from './pages/deliverableTypesPage.js';
 import { renderValidationPage } from './pages/validationPage.js';
 import { renderEvolutionPage } from './pages/evolutionPage.js';
-import { renderRolesPage } from './pages/rolesPage.js';
 import { migrateToPeriods } from './migrateToPeriods.js';
 
 // Initialize app
@@ -26,16 +26,15 @@ function init() {
     router.register('/contracts', renderContractsPage);
     router.register('/people', renderPeoplePage);
     router.register('/squads', renderSquadsPage);
-    router.register('/comparison', renderSquadComparisonPage);
+    router.register('/comparison', renderSquadComparisonPage); // Nova comparação de squads
     router.register('/deliverables', renderDeliverableTypesPage);
     router.register('/validation', renderValidationPage);
     router.register('/evolution', renderEvolutionPage);
-    router.register('/roles', renderRolesPage); // NOVO: Sistema de Pesos
 
     // Initialize router
     router.init();
 
-    console.log('🚀 Agency Analytics initialized with Weighted System');
+    console.log('🚀 Agency Analytics initialized');
 }
 
 // Start app when DOM is ready

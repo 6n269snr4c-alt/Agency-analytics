@@ -12,7 +12,6 @@ export function renderNavbar() {
                 <li><a href="#/" data-route="/">Dashboard</a></li>
                 <li><a href="#/evolution" data-route="/evolution">Evolução</a></li>
                 <li><a href="#/deliverables" data-route="/deliverables">Entregáveis</a></li>
-                <li><a href="#/roles" data-route="/roles">⚖️ Funções</a></li>
                 <li><a href="#/contracts" data-route="/contracts">Contratos</a></li>
                 <li><a href="#/people" data-route="/people">Pessoas</a></li>
                 <li><a href="#/squads" data-route="/squads">Squads</a></li>

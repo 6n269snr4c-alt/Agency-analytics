@@ -1,4 +1,4 @@
-// contractsPage.js - Contracts management page
+// contractsPage.js - Contracts management page (VERSÃO CORRIGIDA)
 
 import contractService from '../services/contractService.js';
 import squadService from '../services/squadService.js';
@@ -56,44 +56,44 @@ export function renderContractsPage() {
 
         <!-- Modal -->
         <div id="contract-modal" class="modal">
-            <div class="modal-content">
+            <div class="modal-content modal-large">
                 <div class="modal-header">
-                    <h2 class="modal-title" id="modal-title">Novo Contrato</h2>
+                    <h2 id="modal-title" class="modal-title">Novo Contrato</h2>
                     <button class="modal-close" onclick="window.closeContractModal()">&times;</button>
                 </div>
                 <form id="contract-form">
                     <div class="form-group">
-                        <label class="form-label">Cliente *</label>
+                        <label class="form-label">Cliente*</label>
                         <input type="text" class="form-input" id="client" required>
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">Valor Mensal (R$) *</label>
+                        <label class="form-label">Valor do Contrato (R$)*</label>
                         <input type="number" class="form-input" id="value" step="0.01" min="0" required>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">Entregáveis</label>
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                            <select class="form-select" id="deliverable-type-select" style="flex: 1;">
+                                <option value="">Selecione um tipo</option>
+                                ${deliverableTypes.map(type => 
+                                    `<option value="${type.id}">${type.name}</option>`
+                                ).join('')}
+                            </select>
+                            <input 
+                                type="number" 
+                                class="form-input" 
+                                id="deliverable-qty" 
+                                placeholder="Qtd" 
+                                min="1" 
+                                style="width: 100px;"
+                            >
+                            <button type="button" class="btn btn-primary" onclick="window.addDeliverable()">
+                                + Adicionar
+                            </button>
+                        </div>
                         <div id="deliverables-container"></div>
-                        ${deliverableTypes.length > 0 ? `
-                            <div class="flex gap-2 mt-2">
-                                <select class="form-select" id="deliverable-type-select" style="flex: 2;">
-                                    <option value="">Selecione o tipo...</option>
-                                    ${deliverableTypes.map(type => `
-                                        <option value="${type.id}">${type.name} (${type.roles.join(', ')})</option>
-                                    `).join('')}
-                                </select>
-                                <input type="number" class="form-input" id="deliverable-qty" placeholder="Qtd" min="1" style="flex: 1;">
-                                <button type="button" class="btn btn-secondary" onclick="window.addDeliverable()">+</button>
-                            </div>
-                        ` : `
-                            <div style="padding: 1rem; background: rgba(255, 170, 0, 0.1); border-left: 3px solid var(--warning); border-radius: 4px;">
-                                <strong>Nenhum tipo de entregável cadastrado</strong>
-                                <p style="margin: 0.5rem 0 0 0; color: var(--text-secondary);">
-                                    Primeiro cadastre tipos de entregáveis na aba <a href="#/deliverables" style="color: var(--primary);">Entregáveis</a>
-                                </p>
-                            </div>
-                        `}
                     </div>
 
                     <div class="form-group">
@@ -169,23 +169,27 @@ function renderContractsList(contracts) {
     // Prepare data with calculated values
     const contractsData = contracts.map(contract => {
         const roi = analyticsService.getContractROI(contract.id);
+        
+        // ✅ CORREÇÃO: Verificar se roi é null antes de acessar propriedades
+        const safeRoi = roi || { cost: 0, profit: 0, margin: 0 };
+        
         const assignedPeople = contract.assignedPeople || [];
         const squad = contract.squadTag ? squadService.getSquad(contract.squadTag) : null;
         const warnings = validateContractConsistency(contract);
         
         return {
             contract,
-            roi,
+            roi: safeRoi,
             assignedPeople,
             squad,
             warnings,
             // Sortable values
             clientName: contract.client.toLowerCase(),
-            cost: roi.cost,
+            cost: safeRoi.cost,
             squadName: squad ? squad.name.toLowerCase() : 'zzz',
             value: contract.value,
-            profit: roi.profit,
-            margin: roi.margin,
+            profit: safeRoi.profit,
+            margin: safeRoi.margin,
             peopleCount: assignedPeople.length,
             deliverablesCount: Object.keys(contract.deliverables || {}).length
         };
@@ -216,93 +220,99 @@ function renderContractsList(contracts) {
     });
 
     return `
-        <div style="background: var(--bg-darker); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
+        <div class="table-container">
+            <table>
                 <thead>
-                    <tr style="background: var(--bg); border-bottom: 2px solid var(--border);">
-                        <th style="padding: 0.4rem 0.75rem; text-align: left; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer; border-right: 1px solid var(--border);" onclick="window.sortContractsBy('client')">
-                            CLIENTE ${sortColumn === 'client' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                    <tr>
+                        <th>
+                            <button class="sort-btn" onclick="window.sortContractsBy('client')">
+                                Cliente ${sortColumn === 'client' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                            </button>
                         </th>
-                        <th style="padding: 0.4rem 0.75rem; text-align: left; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer; border-right: 1px solid var(--border);" onclick="window.sortContractsBy('squad')">
-                            SQUAD ${sortColumn === 'squad' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        <th>
+                            <button class="sort-btn" onclick="window.sortContractsBy('squad')">
+                                Squad ${sortColumn === 'squad' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                            </button>
                         </th>
-                        <th style="padding: 0.4rem 0.75rem; text-align: right; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer; border-right: 1px solid var(--border);" onclick="window.sortContractsBy('value')">
-                            VALOR ${sortColumn === 'value' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        <th>
+                            <button class="sort-btn" onclick="window.sortContractsBy('value')">
+                                Valor ${sortColumn === 'value' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                            </button>
                         </th>
-                        <th style="padding: 0.4rem 0.75rem; text-align: right; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer; border-right: 1px solid var(--border);" onclick="window.sortContractsBy('cost')">
-                            CUSTO ${sortColumn === 'cost' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        <th>
+                            <button class="sort-btn" onclick="window.sortContractsBy('cost')">
+                                Custo ${sortColumn === 'cost' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                            </button>
                         </th>
-                        <th style="padding: 0.4rem 0.75rem; text-align: right; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer; border-right: 1px solid var(--border);" onclick="window.sortContractsBy('profit')">
-                            LUCRO ${sortColumn === 'profit' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        <th>
+                            <button class="sort-btn" onclick="window.sortContractsBy('profit')">
+                                Lucro ${sortColumn === 'profit' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                            </button>
                         </th>
-                        <th style="padding: 0.4rem 0.75rem; text-align: center; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer; border-right: 1px solid var(--border);" onclick="window.sortContractsBy('margin')">
-                            MARGEM ${sortColumn === 'margin' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        <th>
+                            <button class="sort-btn" onclick="window.sortContractsBy('margin')">
+                                Margem ${sortColumn === 'margin' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                            </button>
                         </th>
-                        <th style="padding: 0.4rem 0.75rem; text-align: center; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer; border-right: 1px solid var(--border);" onclick="window.sortContractsBy('peopleCount')">
-                            PESSOAS ${sortColumn === 'peopleCount' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        <th>
+                            <button class="sort-btn" onclick="window.sortContractsBy('peopleCount')">
+                                Equipe ${sortColumn === 'peopleCount' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                            </button>
                         </th>
-                        <th style="padding: 0.4rem 0.75rem; text-align: left; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; cursor: pointer; border-right: 1px solid var(--border);" onclick="window.sortContractsBy('deliverablesCount')">
-                            ENTREGÁVEIS ${sortColumn === 'deliverablesCount' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                        <th>
+                            <button class="sort-btn" onclick="window.sortContractsBy('deliverablesCount')">
+                                Entregas ${sortColumn === 'deliverablesCount' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                            </button>
                         </th>
-                        <th style="padding: 0.4rem 0.75rem; text-align: center; font-weight: bold; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">
-                            AÇÕES
-                        </th>
+                        <th>Ações</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${contractsData.map(data => {
-                        const { contract, roi, assignedPeople, squad, warnings } = data;
-                        const deliverables = contract.deliverables || {};
-                        
-                        const deliverablesText = Object.entries(deliverables).length > 0 
-                            ? Object.entries(deliverables).map(([typeId, qty]) => {
-                                const type = deliverableTypeService.getDeliverableType(typeId);
-                                const typeName = type ? type.name : 'Removido';
-                                return `${typeName}: ${qty}`;
-                            }).join(', ')
-                            : '-';
-                        
-                        return `
-                            <tr style="border-bottom: 1px solid var(--border); ${warnings.length > 0 ? 'background: rgba(220, 38, 38, 0.05);' : ''} transition: background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='${warnings.length > 0 ? 'rgba(220, 38, 38, 0.05)' : 'transparent'}'">
-                                <td style="padding: 0.4rem 0.6rem; border-right: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;">
-                                    <span style="font-weight: 500;">${contract.client}</span>
-                                    ${warnings.length > 0 ? ` <span style="color: var(--error); font-size: 0.8rem;">⚠️</span>` : ''}
-                                </td>
-                                <td style="padding: 0.4rem 0.6rem; border-right: 1px solid var(--border);">
-                                    ${squad ? `<span style="font-size: 0.8rem; background: var(--success); color: #000; padding: 0.2rem 0.5rem; border-radius: 3px; white-space: nowrap; font-weight: 500;">${squad.icon ? squad.icon + ' ' : ''}${squad.name}</span>` : '<span style="color: var(--text-secondary); font-size: 0.8rem;">-</span>'}
-                                </td>
-                                <td style="padding: 0.4rem 0.6rem; text-align: right; border-right: 1px solid var(--border); white-space: nowrap;">
-                                    R$ ${formatCurrency(contract.value)}
-                                </td>
-                                <td style="padding: 0.4rem 0.6rem; text-align: right; border-right: 1px solid var(--border); white-space: nowrap; color: var(--text-secondary);">
-                                    R$ ${formatCurrency(roi.cost)}
-                                </td>
-                                <td style="padding: 0.4rem 0.6rem; text-align: right; border-right: 1px solid var(--border); white-space: nowrap; color: ${roi.profit > 0 ? 'var(--success)' : 'var(--error)'}; font-weight: 500;">
-                                    R$ ${formatCurrency(roi.profit)}
-                                </td>
-                                <td style="padding: 0.4rem 0.6rem; text-align: center; border-right: 1px solid var(--border);">
-                                    ${roi.margin.toFixed(1)}%
-                                </td>
-                                <td style="padding: 0.4rem 0.6rem; text-align: center; border-right: 1px solid var(--border);">
-                                    <span style="cursor: pointer; color: var(--primary); text-decoration: underline;" onclick="alert('EQUIPE:\\n\\n${assignedPeople.map(id => {const p = personService.getPerson(id); return p ? '• ' + p.name + ' (' + p.role + ')' : '';}).filter(Boolean).join('\\n')}')">
-                                        👥 ${assignedPeople.length}
-                                    </span>
-                                </td>
-                                <td style="padding: 0.4rem 0.6rem; text-align: center; border-right: 1px solid var(--border);">
-                                    <span style="cursor: pointer; color: var(--primary); text-decoration: underline;" onclick="alert('ENTREGÁVEIS:\\n\\n${deliverablesText.replace(/• /g, '\\n• ')}')">
-                                        🔍 ${Object.keys(deliverables).length}
-                                    </span>
-                                </td>
-                                <td style="padding: 0.4rem 0.6rem; text-align: center;">
-                                    <div style="display: flex; gap: 0.25rem; justify-content: center;">
-                                        <button class="btn btn-small btn-secondary" onclick="window.showContractBreakdown('${contract.id}')" title="Ver breakdown" style="padding: 0.25rem 0.5rem; font-size: 0.85rem;">📊</button>
-                                        <button class="btn btn-small btn-secondary" onclick="window.editContract('${contract.id}')" title="Editar" style="padding: 0.25rem 0.5rem; font-size: 0.85rem;">✏️</button>
-                                        <button class="btn btn-small btn-danger" onclick="window.deleteContract('${contract.id}')" title="Excluir" style="padding: 0.25rem 0.5rem; font-size: 0.85rem;">🗑️</button>
+                    ${contractsData.map(({contract, roi, assignedPeople, squad, warnings}) => `
+                        <tr>
+                            <td>
+                                <strong>${contract.client}</strong>
+                                ${warnings.length > 0 ? `
+                                    <div style="margin-top: 0.25rem;">
+                                        ${warnings.map(w => `
+                                            <span class="badge badge-warning" style="font-size: 0.75rem;">
+                                                ${w.message}
+                                            </span>
+                                        `).join('')}
                                     </div>
-                                </td>
-                            </tr>
-                        `;
-                    }).join('')}
+                                ` : ''}
+                            </td>
+                            <td>${squad ? squad.name : '-'}</td>
+                            <td>R$ ${formatCurrency(contract.value)}</td>
+                            <td>
+                                <a href="#" onclick="window.showContractBreakdown('${contract.id}'); return false;" style="color: var(--primary); text-decoration: none;">
+                                    R$ ${formatCurrency(roi.cost)} 🔍
+                                </a>
+                            </td>
+                            <td>
+                                <span class="badge ${roi.profit >= 0 ? 'badge-success' : 'badge-error'}">
+                                    R$ ${formatCurrency(roi.profit)}
+                                </span>
+                            </td>
+                            <td>
+                                <span class="badge ${roi.margin >= 30 ? 'badge-success' : roi.margin >= 15 ? 'badge-warning' : 'badge-error'}">
+                                    ${roi.margin.toFixed(1)}%
+                                </span>
+                            </td>
+                            <td>${assignedPeople.length} pessoas</td>
+                            <td>${Object.keys(contract.deliverables || {}).length} tipos</td>
+                            <td>
+                                <div class="btn-group">
+                                    <button class="btn btn-small btn-secondary" onclick="window.editContract('${contract.id}')">
+                                        ✏️
+                                    </button>
+                                    <button class="btn btn-small btn-error" onclick="window.deleteContract('${contract.id}')">
+                                        🗑️
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join('')}
                 </tbody>
             </table>
         </div>
@@ -310,20 +320,8 @@ function renderContractsList(contracts) {
 }
 
 function renderTeamAssignment(people) {
-    if (people.length === 0) {
-        return '<p style="color: var(--text-secondary);">Nenhuma pessoa cadastrada</p>';
-    }
-
-    // Filter out Head Executivo - they are assigned via squad
-    const selectablePeople = people.filter(p => p.role !== 'Head Executivo');
-    
-    if (selectablePeople.length === 0) {
-        return '<p style="color: var(--text-secondary);">Nenhuma pessoa disponível (Heads são atribuídos via squad)</p>';
-    }
-
-    // Group people by role
     const peopleByRole = {};
-    selectablePeople.forEach(person => {
+    people.forEach(person => {
         if (!peopleByRole[person.role]) {
             peopleByRole[person.role] = [];
         }
@@ -333,22 +331,26 @@ function renderTeamAssignment(people) {
     return `
         <div style="display: grid; gap: 1rem;">
             ${Object.entries(peopleByRole).map(([role, rolePeople]) => `
-                <div style="background: var(--bg-darker); border: 1px solid var(--border); border-radius: 4px; padding: 1rem;">
-                    <strong style="display: block; margin-bottom: 0.75rem; color: var(--primary);">${role}</strong>
-                    ${rolePeople.map(person => {
-                        const squads = personService.getPersonSquadNames(person.id);
-                        return `
-                            <label style="display: block; margin: 0.5rem 0; cursor: pointer;">
-                                <input type="checkbox" value="${person.id}" class="person-checkbox" style="margin-right: 0.5rem;">
-                                ${person.name} - R$ ${formatCurrency(person.salary)}
-                                ${squads.length > 0 ? `
-                                    <span style="color: var(--text-secondary); font-size: 0.85rem;">
-                                        (${squads.join(', ')})
-                                    </span>
-                                ` : ''}
-                            </label>
-                        `;
-                    }).join('')}
+                <div style="background: var(--bg-darker); padding: 1rem; border-radius: 4px; border: 1px solid var(--border);">
+                    <h4 style="margin: 0 0 0.75rem 0; color: var(--primary); font-size: 0.95rem;">${role}</h4>
+                    <div style="display: grid; gap: 0.5rem;">
+                        ${rolePeople.map(person => {
+                            const squads = squadService.getPersonSquads(person.id).map(s => s.name);
+                            return `
+                                <label class="checkbox-label" style="display: flex; align-items: center; padding: 0.5rem; background: var(--bg); border-radius: 4px; cursor: pointer;">
+                                    <input type="checkbox" class="person-checkbox" value="${person.id}" style="margin-right: 0.75rem;">
+                                    <div style="flex: 1;">
+                                        <strong>${person.name}</strong>
+                                        ${squads.length > 0 ? `
+                                            <span style="color: var(--text-secondary); font-size: 0.85rem;">
+                                                (${squads.join(', ')})
+                                            </span>
+                                        ` : ''}
+                                    </div>
+                                </label>
+                            `;
+                        }).join('')}
+                    </div>
                 </div>
             `).join('')}
         </div>
@@ -399,6 +401,12 @@ function closeContractModal() {
 function showContractBreakdown(contractId) {
     const contract = contractService.getContract(contractId);
     const roi = analyticsService.getContractROI(contractId);
+    
+    // ✅ CORREÇÃO: Verificar se roi é null
+    if (!roi) {
+        alert('Não foi possível calcular o ROI deste contrato. Verifique se há pessoas atribuídas.');
+        return;
+    }
     
     document.getElementById('breakdown-title').textContent = `${contract.client} - Detalhamento de Custo`;
     
@@ -468,53 +476,86 @@ function sortContractsBy(column) {
         sortColumn = column;
         sortDirection = 'asc';
     }
-    filterContracts();
+    renderContractsPage();
 }
 
 function filterContracts() {
     const searchTerm = document.getElementById('contract-search').value.toLowerCase();
-    const contracts = contractService.getAllContracts();
+    const rows = document.querySelectorAll('#contracts-list tbody tr');
     
-    const filtered = contracts.filter(contract => {
-        const client = contract.client.toLowerCase();
-        const squad = contract.squadTag ? squadService.getSquad(contract.squadTag)?.name.toLowerCase() : '';
-        const people = contract.assignedPeople?.map(id => {
-            const person = personService.getPerson(id);
-            return person ? person.name.toLowerCase() : '';
-        }).join(' ') || '';
-        
-        return client.includes(searchTerm) || 
-               squad.includes(searchTerm) || 
-               people.includes(searchTerm);
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(searchTerm) ? '' : 'none';
     });
+}
+
+function exportContracts() {
+    const contracts = contractService.getAllContracts();
+    const dataStr = JSON.stringify(contracts, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
     
-    document.getElementById('contracts-list').innerHTML = renderContractsList(filtered);
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `contratos_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+}
+
+function updateFormValidationWarnings() {
+    const warningsContainer = document.getElementById('form-validation-warnings');
+    if (!warningsContainer) return;
+
+    const selectedPeople = Array.from(document.querySelectorAll('.person-checkbox:checked'))
+        .map(cb => cb.value);
+    
+    if (selectedPeople.length === 0 || Object.keys(deliverables).length === 0) {
+        warningsContainer.innerHTML = '';
+        return;
+    }
+
+    // Mock contract for validation
+    const mockContract = {
+        assignedPeople: selectedPeople,
+        deliverables: deliverables
+    };
+
+    const warnings = validateContractConsistency(mockContract);
+    
+    if (warnings.length > 0) {
+        warningsContainer.innerHTML = `
+            <div style="background: var(--warning-bg, #fff3cd); border: 1px solid var(--warning, #ffc107); border-radius: 4px; padding: 1rem; margin-top: 1rem;">
+                <strong style="color: var(--warning-dark, #856404);">⚠️ Avisos de Consistência:</strong>
+                <ul style="margin: 0.5rem 0 0 1.5rem; color: var(--warning-dark, #856404);">
+                    ${warnings.map(w => `<li>${w.message}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    } else {
+        warningsContainer.innerHTML = '';
+    }
 }
 
 function validateContractConsistency(contract) {
     const warnings = [];
+    const deliverableTypes = deliverableTypeService.getActiveDeliverableTypes();
     
-    // Get all roles needed for deliverables (excluding Head Executivo)
+    // Get all roles needed for the deliverables
     const rolesNeeded = new Set();
     if (contract.deliverables) {
         Object.keys(contract.deliverables).forEach(typeId => {
-            const type = deliverableTypeService.getDeliverableType(typeId);
+            const type = deliverableTypes.find(dt => dt.id === typeId);
             if (type && type.roles) {
-                type.roles.forEach(role => {
-                    if (role !== 'Head Executivo') {
-                        rolesNeeded.add(role);
-                    }
-                });
+                type.roles.forEach(role => rolesNeeded.add(role));
             }
         });
     }
     
-    // Get all roles assigned to contract (excluding Head Executivo)
+    // Get all roles assigned
     const rolesAssigned = new Set();
     if (contract.assignedPeople) {
         contract.assignedPeople.forEach(personId => {
             const person = personService.getPerson(personId);
-            if (person && person.role !== 'Head Executivo') {
+            if (person) {
                 rolesAssigned.add(person.role);
             }
         });
@@ -641,11 +682,13 @@ function addDeliverable() {
     if (typeSelect) typeSelect.value = '';
     document.getElementById('deliverable-qty').value = '';
     renderDeliverables();
+    updateFormValidationWarnings();
 }
 
 function removeDeliverable(typeId) {
     delete deliverables[typeId];
     renderDeliverables();
+    updateFormValidationWarnings();
 }
 
 function renderDeliverables() {
@@ -662,182 +705,33 @@ function renderDeliverables() {
             ${Object.entries(deliverables).map(([typeId, qty]) => {
                 const type = deliverableTypeService.getDeliverableType(typeId);
                 const typeName = type ? type.name : 'Desconhecido';
-                const roles = type ? ` (${type.roles.join(', ')})` : '';
+                const roles = type ? type.roles.join(', ') : '';
+                
                 return `
-                    <span class="tag">
-                        ${typeName}: ${qty}${roles}
-                        <button type="button" class="tag-remove" onclick="window.removeDeliverable('${typeId}')">&times;</button>
-                    </span>
+                    <div class="tag tag-large">
+                        <div style="display: flex; flex-direction: column; flex: 1;">
+                            <strong>${typeName}</strong>
+                            <span style="font-size: 0.85rem; color: var(--text-secondary);">
+                                ${qty}x | Requer: ${roles}
+                            </span>
+                        </div>
+                        <button 
+                            type="button" 
+                            onclick="window.removeDeliverable('${typeId}')" 
+                            style="background: none; border: none; color: var(--error); cursor: pointer; font-size: 1.2rem; padding: 0 0.5rem;"
+                        >
+                            ×
+                        </button>
+                    </div>
                 `;
             }).join('')}
         </div>
     `;
-    
-    // Show validation warnings in modal
-    updateFormValidationWarnings();
-}
-
-function updateFormValidationWarnings() {
-    const warningsContainer = document.getElementById('form-validation-warnings');
-    if (!warningsContainer) return;
-    
-    // Get selected people roles (excluding Head Executivo)
-    const selectedPeople = Array.from(document.querySelectorAll('.person-checkbox:checked')).map(cb => cb.value);
-    const rolesAssigned = new Set();
-    selectedPeople.forEach(personId => {
-        const person = personService.getPerson(personId);
-        if (person && person.role !== 'Head Executivo') {
-            rolesAssigned.add(person.role);
-        }
-    });
-    
-    // Get roles needed for deliverables (excluding Head Executivo)
-    const rolesNeeded = new Set();
-    Object.keys(deliverables).forEach(typeId => {
-        const type = deliverableTypeService.getDeliverableType(typeId);
-        if (type && type.roles) {
-            type.roles.forEach(role => {
-                if (role !== 'Head Executivo') {
-                    rolesNeeded.add(role);
-                }
-            });
-        }
-    });
-    
-    const warnings = [];
-    
-    // Check missing roles
-    rolesNeeded.forEach(role => {
-        if (!rolesAssigned.has(role)) {
-            warnings.push(`⚠️ Falta <strong>${role}</strong> na equipe`);
-        }
-    });
-    
-    // Check unused people
-    rolesAssigned.forEach(role => {
-        if (!rolesNeeded.has(role)) {
-            warnings.push(`⚠️ <strong>${role}</strong> selecionado mas sem entregável correspondente`);
-        }
-    });
-    
-    if (warnings.length > 0) {
-        warningsContainer.innerHTML = `
-            <div style="background: rgba(255, 59, 48, 0.1); border: 2px solid var(--error); border-radius: 8px; padding: 1rem; margin-top: 1rem;">
-                <div style="font-weight: bold; color: var(--error); margin-bottom: 0.5rem;">⚠️ Atenção:</div>
-                <ul style="margin: 0; padding-left: 1.5rem; color: var(--error);">
-                    ${warnings.map(w => `<li style="margin: 0.25rem 0;">${w}</li>`).join('')}
-                </ul>
-            </div>
-        `;
-    } else {
-        warningsContainer.innerHTML = '';
-    }
-}
-
-function exportContracts() {
-    const contracts = contractService.getAllContracts();
-    
-    if (contracts.length === 0) {
-        alert('Nenhum contrato para exportar');
-        return;
-    }
-
-    // Get all unique roles and deliverable types
-    const allRoles = new Set();
-    const allDeliverables = new Set();
-    
-    contracts.forEach(contract => {
-        if (contract.assignedPeople) {
-            contract.assignedPeople.forEach(personId => {
-                const person = personService.getPerson(personId);
-                if (person) allRoles.add(person.role);
-            });
-        }
-        if (contract.deliverables) {
-            Object.keys(contract.deliverables).forEach(typeId => {
-                const type = deliverableTypeService.getDeliverableType(typeId);
-                if (type) allDeliverables.add(type.name);
-            });
-        }
-    });
-
-    // Prepare data for export
-    const exportData = contracts.map(contract => {
-        const squad = contract.squadTag ? squadService.getSquad(contract.squadTag) : null;
-        const head = squad && squad.headId ? personService.getPerson(squad.headId) : null;
-        
-        const row = {
-            'Cliente': contract.client,
-            'Valor': `R$ ${formatCurrency(contract.value)}`,
-            'Squad': squad ? squad.name : '',
-            'Head Executivo': head ? head.name : ''
-        };
-        
-        // Add people by role (in fixed order)
-        Array.from(allRoles).sort().forEach(role => {
-            const peopleInRole = [];
-            if (contract.assignedPeople) {
-                contract.assignedPeople.forEach(personId => {
-                    const person = personService.getPerson(personId);
-                    if (person && person.role === role) {
-                        peopleInRole.push(person.name);
-                    }
-                });
-            }
-            row[role] = peopleInRole.join(', ');
-        });
-        
-        // Add deliverables (in fixed order)
-        Array.from(allDeliverables).sort().forEach(deliverableName => {
-            let qty = '';
-            if (contract.deliverables) {
-                Object.entries(contract.deliverables).forEach(([typeId, quantity]) => {
-                    const type = deliverableTypeService.getDeliverableType(typeId);
-                    if (type && type.name === deliverableName) {
-                        qty = quantity;
-                    }
-                });
-            }
-            row[deliverableName] = qty;
-        });
-        
-        return row;
-    });
-
-    // Create CSV with ordered headers
-    const baseHeaders = ['Cliente', 'Valor', 'Squad', 'Head Executivo'];
-    const roleHeaders = Array.from(allRoles).sort();
-    const deliverableHeaders = Array.from(allDeliverables).sort();
-    const headers = [...baseHeaders, ...roleHeaders, ...deliverableHeaders];
-    
-    // Create CSV content
-    let csv = headers.map(h => `"${h}"`).join(',') + '\n';
-    
-    exportData.forEach(row => {
-        const values = headers.map(header => {
-            const value = row[header];
-            return value !== undefined && value !== '' ? `"${value}"` : '""';
-        });
-        csv += values.join(',') + '\n';
-    });
-    
-    // Download CSV
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    
-    link.setAttribute('href', url);
-    link.setAttribute('download', `contratos_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
 }
 
 function formatCurrency(value) {
-    return value.toLocaleString('pt-BR', {
+    return new Intl.NumberFormat('pt-BR', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
-    });
+    }).format(value);
 }

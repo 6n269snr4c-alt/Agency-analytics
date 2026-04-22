@@ -1,4 +1,4 @@
-// contractsPage.js - Contracts management page (VERSÃO CORRIGIDA)
+// contractsPage.js - Contracts management page (VISUAL MELHORADO)
 
 import contractService from '../services/contractService.js';
 import squadService from '../services/squadService.js';
@@ -146,6 +146,19 @@ export function renderContractsPage() {
                 </div>
             </div>
         </div>
+
+        <!-- Details Modal (NOVO) -->
+        <div id="details-modal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="details-title">Detalhes do Contrato</h2>
+                    <button class="modal-close" onclick="window.closeDetailsModal()">&times;</button>
+                </div>
+                <div id="details-content" style="padding: 1.5rem;">
+                    <!-- Content populated by JS -->
+                </div>
+            </div>
+        </div>
     `;
 
     attachContractHandlers();
@@ -169,8 +182,6 @@ function renderContractsList(contracts) {
     // Prepare data with calculated values
     const contractsData = contracts.map(contract => {
         const roi = analyticsService.getContractROI(contract.id);
-        
-        // ✅ CORREÇÃO: Verificar se roi é null antes de acessar propriedades
         const safeRoi = roi || { cost: 0, profit: 0, margin: 0 };
         
         const assignedPeople = contract.assignedPeople || [];
@@ -183,7 +194,6 @@ function renderContractsList(contracts) {
             assignedPeople,
             squad,
             warnings,
-            // Sortable values
             clientName: contract.client.toLowerCase(),
             cost: safeRoi.cost,
             squadName: squad ? squad.name.toLowerCase() : 'zzz',
@@ -220,6 +230,117 @@ function renderContractsList(contracts) {
     });
 
     return `
+        <style>
+            /* Estilos para tabela de contratos - UMA LINHA POR CONTRATO */
+            #contracts-list .table-container {
+                overflow-x: auto;
+                border-radius: 8px;
+                border: 1px solid var(--border);
+            }
+            
+            #contracts-list table {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed; /* FORÇA larguras fixas */
+                min-width: 1200px; /* Largura mínima para scroll horizontal */
+            }
+            
+            #contracts-list th,
+            #contracts-list td {
+                padding: 1rem;
+                text-align: left;
+                border-bottom: 1px solid var(--border);
+                white-space: nowrap; /* IMPEDE quebra de linha */
+                overflow: hidden;
+                text-overflow: ellipsis; /* ... quando texto for muito grande */
+            }
+            
+            /* Larguras fixas por coluna */
+            #contracts-list th:nth-child(1), /* Cliente */
+            #contracts-list td:nth-child(1) { width: 200px; }
+            
+            #contracts-list th:nth-child(2), /* Squad */
+            #contracts-list td:nth-child(2) { width: 120px; }
+            
+            #contracts-list th:nth-child(3), /* Valor */
+            #contracts-list td:nth-child(3) { width: 130px; }
+            
+            #contracts-list th:nth-child(4), /* Custo */
+            #contracts-list td:nth-child(4) { width: 130px; }
+            
+            #contracts-list th:nth-child(5), /* Lucro */
+            #contracts-list td:nth-child(5) { width: 130px; }
+            
+            #contracts-list th:nth-child(6), /* Margem */
+            #contracts-list td:nth-child(6) { width: 100px; }
+            
+            #contracts-list th:nth-child(7), /* Detalhes */
+            #contracts-list td:nth-child(7) { width: 100px; text-align: center; }
+            
+            #contracts-list th:nth-child(8), /* Ações */
+            #contracts-list td:nth-child(8) { width: 120px; text-align: center; }
+            
+            #contracts-list thead {
+                background: var(--bg-darker);
+                position: sticky;
+                top: 0;
+                z-index: 10;
+            }
+            
+            #contracts-list tbody tr:hover {
+                background: var(--bg-darker);
+            }
+            
+            .sort-btn {
+                background: none;
+                border: none;
+                color: var(--text);
+                cursor: pointer;
+                font-weight: 600;
+                padding: 0;
+                display: flex;
+                align-items: center;
+                gap: 0.25rem;
+                white-space: nowrap;
+            }
+            
+            .sort-btn:hover {
+                color: var(--primary);
+            }
+
+            .details-btn {
+                background: var(--primary);
+                color: var(--bg);
+                border: none;
+                padding: 0.5rem 1rem;
+                border-radius: 4px;
+                cursor: pointer;
+                font-weight: 500;
+                transition: all 0.2s;
+                white-space: nowrap;
+            }
+
+            .details-btn:hover {
+                opacity: 0.8;
+                transform: translateY(-1px);
+            }
+
+            .warning-indicator {
+                display: inline-block;
+                width: 8px;
+                height: 8px;
+                background: var(--warning, #ffc107);
+                border-radius: 50%;
+                margin-left: 0.5rem;
+                animation: pulse 2s infinite;
+            }
+
+            @keyframes pulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.5; }
+            }
+        </style>
+        
         <div class="table-container">
             <table>
                 <thead>
@@ -254,41 +375,20 @@ function renderContractsList(contracts) {
                                 Margem ${sortColumn === 'margin' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
                             </button>
                         </th>
-                        <th>
-                            <button class="sort-btn" onclick="window.sortContractsBy('peopleCount')">
-                                Equipe ${sortColumn === 'peopleCount' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                            </button>
-                        </th>
-                        <th>
-                            <button class="sort-btn" onclick="window.sortContractsBy('deliverablesCount')">
-                                Entregas ${sortColumn === 'deliverablesCount' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
-                            </button>
-                        </th>
-                        <th>Ações</th>
+                        <th style="text-align: center;">Detalhes</th>
+                        <th style="text-align: center;">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${contractsData.map(({contract, roi, assignedPeople, squad, warnings}) => `
                         <tr>
-                            <td>
+                            <td title="${contract.client}">
                                 <strong>${contract.client}</strong>
-                                ${warnings.length > 0 ? `
-                                    <div style="margin-top: 0.25rem;">
-                                        ${warnings.map(w => `
-                                            <span class="badge badge-warning" style="font-size: 0.75rem;">
-                                                ${w.message}
-                                            </span>
-                                        `).join('')}
-                                    </div>
-                                ` : ''}
+                                ${warnings.length > 0 ? '<span class="warning-indicator" title="Há avisos para este contrato"></span>' : ''}
                             </td>
-                            <td>${squad ? squad.name : '-'}</td>
+                            <td title="${squad ? squad.name : 'Nenhum squad'}">${squad ? squad.name : '-'}</td>
                             <td>R$ ${formatCurrency(contract.value)}</td>
-                            <td>
-                                <a href="#" onclick="window.showContractBreakdown('${contract.id}'); return false;" style="color: var(--primary); text-decoration: none;">
-                                    R$ ${formatCurrency(roi.cost)} 🔍
-                                </a>
-                            </td>
+                            <td>R$ ${formatCurrency(roi.cost)}</td>
                             <td>
                                 <span class="badge ${roi.profit >= 0 ? 'badge-success' : 'badge-error'}">
                                     R$ ${formatCurrency(roi.profit)}
@@ -299,14 +399,17 @@ function renderContractsList(contracts) {
                                     ${roi.margin.toFixed(1)}%
                                 </span>
                             </td>
-                            <td>${assignedPeople.length} pessoas</td>
-                            <td>${Object.keys(contract.deliverables || {}).length} tipos</td>
+                            <td style="text-align: center;">
+                                <button class="details-btn" onclick="window.showContractDetails('${contract.id}')">
+                                    👥 ${assignedPeople.length} | 📦 ${Object.keys(contract.deliverables || {}).length}
+                                </button>
+                            </td>
                             <td>
-                                <div class="btn-group">
-                                    <button class="btn btn-small btn-secondary" onclick="window.editContract('${contract.id}')">
+                                <div class="btn-group" style="display: flex; gap: 0.5rem; justify-content: center;">
+                                    <button class="btn btn-small btn-secondary" onclick="window.editContract('${contract.id}')" title="Editar">
                                         ✏️
                                     </button>
-                                    <button class="btn btn-small btn-error" onclick="window.deleteContract('${contract.id}')">
+                                    <button class="btn btn-small btn-error" onclick="window.deleteContract('${contract.id}')" title="Excluir">
                                         🗑️
                                     </button>
                                 </div>
@@ -317,6 +420,103 @@ function renderContractsList(contracts) {
             </table>
         </div>
     `;
+}
+
+function showContractDetails(contractId) {
+    const contract = contractService.getContract(contractId);
+    const assignedPeople = (contract.assignedPeople || []).map(id => personService.getPerson(id)).filter(Boolean);
+    const deliverableTypes = deliverableTypeService.getActiveDeliverableTypes();
+    
+    document.getElementById('details-title').textContent = `${contract.client} - Equipe e Entregáveis`;
+    
+    const detailsContent = document.getElementById('details-content');
+    
+    detailsContent.innerHTML = `
+        <div style="display: grid; gap: 2rem;">
+            <!-- Equipe -->
+            <div>
+                <h3 style="margin: 0 0 1rem 0; color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
+                    👥 Equipe (${assignedPeople.length} pessoas)
+                </h3>
+                ${assignedPeople.length > 0 ? `
+                    <div style="display: grid; gap: 0.75rem;">
+                        ${assignedPeople.map(person => `
+                            <div style="background: var(--bg-darker); padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <strong style="font-size: 1.05rem;">${person.name}</strong>
+                                        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem;">
+                                            ${person.role} • R$ ${formatCurrency(person.salary)}/mês
+                                        </div>
+                                    </div>
+                                    ${squadService.getPersonSquads(person.id).length > 0 ? `
+                                        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                                            Squad: ${squadService.getPersonSquads(person.id).map(s => s.name).join(', ')}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : `
+                    <p style="color: var(--text-secondary); padding: 1rem; background: var(--bg-darker); border-radius: 6px; text-align: center;">
+                        Nenhuma pessoa atribuída a este contrato
+                    </p>
+                `}
+            </div>
+
+            <!-- Entregáveis -->
+            <div>
+                <h3 style="margin: 0 0 1rem 0; color: var(--primary); display: flex; align-items: center; gap: 0.5rem;">
+                    📦 Entregáveis (${Object.keys(contract.deliverables || {}).length} tipos)
+                </h3>
+                ${Object.keys(contract.deliverables || {}).length > 0 ? `
+                    <div style="display: grid; gap: 0.75rem;">
+                        ${Object.entries(contract.deliverables).map(([typeId, qty]) => {
+                            const type = deliverableTypes.find(dt => dt.id === typeId);
+                            const typeName = type ? type.name : 'Desconhecido';
+                            const roles = type ? type.roles.join(', ') : 'N/A';
+                            
+                            return `
+                                <div style="background: var(--bg-darker); padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <strong style="font-size: 1.05rem;">${typeName}</strong>
+                                            <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem;">
+                                                Requer: ${roles}
+                                            </div>
+                                        </div>
+                                        <div style="background: var(--primary); color: var(--bg); padding: 0.5rem 1rem; border-radius: 4px; font-weight: bold;">
+                                            ${qty}x
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                ` : `
+                    <p style="color: var(--text-secondary); padding: 1rem; background: var(--bg-darker); border-radius: 6px; text-align: center;">
+                        Nenhum entregável cadastrado
+                    </p>
+                `}
+            </div>
+
+            ${contract.notes ? `
+                <div>
+                    <h3 style="margin: 0 0 1rem 0; color: var(--primary);">📝 Observações</h3>
+                    <div style="background: var(--bg-darker); padding: 1rem; border-radius: 6px; border: 1px solid var(--border); white-space: pre-wrap;">
+                        ${contract.notes}
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    document.getElementById('details-modal').classList.add('active');
+}
+
+function closeDetailsModal() {
+    document.getElementById('details-modal').classList.remove('active');
 }
 
 function renderTeamAssignment(people) {
@@ -361,7 +561,6 @@ function attachContractHandlers() {
     const form = document.getElementById('contract-form');
     form.addEventListener('submit', handleContractSubmit);
     
-    // Add listeners to person checkboxes for real-time validation
     setTimeout(() => {
         const checkboxes = document.querySelectorAll('.person-checkbox');
         checkboxes.forEach(checkbox => {
@@ -379,6 +578,8 @@ function attachContractHandlers() {
     window.exportContracts = exportContracts;
     window.showContractBreakdown = showContractBreakdown;
     window.closeBreakdownModal = closeBreakdownModal;
+    window.showContractDetails = showContractDetails;
+    window.closeDetailsModal = closeDetailsModal;
     window.filterContracts = filterContracts;
     window.sortContractsBy = sortContractsBy;
 }
@@ -402,7 +603,6 @@ function showContractBreakdown(contractId) {
     const contract = contractService.getContract(contractId);
     const roi = analyticsService.getContractROI(contractId);
     
-    // ✅ CORREÇÃO: Verificar se roi é null
     if (!roi) {
         alert('Não foi possível calcular o ROI deste contrato. Verifique se há pessoas atribuídas.');
         return;
@@ -513,7 +713,6 @@ function updateFormValidationWarnings() {
         return;
     }
 
-    // Mock contract for validation
     const mockContract = {
         assignedPeople: selectedPeople,
         deliverables: deliverables
@@ -539,7 +738,6 @@ function validateContractConsistency(contract) {
     const warnings = [];
     const deliverableTypes = deliverableTypeService.getActiveDeliverableTypes();
     
-    // Get all roles needed for the deliverables
     const rolesNeeded = new Set();
     if (contract.deliverables) {
         Object.keys(contract.deliverables).forEach(typeId => {
@@ -550,7 +748,6 @@ function validateContractConsistency(contract) {
         });
     }
     
-    // Get all roles assigned
     const rolesAssigned = new Set();
     if (contract.assignedPeople) {
         contract.assignedPeople.forEach(personId => {
@@ -561,7 +758,6 @@ function validateContractConsistency(contract) {
         });
     }
     
-    // Check 1: Missing roles for deliverables
     rolesNeeded.forEach(role => {
         if (!rolesAssigned.has(role)) {
             warnings.push({
@@ -572,7 +768,6 @@ function validateContractConsistency(contract) {
         }
     });
     
-    // Check 2: People without relevant deliverables
     rolesAssigned.forEach(role => {
         if (!rolesNeeded.has(role)) {
             warnings.push({
@@ -597,20 +792,16 @@ function editContract(id) {
     deliverables = { ...contract.deliverables };
     renderDeliverables();
 
-    // Set squad tag
     if (contract.squadTag) {
         document.getElementById('squad-tag').value = contract.squadTag;
     }
 
-    // Check assigned people
     if (contract.assignedPeople && contract.assignedPeople.length > 0) {
-        // Wait for DOM to be ready
         setTimeout(() => {
             contract.assignedPeople.forEach(personId => {
                 const checkbox = document.querySelector(`.person-checkbox[value="${personId}"]`);
                 if (checkbox) checkbox.checked = true;
             });
-            // Update validation warnings after checkboxes are marked
             updateFormValidationWarnings();
         }, 100);
     }

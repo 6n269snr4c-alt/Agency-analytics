@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug - Agency Analytics</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 2rem;
+            background: #f5f5f5;
+        }
+        #error {
+            background: #fee;
+            border: 2px solid #c00;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 8px;
+            color: #600;
+        }
+        #content {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Debug Agency Analytics</h1>
+    <div id="error" style="display: none;"></div>
+    <div id="content"></div>
+
+    <script type="module">
+        const errorDiv = document.getElementById('error');
+        
+        window.addEventListener('error', (e) => {
+            errorDiv.style.display = 'block';
+            errorDiv.innerHTML = `
+                <strong>ERRO:</strong> ${e.message}<br>
+                <strong>Arquivo:</strong> ${e.filename}<br>
+                <strong>Linha:</strong> ${e.lineno}
+            `;
+            console.error('ERROR:', e);
+        });
+
+        try {
+            console.log('🚀 Iniciando importação do app.js...');
+            import('./js/app.js')
+                .then(() => {
+                    console.log('✅ App.js carregado com sucesso!');
+                })
+                .catch(err => {
+                    errorDiv.style.display = 'block';
+                    errorDiv.innerHTML = `<strong>ERRO AO IMPORTAR APP.JS:</strong><br>${err.message}<br><pre>${err.stack}</pre>`;
+                    console.error('IMPORT ERROR:', err);
+                });
+        } catch (err) {
+            errorDiv.style.display = 'block';
+            errorDiv.innerHTML = `<strong>ERRO CRÍTICO:</strong><br>${err.message}`;
+            console.error('CRITICAL ERROR:', err);
+        }
+    </script>
+</body>
+</html>

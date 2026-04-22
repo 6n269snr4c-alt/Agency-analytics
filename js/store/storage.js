@@ -92,6 +92,43 @@ class StorageService {
         window.dispatchEvent(new CustomEvent('periodChanged', { detail: { period } }));
     }
 
+    // Retorna contratos agrupados por período (para migração)
+    getContractsPerPeriod() {
+        const key = 'agency_contracts_per_period';
+        try {
+            const data = localStorage.getItem(key);
+            return data ? JSON.parse(data) : [];
+        } catch {
+            return [];
+        }
+    }
+
+    // Salva contratos para um período específico (para migração)
+    saveContractsForPeriod(period, contracts) {
+        const key = 'agency_contracts_per_period';
+        try {
+            const allPeriods = this.getContractsPerPeriod();
+            const existingIndex = allPeriods.findIndex(p => p.period === period);
+            
+            if (existingIndex >= 0) {
+                allPeriods[existingIndex] = { period, contracts };
+            } else {
+                allPeriods.push({ period, contracts });
+            }
+            
+            localStorage.setItem(key, JSON.stringify(allPeriods));
+            
+            // Também salva nos contratos normais com período
+            const contractsWithPeriod = contracts.map(c => ({ ...c, period }));
+            this.saveContracts(contractsWithPeriod);
+            
+            return true;
+        } catch (error) {
+            console.error('Erro ao salvar contratos por período:', error);
+            return false;
+        }
+    }
+
     // ========================================
     // TIPOS DE ENTREGÁVEIS
     // ========================================

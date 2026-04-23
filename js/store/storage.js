@@ -1,5 +1,5 @@
-// storage.js - LocalStorage wrapper para dados da aplicação
-// VERSÃO COMPLETA COM SISTEMA DE PESOS + MÉTODOS DE PERÍODO
+// storage.js - LocalStorage wrapper COMPLETO
+// TODOS OS MÉTODOS NECESSÁRIOS PARA O SISTEMA
 
 class Storage {
     constructor() {
@@ -9,8 +9,49 @@ class Storage {
             SQUADS: 'agency_squads',
             DELIVERABLE_TYPES: 'agency_deliverable_types',
             ROLES: 'agency_roles',
-            CURRENT_PERIOD: 'agency_current_period'
+            PERIODS: 'agency_periods',
+            CURRENT_PERIOD: 'agency_current_period',
+            CONTRACTS_PER_PERIOD: 'agency_contracts_per_period',
+            PAYROLL_PER_PERIOD: 'agency_payroll_per_period'
         };
+        this.initStorage();
+    }
+
+    initStorage() {
+        // Initialize empty arrays if nothing exists
+        if (!localStorage.getItem(this.keys.CONTRACTS)) {
+            this.saveContracts([]);
+        }
+        if (!localStorage.getItem(this.keys.PEOPLE)) {
+            this.savePeople([]);
+        }
+        if (!localStorage.getItem(this.keys.SQUADS)) {
+            this.saveSquads([]);
+        }
+        if (!localStorage.getItem(this.keys.DELIVERABLE_TYPES)) {
+            this.saveDeliverableTypes([]);
+        }
+        if (!localStorage.getItem(this.keys.ROLES)) {
+            this.saveRoles([]);
+        }
+        
+        // Initialize period-based data
+        if (!localStorage.getItem(this.keys.PERIODS)) {
+            this.savePeriods([]);
+        }
+        if (!localStorage.getItem(this.keys.CONTRACTS_PER_PERIOD)) {
+            localStorage.setItem(this.keys.CONTRACTS_PER_PERIOD, JSON.stringify([]));
+        }
+        if (!localStorage.getItem(this.keys.PAYROLL_PER_PERIOD)) {
+            localStorage.setItem(this.keys.PAYROLL_PER_PERIOD, JSON.stringify([]));
+        }
+        
+        // Set current period to current month if not set
+        if (!localStorage.getItem(this.keys.CURRENT_PERIOD)) {
+            const now = new Date();
+            const currentPeriodId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+            this.setCurrentPeriod(currentPeriodId);
+        }
     }
 
     generateId() {
@@ -68,30 +109,6 @@ class Storage {
 
     getContractById(id) {
         return this.getContracts().find(c => c.id === id);
-    }
-
-    // Métodos de período (para migrateToPeriods.js e periodService.js)
-    getContractsPerPeriod() {
-        return {};
-    }
-
-    saveContractsForPeriod(period, contracts) {
-        return true;
-    }
-
-    getPeriod(periodId) {
-        // Retorna período básico
-        return {
-            id: periodId,
-            name: periodId,
-            startDate: periodId + '-01',
-            endDate: periodId + '-31'
-        };
-    }
-
-    getAllPeriods() {
-        // Retorna array vazio - sistema de períodos desativado
-        return [];
     }
 
     // ====================
@@ -311,9 +328,64 @@ class Storage {
     }
 
     // ====================
-    // PERIODS
+    // PERIODS (SISTEMA DE PERÍODOS)
     // ====================
     
+    getPeriods() {
+        try {
+            return JSON.parse(localStorage.getItem(this.keys.PERIODS)) || [];
+        } catch (e) {
+            console.error('Error loading periods:', e);
+            return [];
+        }
+    }
+
+    savePeriods(periods) {
+        try {
+            localStorage.setItem(this.keys.PERIODS, JSON.stringify(periods));
+            return true;
+        } catch (e) {
+            console.error('Error saving periods:', e);
+            return false;
+        }
+    }
+
+    addPeriod(periodData) {
+        const periods = this.getPeriods();
+        const period = {
+            id: periodData.id,
+            month: periodData.month,
+            year: periodData.year,
+            label: periodData.label,
+            createdAt: new Date().toISOString()
+        };
+        periods.push(period);
+        this.savePeriods(periods);
+        return period;
+    }
+
+    getPeriod(periodId) {
+        const periods = this.getPeriods();
+        let period = periods.find(p => p.id === periodId);
+        
+        // Se não existir, criar período
+        if (!period) {
+            const [year, month] = periodId.split('-');
+            const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+            period = {
+                id: periodId,
+                month: parseInt(month),
+                year: parseInt(year),
+                label: `${monthNames[parseInt(month) - 1]}/${year}`,
+                startDate: `${periodId}-01`,
+                endDate: `${periodId}-31`
+            };
+            this.addPeriod(period);
+        }
+        
+        return period;
+    }
+
     getCurrentPeriod() {
         try {
             return localStorage.getItem(this.keys.CURRENT_PERIOD) || new Date().toISOString().slice(0, 7);
@@ -322,8 +394,82 @@ class Storage {
         }
     }
 
-    setCurrentPeriod(period) {
-        localStorage.setItem(this.keys.CURRENT_PERIOD, period);
+    setCurrentPeriod(periodId) {
+        localStorage.setItem(this.keys.CURRENT_PERIOD, periodId);
+        
+        // Create period if it doesn't exist
+        this.getPeriod(periodId);
+    }
+
+    // Contracts Per Period
+    getContractsPerPeriod() {
+        try {
+            return JSON.parse(localStorage.getItem(this.keys.CONTRACTS_PER_PERIOD)) || [];
+        } catch (e) {
+            console.error('Error loading contracts per period:', e);
+            return [];
+        }
+    }
+
+    getContractsForPeriod(periodId) {
+        const allData = this.getContractsPerPeriod();
+        const periodData = allData.find(p => p.periodId === periodId);
+        return periodData ? periodData.contracts : [];
+    }
+
+    saveContractsForPeriod(periodId, contracts) {
+        const allData = this.getContractsPerPeriod();
+        const existingIndex = allData.findIndex(p => p.periodId === periodId);
+        
+        if (existingIndex >= 0) {
+            allData[existingIndex] = { periodId, contracts };
+        } else {
+            allData.push({ periodId, contracts });
+        }
+        
+        localStorage.setItem(this.keys.CONTRACTS_PER_PERIOD, JSON.stringify(allData));
+    }
+
+    // Payroll Per Period
+    getPayrollPerPeriod() {
+        try {
+            return JSON.parse(localStorage.getItem(this.keys.PAYROLL_PER_PERIOD)) || [];
+        } catch (e) {
+            console.error('Error loading payroll per period:', e);
+            return [];
+        }
+    }
+
+    getPayrollForPeriod(periodId) {
+        const allData = this.getPayrollPerPeriod();
+        const periodData = allData.find(p => p.periodId === periodId);
+        return periodData ? periodData.payroll : [];
+    }
+
+    savePayrollForPeriod(periodId, payroll) {
+        const allData = this.getPayrollPerPeriod();
+        const existingIndex = allData.findIndex(p => p.periodId === periodId);
+        
+        if (existingIndex >= 0) {
+            allData[existingIndex] = { periodId, payroll };
+        } else {
+            allData.push({ periodId, payroll });
+        }
+        
+        localStorage.setItem(this.keys.PAYROLL_PER_PERIOD, JSON.stringify(allData));
+    }
+
+    // Copy previous period data to new period
+    copyPeriodData(fromPeriodId, toPeriodId) {
+        // Copy contracts
+        const contracts = this.getContractsForPeriod(fromPeriodId);
+        this.saveContractsForPeriod(toPeriodId, contracts);
+        
+        // Copy payroll
+        const payroll = this.getPayrollForPeriod(fromPeriodId);
+        this.savePayrollForPeriod(toPeriodId, payroll);
+        
+        return true;
     }
 
     // ====================
@@ -334,6 +480,7 @@ class Storage {
         Object.values(this.keys).forEach(key => {
             localStorage.removeItem(key);
         });
+        this.initStorage();
         return true;
     }
 
@@ -344,18 +491,34 @@ class Storage {
             squads: this.getSquads(),
             deliverableTypes: this.getDeliverableTypes(),
             roles: this.getRoles(),
-            currentPeriod: this.getCurrentPeriod()
+            periods: this.getPeriods(),
+            currentPeriod: this.getCurrentPeriod(),
+            contractsPerPeriod: this.getContractsPerPeriod(),
+            payrollPerPeriod: this.getPayrollPerPeriod(),
+            exportedAt: new Date().toISOString()
         };
     }
 
     importData(data) {
-        if (data.contracts) this.saveContracts(data.contracts);
-        if (data.people) this.savePeople(data.people);
-        if (data.squads) this.saveSquads(data.squads);
-        if (data.deliverableTypes) this.saveDeliverableTypes(data.deliverableTypes);
-        if (data.roles) this.saveRoles(data.roles);
-        if (data.currentPeriod) this.setCurrentPeriod(data.currentPeriod);
-        return true;
+        try {
+            if (data.contracts) this.saveContracts(data.contracts);
+            if (data.people) this.savePeople(data.people);
+            if (data.squads) this.saveSquads(data.squads);
+            if (data.deliverableTypes) this.saveDeliverableTypes(data.deliverableTypes);
+            if (data.roles) this.saveRoles(data.roles);
+            if (data.periods) this.savePeriods(data.periods);
+            if (data.currentPeriod) this.setCurrentPeriod(data.currentPeriod);
+            if (data.contractsPerPeriod) {
+                localStorage.setItem(this.keys.CONTRACTS_PER_PERIOD, JSON.stringify(data.contractsPerPeriod));
+            }
+            if (data.payrollPerPeriod) {
+                localStorage.setItem(this.keys.PAYROLL_PER_PERIOD, JSON.stringify(data.payrollPerPeriod));
+            }
+            return true;
+        } catch (e) {
+            console.error('Error importing data:', e);
+            return false;
+        }
     }
 }
 

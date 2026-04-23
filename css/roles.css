@@ -1,459 +1,99 @@
-/* ============================================
-   ROLES PAGE STYLES
-   Gestão de Funções e Configuração de Pesos
-   ============================================ */
+/* roles.css - Estilos para Página de Gestão de Funções */
 
+/* Variáveis já devem estar definidas no main.css, mas caso não estejam: */
+:root {
+    --primary: #00ff41;
+    --bg: #0a0a0a;
+    --bg-card: #1a1a1a;
+    --bg-darker: #151515;
+    --text: #ffffff;
+    --text-secondary: #999999;
+    --border: #333333;
+    --success: #28a745;
+    --warning: #ffc107;
+    --error: #dc3545;
+}
+
+/* Container da página */
 .roles-page {
     padding: 2rem;
     max-width: 1400px;
     margin: 0 auto;
 }
 
-.page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 2rem;
-    flex-wrap: wrap;
-    gap: 1rem;
-}
-
-.page-header h1 {
-    font-size: 2rem;
-    color: #2c3e50;
-    margin: 0;
-}
-
-.page-header .subtitle {
-    color: #7f8c8d;
-    margin: 0.5rem 0 0 0;
-    font-size: 0.95rem;
-}
-
-/* Info Box */
-.info-box {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 1.5rem;
-    border-radius: 12px;
-    margin-bottom: 2rem;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-
-.info-box h3 {
-    margin-top: 0;
-    font-size: 1.2rem;
-}
-
-.info-box p {
-    margin: 0.5rem 0;
-    line-height: 1.6;
-}
-
-.info-box ul {
-    margin: 0.5rem 0 0.5rem 1.5rem;
-}
-
-.info-box li {
-    margin: 0.3rem 0;
-}
-
-.info-box strong {
-    font-weight: 600;
-}
-
-/* Roles Grid */
-.roles-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 1.5rem;
-}
-
-/* Role Card */
-.role-card {
-    background: white;
-    border-radius: 12px;
-    padding: 1.5rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    transition: all 0.3s ease;
-    border: 2px solid transparent;
-}
-
-.role-card:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    border-color: #667eea;
-    transform: translateY(-2px);
-}
-
-.role-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 1rem;
-}
-
-.role-card-header h3 {
-    margin: 0;
-    font-size: 1.3rem;
-    color: #2c3e50;
-}
-
-.role-actions {
-    display: flex;
-    gap: 0.5rem;
-}
-
-.btn-icon {
-    background: none;
-    border: none;
-    font-size: 1.2rem;
-    cursor: pointer;
-    padding: 0.3rem;
-    border-radius: 6px;
+/* Escala responsiva para weight inputs */
+.weight-input {
     transition: all 0.2s ease;
 }
 
-.btn-icon:hover {
-    background: #f0f0f0;
-    transform: scale(1.1);
+.weight-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(0, 255, 65, 0.1);
 }
 
-.btn-icon.btn-danger:hover {
-    background: #ffe0e0;
+/* Ajustes para modal de pesos */
+#weights-modal .modal-content {
+    max-width: 800px;
 }
 
-.role-description {
-    color: #7f8c8d;
-    font-size: 0.9rem;
-    margin-bottom: 1rem;
-    font-style: italic;
-}
-
-/* Role Deliverables Section */
-.role-deliverables h4 {
-    font-size: 1rem;
-    color: #34495e;
-    margin-bottom: 0.8rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 2px solid #ecf0f1;
-}
-
-.deliverable-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.deliverable-list li {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.6rem;
-    margin-bottom: 0.4rem;
-    background: #f8f9fa;
-    border-radius: 6px;
-    transition: background 0.2s ease;
-}
-
-.deliverable-list li:hover {
-    background: #e9ecef;
-}
-
-.deliverable-name {
-    font-weight: 500;
-    color: #2c3e50;
-}
-
-.deliverable-weight {
-    padding: 0.3rem 0.8rem;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 600;
-}
-
-.deliverable-weight.configured {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-}
-
-.deliverable-weight.default {
-    background: #e9ecef;
-    color: #7f8c8d;
-}
-
-.empty-state {
-    text-align: center;
-    color: #95a5a6;
-    font-style: italic;
-    padding: 2rem;
-}
-
-/* Alert Box */
-.alert {
-    padding: 1rem;
-    border-radius: 8px;
-    margin-top: 1rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-}
-
-.alert-warning {
-    background: #fff3cd;
-    border: 1px solid #ffc107;
-    color: #856404;
-}
-
-.alert .btn {
-    white-space: nowrap;
-}
-
-/* Modal Styles */
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0,0,0,0.5);
-    animation: fadeIn 0.3s ease;
-}
-
+/* Animação para badges de peso */
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-.modal-content {
-    background-color: white;
-    margin: 5% auto;
-    padding: 2rem;
-    border-radius: 12px;
-    width: 90%;
-    max-width: 500px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-    animation: slideDown 0.3s ease;
-}
-
-.modal-content.modal-large {
-    max-width: 700px;
-}
-
-@keyframes slideDown {
     from {
-        transform: translateY(-50px);
         opacity: 0;
+        transform: translateY(-10px);
     }
     to {
-        transform: translateY(0);
         opacity: 1;
+        transform: translateY(0);
     }
 }
 
-.close {
-    color: #aaa;
-    float: right;
-    font-size: 28px;
-    font-weight: bold;
-    cursor: pointer;
-    line-height: 1;
+.role-card {
+    animation: fadeIn 0.3s ease-out;
 }
 
-.close:hover,
-.close:focus {
-    color: #000;
-}
-
-.modal-subtitle {
-    color: #7f8c8d;
-    margin-top: -0.5rem;
-    margin-bottom: 1.5rem;
-}
-
-/* Form Styles */
-.form-group {
-    margin-bottom: 1.5rem;
-}
-
-.form-group label {
-    display: block;
-    margin-bottom: 0.5rem;
-    font-weight: 600;
-    color: #2c3e50;
-}
-
-.form-group input,
-.form-group textarea,
-.form-group select {
-    width: 100%;
-    padding: 0.75rem;
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    font-size: 1rem;
-    transition: border-color 0.3s ease;
-}
-
-.form-group input:focus,
-.form-group textarea:focus,
-.form-group select:focus {
-    outline: none;
-    border-color: #667eea;
-}
-
-.form-group textarea {
-    min-height: 80px;
-    resize: vertical;
-}
-
-.form-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 1rem;
-    margin-top: 2rem;
-}
-
-/* Weights Grid */
-.weights-grid {
-    display: grid;
-    gap: 1.5rem;
-}
-
-.weight-input-group {
-    background: #f8f9fa;
-    padding: 1rem;
-    border-radius: 8px;
-    border: 2px solid #e9ecef;
+/* Preview de peso em tempo real */
+[id^="preview-"] {
     transition: all 0.3s ease;
 }
 
-.weight-input-group:hover {
-    border-color: #667eea;
-    background: white;
+.weight-input:focus + [id^="preview-"] {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 255, 65, 0.3);
 }
 
-.weight-input-group label {
-    display: block;
-    margin-bottom: 0.8rem;
-}
-
-.weight-input-group label strong {
-    display: block;
-    font-size: 1.05rem;
-    color: #2c3e50;
-    margin-bottom: 0.3rem;
-}
-
-.weight-input-group .help-text {
-    display: block;
-    font-size: 0.85rem;
-    color: #7f8c8d;
-    font-weight: normal;
-    margin: 0.2rem 0;
-}
-
-.weight-input-group .default-weight {
-    display: inline-block;
-    font-size: 0.8rem;
-    color: #95a5a6;
-    background: #ecf0f1;
-    padding: 0.2rem 0.6rem;
-    border-radius: 12px;
-    font-weight: normal;
-    margin-top: 0.3rem;
-}
-
-.weight-input-group input {
-    width: 100%;
-    padding: 0.6rem;
-    font-size: 1.1rem;
-    font-weight: 600;
-    text-align: center;
-    border: 2px solid #dee2e6;
-    border-radius: 8px;
-}
-
-.weight-input-group input:focus {
-    border-color: #667eea;
-    background: white;
-}
-
-/* Buttons */
-.btn {
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 8px;
-    font-size: 1rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-}
-
-.btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-}
-
-.btn-secondary {
-    background: #e9ecef;
-    color: #495057;
-}
-
-.btn-secondary:hover {
-    background: #dee2e6;
-}
-
-.btn-sm {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.85rem;
-}
-
-/* Responsive Design */
+/* Responsividade */
 @media (max-width: 768px) {
-    .roles-grid {
-        grid-template-columns: 1fr;
+    .roles-page {
+        padding: 1rem;
     }
 
-    .page-header {
+    #weights-modal .modal-content {
+        max-width: 95%;
+    }
+
+    .role-card {
+        padding: 1rem;
+    }
+
+    .role-card > div {
         flex-direction: column;
-        align-items: flex-start;
+        align-items: flex-start !important;
     }
 
-    .modal-content {
-        width: 95%;
-        margin: 10% auto;
-        padding: 1.5rem;
-    }
-
-    .form-actions {
-        flex-direction: column;
-    }
-
-    .form-actions button {
-        width: 100%;
+    .role-card button {
+        margin-top: 0.5rem;
     }
 }
 
-/* Loading State */
-.loading {
-    text-align: center;
-    padding: 3rem;
-    color: #7f8c8d;
-}
-
-.loading::before {
-    content: "⏳";
-    display: block;
-    font-size: 3rem;
-    margin-bottom: 1rem;
+/* Suporte para modo claro (se houver) */
+@media (prefers-color-scheme: light) {
+    [data-theme="light"] {
+        --bg: #ffffff;
+        --bg-card: #f8f9fa;
+        --bg-darker: #e9ecef;
+        --text: #212529;
+        --text-secondary: #6c757d;
+        --border: #dee2e6;
+    }
 }

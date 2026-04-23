@@ -29,18 +29,37 @@ class AnalyticsService {
 
     /**
      * Calcula total de pontos ponderados dos entregáveis de uma pessoa
+     * BUSCA NOS CONTRATOS, NÃO NO PERFIL DA PESSOA!
      * @param {string} personId - ID da pessoa
      * @returns {number} - Total de pontos ponderados
      */
     getPersonTotalWeightedDeliverables(personId) {
         const person = storage.getPersonById(personId);
-        if (!person || !person.deliverables) return 0;
+        if (!person) return 0;
 
         let totalWeightedPoints = 0;
-
-        Object.entries(person.deliverables).forEach(([typeId, quantity]) => {
-            const weight = this.getWeightForRole(person.role, typeId);
-            totalWeightedPoints += (quantity * weight);
+        
+        // ✅ BUSCAR ENTREGÁVEIS NOS CONTRATOS ONDE A PESSOA ESTÁ
+        const contracts = storage.getContracts();
+        
+        contracts.forEach(contract => {
+            // Verificar se a pessoa está neste contrato
+            if (!contract.assignedPeople || !contract.assignedPeople.includes(personId)) {
+                return; // Pula este contrato
+            }
+            
+            // Contar entregáveis deste contrato
+            if (contract.deliverables) {
+                Object.entries(contract.deliverables).forEach(([typeId, quantity]) => {
+                    const type = storage.getDeliverableTypeById(typeId);
+                    
+                    // Só conta se a role da pessoa está no tipo de entregável
+                    if (type && type.roles && type.roles.includes(person.role)) {
+                        const weight = this.getWeightForRole(person.role, typeId);
+                        totalWeightedPoints += (quantity * weight);
+                    }
+                });
+            }
         });
 
         return totalWeightedPoints;
@@ -180,9 +199,33 @@ class AnalyticsService {
 
     getPersonTotalDeliverables(personId) {
         const person = storage.getPersonById(personId);
-        if (!person || !person.deliverables) return 0;
+        if (!person) return 0;
 
-        return Object.values(person.deliverables).reduce((sum, qty) => sum + qty, 0);
+        let total = 0;
+        
+        // ✅ BUSCAR ENTREGÁVEIS NOS CONTRATOS ONDE A PESSOA ESTÁ
+        const contracts = storage.getContracts();
+        
+        contracts.forEach(contract => {
+            // Verificar se a pessoa está neste contrato
+            if (!contract.assignedPeople || !contract.assignedPeople.includes(personId)) {
+                return; // Pula este contrato
+            }
+            
+            // Contar entregáveis deste contrato
+            if (contract.deliverables) {
+                Object.entries(contract.deliverables).forEach(([typeId, quantity]) => {
+                    const type = storage.getDeliverableTypeById(typeId);
+                    
+                    // Só conta se a role da pessoa está no tipo de entregável
+                    if (type && type.roles && type.roles.includes(person.role)) {
+                        total += quantity;
+                    }
+                });
+            }
+        });
+
+        return total;
     }
 
     getPersonCostPerDeliverable(personId) {

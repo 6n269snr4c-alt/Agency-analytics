@@ -1,23 +1,20 @@
-// navbar.js - Fast Analytics Sidebar
+// navbar.js - Fast Analytics (SIMPLIFICADO E FUNCIONAL)
 
 export function renderNavbar() {
     const navbarContainer = document.getElementById('navbar');
     
     navbarContainer.innerHTML = `
         <nav class="sidebar">
-            <!-- Header com Logo -->
+            <!-- Header -->
             <div class="sidebar-header">
                 <div class="sidebar-logo">
-                    <img src="LOGOFASTWHITE.png" alt="Fast Digital 360" class="logo-image">
-                    <div class="logo-subtitle">Analytics</div>
+                    <img src="./LOGOFASTWHITE.png" alt="Fast" class="logo-image" onerror="this.style.display='none'">
+                    <div class="logo-subtitle">ANALYTICS</div>
                 </div>
             </div>
 
-            <!-- Navigation -->
+            <!-- Navigation - SEM DIVISÕES -->
             <div class="sidebar-nav">
-                <!-- Overview -->
-                <div class="nav-section-title">Overview</div>
-                
                 <a href="#/" class="nav-link" data-route="/">
                     <span class="nav-icon">📊</span>
                     <span class="nav-text">Dashboard</span>
@@ -27,11 +24,6 @@ export function renderNavbar() {
                     <span class="nav-icon">📈</span>
                     <span class="nav-text">Evolução</span>
                 </a>
-                
-                <div class="nav-divider"></div>
-                
-                <!-- Gestão -->
-                <div class="nav-section-title">Gestão</div>
                 
                 <a href="#/contracts" class="nav-link" data-route="/contracts">
                     <span class="nav-icon">📋</span>
@@ -48,11 +40,6 @@ export function renderNavbar() {
                     <span class="nav-text">Squads</span>
                 </a>
                 
-                <div class="nav-divider"></div>
-                
-                <!-- Configuração -->
-                <div class="nav-section-title">Config</div>
-                
                 <a href="#/deliverables" class="nav-link" data-route="/deliverables">
                     <span class="nav-icon">📦</span>
                     <span class="nav-text">Entregáveis</span>
@@ -62,11 +49,6 @@ export function renderNavbar() {
                     <span class="nav-icon">⚖️</span>
                     <span class="nav-text">Funções</span>
                 </a>
-                
-                <div class="nav-divider"></div>
-                
-                <!-- Análise -->
-                <div class="nav-section-title">Análise</div>
                 
                 <a href="#/comparison" class="nav-link" data-route="/comparison">
                     <span class="nav-icon">📊</span>
@@ -81,39 +63,46 @@ export function renderNavbar() {
 
             <!-- Footer -->
             <div class="sidebar-footer">
-                <div class="sidebar-footer-info">
-                    <div>v2.0 • <strong>Fast Analytics</strong></div>
-                    <div style="margin-top: 0.25rem;">💚 Made with Fast Digital 360</div>
+                <div class="sidebar-footer-text">
+                    Fast Digital 360
                 </div>
             </div>
         </nav>
     `;
 
-    attachNavHandlers();
+    // Attach handlers
+    setTimeout(() => {
+        attachNavHandlers();
+    }, 100);
 }
 
 function attachNavHandlers() {
     const links = document.querySelectorAll('.nav-link');
     
     links.forEach(link => {
-        link.addEventListener('click', (e) => {
+        link.addEventListener('click', function(e) {
             e.preventDefault();
             
             // Remove active de todos
             links.forEach(l => l.classList.remove('active'));
             
             // Adiciona active no clicado
-            link.classList.add('active');
+            this.classList.add('active');
             
             // Navega
-            const route = link.getAttribute('data-route');
-            if (window.router) {
+            const route = this.getAttribute('data-route');
+            
+            // Usar router global
+            if (window.router && window.router.navigate) {
                 window.router.navigate(route);
+            } else {
+                // Fallback: mudar hash manualmente
+                window.location.hash = route;
             }
         });
     });
     
-    // Set active baseado na rota atual
+    // Set active inicial
     updateActiveLink();
 }
 
@@ -123,13 +112,15 @@ function updateActiveLink() {
     
     links.forEach(link => {
         const route = link.getAttribute('data-route');
+        link.classList.remove('active');
         if (route === currentRoute) {
             link.classList.add('active');
-        } else {
-            link.classList.remove('active');
         }
     });
 }
 
-// Exportar para ser chamado quando navegar
+// Escutar mudanças de hash
+window.addEventListener('hashchange', updateActiveLink);
+
+// Exportar
 window.updateActiveLink = updateActiveLink;

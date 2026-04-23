@@ -434,6 +434,52 @@ class AnalyticsService {
             };
         }).sort((a, b) => b.profit - a.profit);
     }
+
+    getPersonDeliverablesBreakdown(personId) {
+        const person = storage.getPersonById(personId);
+        if (!person) return { total: 0, byType: {}, byContract: {} };
+
+        const contracts = this.getPersonContracts(personId);
+        const breakdown = {
+            total: 0,
+            byType: {},
+            byContract: {}
+        };
+
+        contracts.forEach(contract => {
+            if (!contract.deliverables) return;
+
+            let contractTotal = 0;
+            const contractBreakdown = {};
+
+            Object.entries(contract.deliverables).forEach(([typeId, quantity]) => {
+                const type = storage.getDeliverableTypeById(typeId);
+                
+                // Only count if this person's role is involved
+                if (type && type.roles && type.roles.includes(person.role)) {
+                    // Aggregate by type
+                    if (!breakdown.byType[type.name]) {
+                        breakdown.byType[type.name] = 0;
+                    }
+                    breakdown.byType[type.name] += quantity;
+                    breakdown.total += quantity;
+
+                    // Track for this contract
+                    contractTotal += quantity;
+                    contractBreakdown[type.name] = quantity;
+                }
+            });
+
+            if (contractTotal > 0) {
+                breakdown.byContract[contract.client] = {
+                    total: contractTotal,
+                    breakdown: contractBreakdown
+                };
+            }
+        });
+
+        return breakdown;
+    }
 }
 
 export default new AnalyticsService();

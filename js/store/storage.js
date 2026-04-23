@@ -70,17 +70,28 @@ class Storage {
         return this.getContracts().find(c => c.id === id);
     }
 
-    // Métodos de período (para migrateToPeriods.js)
+    // Métodos de período (para migrateToPeriods.js e periodService.js)
     getContractsPerPeriod() {
-        // Retorna um objeto vazio por padrão
-        // O sistema de períodos não está ativo, então retorna estrutura vazia
         return {};
     }
 
     saveContractsForPeriod(period, contracts) {
-        // Método placeholder - não faz nada por enquanto
-        // Sistema de períodos desativado
         return true;
+    }
+
+    getPeriod(periodId) {
+        // Retorna período básico
+        return {
+            id: periodId,
+            name: periodId,
+            startDate: periodId + '-01',
+            endDate: periodId + '-31'
+        };
+    }
+
+    getAllPeriods() {
+        // Retorna array vazio - sistema de períodos desativado
+        return [];
     }
 
     // ====================

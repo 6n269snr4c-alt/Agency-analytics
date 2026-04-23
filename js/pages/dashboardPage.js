@@ -70,13 +70,21 @@ function renderInsights(insights, opportunities) {
                     <div class="widget-body">
                         ${[...criticalInsights, ...warningInsights].slice(0, 5).map(insight => `
                             <div style="padding: 1rem; background: ${
-                                insight.type === 'critical' ? 'rgba(255, 51, 51, 0.1)' : 'rgba(255, 170, 0, 0.1)'
-                            }; border-left: 3px solid ${
+                                insight.type === 'critical' ? 'rgba(220, 38, 38, 0.1)' : 'rgba(251, 191, 36, 0.1)'
+                            }; border-left: 4px solid ${
                                 insight.type === 'critical' ? 'var(--error)' : 'var(--warning)'
-                            }; border-radius: 4px; margin-bottom: 1rem;">
-                                <div style="font-weight: 600; margin-bottom: 0.5rem;">${insight.title}</div>
-                                <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.5rem;">${insight.message}</div>
-                                <div style="color: var(--text-secondary); font-size: 0.85rem; font-style: italic;">→ ${insight.action}</div>
+                            }; margin-bottom: 1rem; border-radius: 4px;">
+                                <div style="font-weight: bold; margin-bottom: 0.5rem; color: ${
+                                    insight.type === 'critical' ? 'var(--error)' : 'var(--warning)'
+                                };">
+                                    ${insight.title}
+                                </div>
+                                <div style="font-size: 0.9rem; margin-bottom: 0.5rem;">
+                                    ${insight.message}
+                                </div>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary); font-style: italic;">
+                                    💡 ${insight.action}
+                                </div>
                             </div>
                         `).join('')}
                     </div>
@@ -87,19 +95,25 @@ function renderInsights(insights, opportunities) {
             ${opportunities.length > 0 ? `
                 <div class="widget">
                     <div class="widget-header">
-                        <h2 class="widget-title">✨ Oportunidades</h2>
+                        <h2 class="widget-title">💡 Oportunidades</h2>
                     </div>
                     <div class="widget-body">
-                        ${opportunities.map(opp => `
-                            <div style="padding: 1rem; background: rgba(0, 255, 65, 0.1); border-left: 3px solid var(--success); border-radius: 4px; margin-bottom: 1rem;">
-                                <div style="font-weight: 600; margin-bottom: 0.5rem;">${opp.title}</div>
-                                <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.5rem;">${opp.message}</div>
+                        ${opportunities.slice(0, 3).map(opp => `
+                            <div style="padding: 1rem; background: rgba(16, 185, 129, 0.1); border-left: 4px solid var(--success); margin-bottom: 1rem; border-radius: 4px;">
+                                <div style="font-weight: bold; margin-bottom: 0.5rem; color: var(--success);">
+                                    ${opp.title}
+                                </div>
+                                <div style="font-size: 0.9rem; margin-bottom: 0.5rem;">
+                                    ${opp.message}
+                                </div>
                                 ${opp.items ? `
-                                    <ul style="margin: 0.5rem 0; padding-left: 1.5rem; color: var(--text-secondary); font-size: 0.85rem;">
+                                    <ul style="margin: 0.5rem 0; padding-left: 1.5rem; font-size: 0.85rem;">
                                         ${opp.items.map(item => `<li>${item}</li>`).join('')}
                                     </ul>
                                 ` : ''}
-                                <div style="color: var(--text-secondary); font-size: 0.85rem; font-style: italic;">→ ${opp.action}</div>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary); font-style: italic;">
+                                    💡 ${opp.action}
+                                </div>
                             </div>
                         `).join('')}
                     </div>
@@ -300,10 +314,12 @@ function renderContractProfitability(contracts) {
 }
 
 function renderDeliverablesBreakdown(breakdown) {
-    if (breakdown.length === 0) {
+    // ✅ CORREÇÃO: breakdown é um ARRAY, não objeto
+    if (!Array.isArray(breakdown) || breakdown.length === 0) {
         return '';
     }
 
+    // ✅ CORREÇÃO: usar reduce em ARRAY
     const total = breakdown.reduce((sum, item) => sum + item.total, 0);
 
     return `

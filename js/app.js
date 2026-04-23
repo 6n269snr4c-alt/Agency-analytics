@@ -11,6 +11,7 @@ import { renderSquadComparisonPage } from './pages/squadComparisonPage.js';
 import { renderDeliverableTypesPage } from './pages/deliverableTypesPage.js';
 import { renderValidationPage } from './pages/validationPage.js';
 import { renderEvolutionPage } from './pages/evolutionPage.js';
+import { renderRolesPage } from './pages/rolesPage.js'; // ← ADICIONADO
 import { migrateToPeriods } from './migrateToPeriods.js';
 
 // Initialize app
@@ -26,15 +27,16 @@ function init() {
     router.register('/contracts', renderContractsPage);
     router.register('/people', renderPeoplePage);
     router.register('/squads', renderSquadsPage);
-    router.register('/comparison', renderSquadComparisonPage); // Nova comparação de squads
+    router.register('/comparison', renderSquadComparisonPage);
     router.register('/deliverables', renderDeliverableTypesPage);
     router.register('/validation', renderValidationPage);
     router.register('/evolution', renderEvolutionPage);
+    router.register('/roles', renderRolesPage); // ← ADICIONADO
 
     // Initialize router
     router.init();
 
-    console.log('🚀 Agency Analytics initialized');
+    console.log('🚀 Agency Analytics initialized with Roles');
 }
 
 // Start app when DOM is ready

@@ -1,5 +1,5 @@
 // storage.js - LocalStorage wrapper para dados da aplicação
-// VERSÃO COMPLETA COM SISTEMA DE PESOS
+// VERSÃO COMPLETA COM SISTEMA DE PESOS + MÉTODOS DE PERÍODO
 
 class Storage {
     constructor() {
@@ -8,7 +8,7 @@ class Storage {
             PEOPLE: 'agency_people',
             SQUADS: 'agency_squads',
             DELIVERABLE_TYPES: 'agency_deliverable_types',
-            ROLES: 'agency_roles',  // Sistema de Pesos
+            ROLES: 'agency_roles',
             CURRENT_PERIOD: 'agency_current_period'
         };
     }
@@ -68,6 +68,19 @@ class Storage {
 
     getContractById(id) {
         return this.getContracts().find(c => c.id === id);
+    }
+
+    // Métodos de período (para migrateToPeriods.js)
+    getContractsPerPeriod() {
+        // Retorna um objeto vazio por padrão
+        // O sistema de períodos não está ativo, então retorna estrutura vazia
+        return {};
+    }
+
+    saveContractsForPeriod(period, contracts) {
+        // Método placeholder - não faz nada por enquanto
+        // Sistema de períodos desativado
+        return true;
     }
 
     // ====================

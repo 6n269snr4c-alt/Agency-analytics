@@ -1,21 +1,23 @@
-// navbar.js - Menu Lateral Esquerdo Profissional
+// navbar.js - Fast Analytics Sidebar
 
 export function renderNavbar() {
     const navbarContainer = document.getElementById('navbar');
     
     navbarContainer.innerHTML = `
-        <!-- Sidebar -->
         <nav class="sidebar">
-            <!-- Logo/Header -->
+            <!-- Header com Logo -->
             <div class="sidebar-header">
                 <div class="sidebar-logo">
-                    <span class="logo-icon">⚡</span>
-                    <span class="logo-text">Agency Analytics</span>
+                    <img src="LOGOFASTWHITE.png" alt="Fast Digital 360" class="logo-image">
+                    <div class="logo-subtitle">Analytics</div>
                 </div>
             </div>
 
-            <!-- Navigation Links -->
+            <!-- Navigation -->
             <div class="sidebar-nav">
+                <!-- Overview -->
+                <div class="nav-section-title">Overview</div>
+                
                 <a href="#/" class="nav-link" data-route="/">
                     <span class="nav-icon">📊</span>
                     <span class="nav-text">Dashboard</span>
@@ -28,6 +30,9 @@ export function renderNavbar() {
                 
                 <div class="nav-divider"></div>
                 
+                <!-- Gestão -->
+                <div class="nav-section-title">Gestão</div>
+                
                 <a href="#/contracts" class="nav-link" data-route="/contracts">
                     <span class="nav-icon">📋</span>
                     <span class="nav-text">Contratos</span>
@@ -39,11 +44,14 @@ export function renderNavbar() {
                 </a>
                 
                 <a href="#/squads" class="nav-link" data-route="/squads">
-                    <span class="nav-icon">🎯</span>
+                    <span class="nav-icon">⚡</span>
                     <span class="nav-text">Squads</span>
                 </a>
                 
                 <div class="nav-divider"></div>
+                
+                <!-- Configuração -->
+                <div class="nav-section-title">Config</div>
                 
                 <a href="#/deliverables" class="nav-link" data-route="/deliverables">
                     <span class="nav-icon">📦</span>
@@ -56,6 +64,9 @@ export function renderNavbar() {
                 </a>
                 
                 <div class="nav-divider"></div>
+                
+                <!-- Análise -->
+                <div class="nav-section-title">Análise</div>
                 
                 <a href="#/comparison" class="nav-link" data-route="/comparison">
                     <span class="nav-icon">📊</span>
@@ -71,7 +82,8 @@ export function renderNavbar() {
             <!-- Footer -->
             <div class="sidebar-footer">
                 <div class="sidebar-footer-info">
-                    <div style="font-size: 0.75rem; color: var(--text-secondary);">v2.0</div>
+                    <div>v2.0 • <strong>Fast Analytics</strong></div>
+                    <div style="margin-top: 0.25rem;">💚 Made with Fast Digital 360</div>
                 </div>
             </div>
         </nav>
@@ -95,7 +107,9 @@ function attachNavHandlers() {
             
             // Navega
             const route = link.getAttribute('data-route');
-            window.router.navigate(route);
+            if (window.router) {
+                window.router.navigate(route);
+            }
         });
     });
     
@@ -111,9 +125,11 @@ function updateActiveLink() {
         const route = link.getAttribute('data-route');
         if (route === currentRoute) {
             link.classList.add('active');
+        } else {
+            link.classList.remove('active');
         }
     });
 }
 
-// Exportar função para atualizar active ao navegar
+// Exportar para ser chamado quando navegar
 window.updateActiveLink = updateActiveLink;

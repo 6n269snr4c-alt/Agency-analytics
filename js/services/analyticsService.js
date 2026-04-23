@@ -201,6 +201,14 @@ class AnalyticsService {
         );
     }
 
+    getPersonAverageTicket(personId) {
+        const contracts = this.getPersonContracts(personId);
+        if (contracts.length === 0) return 0;
+        
+        const totalValue = contracts.reduce((sum, contract) => sum + contract.value, 0);
+        return totalValue / contracts.length;
+    }
+
     getSquadROI(squadId) {
         const contracts = this.getSquadContracts(squadId);
         const squad = storage.getSquadById(squadId);
@@ -405,6 +413,26 @@ class AnalyticsService {
             costPerContract,
             contractCount: contracts.length
         };
+    }
+
+    getSquadComparison() {
+        const squads = storage.getSquads();
+        
+        return squads.map(squad => {
+            const roi = this.getSquadROI(squad.id);
+            
+            return {
+                id: squad.id,
+                name: squad.name,
+                memberCount: squad.members.length,
+                contractCount: roi.contractCount,
+                revenue: roi.revenue,
+                cost: roi.cost,
+                profit: roi.profit,
+                margin: roi.margin,
+                revenuePerMember: squad.members.length > 0 ? roi.revenue / squad.members.length : 0
+            };
+        }).sort((a, b) => b.profit - a.profit);
     }
 }
 

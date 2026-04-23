@@ -52,7 +52,15 @@ class AnalyticsService {
     
     getContractROI(contractId) {
         const contract = storage.getContractById(contractId);
-        if (!contract) return null;
+        if (!contract) {
+            return {
+                revenue: 0,
+                cost: 0,
+                profit: 0,
+                margin: 0,
+                costBreakdown: []
+            };
+        }
 
         const revenue = contract.value;
         let cost = 0;

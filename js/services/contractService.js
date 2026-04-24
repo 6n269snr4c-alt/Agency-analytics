@@ -1,192 +1,178 @@
-// contractService.js - Contract management business logic
+// contractsPage.js - MODIFICAÇÃO: Remover seleção de Head
 
-import storage from '../store/storage.js';
-import periodService from './periodService.js';
+// MODIFICAR A FUNÇÃO renderContractForm
 
-class ContractService {
-    // Get contracts for current period
-    getAllContracts() {
-        const currentPeriod = periodService.getCurrentPeriod();
-        return storage.getContractsForPeriod(currentPeriod);
+function renderContractForm(contract = null) {
+    const isEdit = !!contract;
+    const squads = squadService.getAllSquads();
+    const people = personService.getAllPeople();
+    const deliverableTypes = storage.getDeliverableTypes();
+
+    let assignedPeopleIds = [];
+    let squadId = '';
+    
+    if (contract) {
+        assignedPeopleIds = contract.assignedPeople || [];
+        squadId = contract.squadId || '';
     }
 
-    getContractById(id) {
-        const contracts = this.getAllContracts();
-        return contracts.find(c => c.id === id);
-    }
-
-    createContract(contractData) {
-        // Validate required fields
-        if (!contractData.client || !contractData.value) {
-            throw new Error('Cliente e valor são obrigatórios');
-        }
-
-        // Ensure deliverables is an object
-        if (!contractData.deliverables) {
-            contractData.deliverables = {};
-        }
-
-        // Create contract object
-        const contract = {
-            id: storage.generateId(),
-            client: contractData.client,
-            value: parseFloat(contractData.value),
-            deliverables: contractData.deliverables,
-            squadTag: contractData.squadTag || null,
-            assignedPeople: contractData.assignedPeople || [],
-            notes: contractData.notes || '',
-            createdAt: new Date().toISOString()
-        };
-
-        // Save to current period
-        const currentPeriod = periodService.getCurrentPeriod();
-        const contracts = this.getAllContracts();
-        contracts.push(contract);
-        storage.saveContractsForPeriod(currentPeriod, contracts);
-
-        return contract;
-    }
-
-    updateContract(id, updates) {
-        const contracts = this.getAllContracts();
-        const contractIndex = contracts.findIndex(c => c.id === id);
+    // ========================================
+    // FILTRAR PESSOAS: REMOVER HEADS
+    // ========================================
+    const availablePeople = people.filter(person => {
+        // Verificar se a pessoa é Head de algum squad
+        const isHead = squads.some(squad => squad.headId === person.id);
         
-        if (contractIndex === -1) {
-            throw new Error('Contrato não encontrado');
-        }
+        // REMOVER se for Head
+        return !isHead;
+    });
 
-        // Validate value if being updated
-        if (updates.value !== undefined) {
-            updates.value = parseFloat(updates.value);
-        }
+    return `
+        <div class="modal-body" style="padding: var(--spacing-lg);">
+            <form id="contractForm">
+                <!-- Cliente -->
+                <div class="form-group">
+                    <label class="form-label">Cliente *</label>
+                    <input 
+                        type="text" 
+                        name="client" 
+                        class="form-input"
+                        value="${contract ? contract.client : ''}"
+                        required
+                        placeholder="Nome do cliente"
+                    >
+                </div>
 
-        // Update contract
-        contracts[contractIndex] = { ...contracts[contractIndex], ...updates };
-        
-        // Save to current period
-        const currentPeriod = periodService.getCurrentPeriod();
-        storage.saveContractsForPeriod(currentPeriod, contracts);
-        
-        return contracts[contractIndex];
-    }
+                <!-- Valor -->
+                <div class="form-group">
+                    <label class="form-label">Valor do Contrato (R$) *</label>
+                    <input 
+                        type="number" 
+                        name="value" 
+                        class="form-input"
+                        value="${contract ? contract.value : ''}"
+                        required
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                    >
+                </div>
 
-    deleteContract(id) {
-        const contracts = this.getAllContracts();
-        const filteredContracts = contracts.filter(c => c.id !== id);
-        
-        // Save to current period
-        const currentPeriod = periodService.getCurrentPeriod();
-        storage.saveContractsForPeriod(currentPeriod, filteredContracts);
-        
-        return true;
-    }
+                <!-- Squad -->
+                <div class="form-group">
+                    <label class="form-label">Squad</label>
+                    <select name="squadId" class="form-select" id="squadSelect">
+                        <option value="">Selecione um squad</option>
+                        ${squads.map(squad => `
+                            <option value="${squad.id}" ${squadId === squad.id ? 'selected' : ''}>
+                                ${squad.name}
+                            </option>
+                        `).join('')}
+                    </select>
+                    <small style="color: var(--text-tertiary); font-size: 0.75rem; display: block; margin-top: 0.25rem;">
+                        ℹ️ O Head Executivo será incluído automaticamente
+                    </small>
+                </div>
 
-    getContract(id) {
-        return this.getContractById(id);
-    }
+                <!-- Pessoas (SEM HEADS) -->
+                <div class="form-group">
+                    <label class="form-label">Pessoas do Squad</label>
+                    <div style="
+                        max-height: 200px;
+                        overflow-y: auto;
+                        border: 1px solid var(--border-color);
+                        border-radius: var(--radius-md);
+                        padding: var(--spacing-sm);
+                        background: var(--bg-tertiary);
+                    ">
+                        ${availablePeople.length > 0 ? availablePeople.map(person => `
+                            <label style="
+                                display: flex;
+                                align-items: center;
+                                padding: var(--spacing-sm);
+                                cursor: pointer;
+                                border-radius: var(--radius-sm);
+                                transition: background 0.15s ease;
+                            " onmouseover="this.style.background='var(--bg-card-hover)'" 
+                               onmouseout="this.style.background='transparent'">
+                                <input 
+                                    type="checkbox" 
+                                    name="assignedPeople" 
+                                    value="${person.id}"
+                                    ${assignedPeopleIds.includes(person.id) ? 'checked' : ''}
+                                    style="margin-right: var(--spacing-sm);"
+                                >
+                                <span style="flex: 1; color: var(--text-primary); font-size: 0.875rem;">
+                                    ${person.name}
+                                </span>
+                                <span style="color: var(--text-tertiary); font-size: 0.75rem;">
+                                    ${person.role}
+                                </span>
+                            </label>
+                        `).join('') : `
+                            <div style="
+                                text-align: center;
+                                padding: var(--spacing-lg);
+                                color: var(--text-tertiary);
+                            ">
+                                Nenhuma pessoa disponível
+                            </div>
+                        `}
+                    </div>
+                </div>
 
-    searchContracts(query) {
-        const contracts = this.getAllContracts();
-        const lowerQuery = query.toLowerCase();
-        
-        return contracts.filter(contract => 
-            contract.client.toLowerCase().includes(lowerQuery) ||
-            (contract.notes && contract.notes.toLowerCase().includes(lowerQuery))
-        );
-    }
+                <!-- Entregáveis -->
+                <div class="form-group">
+                    <label class="form-label">Entregáveis</label>
+                    <div id="deliverablesContainer">
+                        ${deliverableTypes.map(type => {
+                            const currentQty = contract && contract.deliverables ? 
+                                (contract.deliverables[type.id] || 0) : 0;
+                            
+                            return `
+                                <div style="
+                                    display: flex;
+                                    align-items: center;
+                                    gap: var(--spacing-sm);
+                                    margin-bottom: var(--spacing-sm);
+                                ">
+                                    <label style="
+                                        flex: 1;
+                                        color: var(--text-secondary);
+                                        font-size: 0.875rem;
+                                    ">
+                                        ${type.name}
+                                    </label>
+                                    <input 
+                                        type="number" 
+                                        name="deliverable_${type.id}"
+                                        class="form-input"
+                                        value="${currentQty}"
+                                        min="0"
+                                        placeholder="0"
+                                        style="width: 100px;"
+                                    >
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
 
-    getContractsBySquad(squadId) {
-        const contracts = storage.getContracts();
-        return contracts.filter(contract => contract.squadId === squadId);
-    }
-
-    getContractsByPerson(personId) {
-        const contracts = storage.getContracts();
-        return contracts.filter(contract => {
-            if (contract.assignedPeople && contract.assignedPeople.includes(personId)) {
-                return true;
-            }
-            if (contract.squadId) {
-                const squad = storage.getSquadById(contract.squadId);
-                return squad && squad.members.includes(personId);
-            }
-            return false;
-        });
-    }
-
-    addDeliverable(contractId, type, quantity) {
-        const contract = storage.getContractById(contractId);
-        if (!contract) {
-            throw new Error('Contrato não encontrado');
-        }
-
-        if (!contract.deliverables) {
-            contract.deliverables = {};
-        }
-
-        contract.deliverables[type] = parseInt(quantity);
-        return storage.updateContract(contractId, contract);
-    }
-
-    removeDeliverable(contractId, type) {
-        const contract = storage.getContractById(contractId);
-        if (!contract) {
-            throw new Error('Contrato não encontrado');
-        }
-
-        if (contract.deliverables && contract.deliverables[type]) {
-            delete contract.deliverables[type];
-            return storage.updateContract(contractId, contract);
-        }
-
-        return contract;
-    }
-
-    assignSquad(contractId, squadId) {
-        const contract = storage.getContractById(contractId);
-        if (!contract) {
-            throw new Error('Contrato não encontrado');
-        }
-
-        const squad = storage.getSquadById(squadId);
-        if (!squad) {
-            throw new Error('Squad não encontrado');
-        }
-
-        // Clear individual assignments when assigning squad
-        return storage.updateContract(contractId, {
-            squadId: squadId,
-            assignedPeople: []
-        });
-    }
-
-    assignPeople(contractId, personIds) {
-        const contract = storage.getContractById(contractId);
-        if (!contract) {
-            throw new Error('Contrato não encontrado');
-        }
-
-        // Validate all people exist
-        const people = storage.getPeople();
-        const validIds = personIds.filter(id => 
-            people.some(p => p.id === id)
-        );
-
-        // Clear squad assignment when assigning individual people
-        return storage.updateContract(contractId, {
-            assignedPeople: validIds,
-            squadId: null
-        });
-    }
-
-    getTotalRevenue() {
-        const contracts = storage.getContracts();
-        return contracts.reduce((total, contract) => total + contract.value, 0);
-    }
-
-    getContractCount() {
-        return storage.getContracts().length;
-    }
+                <!-- Botões -->
+                <div style="
+                    display: flex;
+                    gap: var(--spacing-sm);
+                    justify-content: flex-end;
+                    margin-top: var(--spacing-xl);
+                ">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="btn btn-primary">
+                        ${isEdit ? 'Salvar Alterações' : 'Criar Contrato'}
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
 }
-
-export default new ContractService();

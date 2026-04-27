@@ -1,5 +1,5 @@
 // analyticsService.js - Analytics and ROI calculation service
-// VERSÃO COM HEAD POR CLIENTE
+// VERSÃO COM SISTEMA MENSAL + HEAD POR CLIENTE
 
 import storage from '../store/storage.js';
 
@@ -21,8 +21,10 @@ class AnalyticsService {
         return (deliverableType && deliverableType.defaultWeight) || 1;
     }
 
-    getPersonTotalWeightedDeliverables(personId) {
-        const contracts = this.getPersonContracts(personId);
+    // ATUALIZADO: Usar período específico
+    getPersonTotalWeightedDeliverables(personId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        const contracts = this.getPersonContractsForPeriod(personId, currentPeriod);
         const person = storage.getPersonById(personId);
         
         if (!person) return 0;
@@ -30,8 +32,12 @@ class AnalyticsService {
         let totalWeightedPoints = 0;
 
         contracts.forEach(contract => {
-            if (contract.deliverables) {
-                Object.entries(contract.deliverables).forEach(([typeId, quantity]) => {
+            // Pegar entregáveis do período específico
+            const projection = storage.getContractProjection(contract.id, currentPeriod);
+            const deliverables = projection ? projection.deliverables : contract.deliverables;
+            
+            if (deliverables) {
+                Object.entries(deliverables).forEach(([typeId, quantity]) => {
                     const weight = this.getWeightForRole(person.role, typeId);
                     totalWeightedPoints += (quantity * weight);
                 });
@@ -45,7 +51,9 @@ class AnalyticsService {
     // HEAD EXECUTIVO - CUSTO POR CLIENTE
     // ========================================
 
-    getHeadCostForContract(contractId) {
+    // ATUALIZADO: Usar salário do período
+    getHeadCostForContract(contractId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
         const contract = storage.getContractById(contractId);
         if (!contract || !contract.squadTag) return 0;
         
@@ -55,9 +63,12 @@ class AnalyticsService {
         const head = storage.getPersonById(squad.headId);
         if (!head) return 0;
         
-        // Contar clientes únicos do squad
-        const allContracts = storage.getContracts();
-        const squadContracts = allContracts.filter(c => c.squadTag === squad.id);
+        // Pegar salário do Head no período
+        const headSalary = storage.getSalaryForPeriod(squad.headId, currentPeriod) || head.salary || 0;
+        
+        // Contar clientes únicos do squad no período
+        const activeContracts = storage.getActiveContractsForPeriod(currentPeriod);
+        const squadContracts = activeContracts.filter(c => c.squadTag === squad.id);
         
         const uniqueClients = [...new Set(squadContracts.map(c => c.client))];
         const clientCount = uniqueClients.length;
@@ -65,20 +76,30 @@ class AnalyticsService {
         if (clientCount === 0) return 0;
         
         // Custo do Head dividido igualmente entre clientes
-        return head.salary / clientCount;
+        return headSalary / clientCount;
     }
 
     // ========================================
-    // CÁLCULO DE ROI DO CONTRATO (COM HEAD)
+    // CÁLCULO DE ROI DO CONTRATO (COM HEAD + PERÍODO)
     // ========================================
     
-    getContractROI(contractId) {
+    // ATUALIZADO: Calcular ROI para período específico
+    getContractROI(contractId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
         const contract = storage.getContractById(contractId);
+        
         if (!contract) {
             return { revenue: 0, cost: 0, profit: 0, margin: 0, costBreakdown: [] };
         }
 
-        const revenue = contract.value;
+        // Pegar dados do período específico
+        const projection = storage.getContractProjection(contractId, currentPeriod);
+        if (!projection) {
+            return { revenue: 0, cost: 0, profit: 0, margin: 0, costBreakdown: [] };
+        }
+
+        const revenue = projection.value || 0;
+        const deliverables = projection.deliverables || {};
         let cost = 0;
         const costBreakdown = [];
 
@@ -94,16 +115,20 @@ class AnalyticsService {
 
                 let personWeightedPointsInContract = 0;
 
-                if (contract.deliverables) {
-                    Object.entries(contract.deliverables).forEach(([typeId, quantity]) => {
+                if (deliverables) {
+                    Object.entries(deliverables).forEach(([typeId, quantity]) => {
                         const weight = this.getWeightForRole(person.role, typeId);
                         personWeightedPointsInContract += (quantity * weight);
                     });
                 }
 
-                const totalPersonWeightedPoints = this.getPersonTotalWeightedDeliverables(personId);
+                const totalPersonWeightedPoints = this.getPersonTotalWeightedDeliverables(personId, currentPeriod);
+                
+                // Pegar salário do período
+                const personSalary = storage.getSalaryForPeriod(personId, currentPeriod) || person.salary || 0;
+                
                 const costPerWeightedPoint = totalPersonWeightedPoints > 0 
-                    ? person.salary / totalPersonWeightedPoints 
+                    ? personSalary / totalPersonWeightedPoints 
                     : 0;
 
                 const personCostInContract = personWeightedPointsInContract * costPerWeightedPoint;
@@ -114,6 +139,7 @@ class AnalyticsService {
                         personId: person.id,
                         name: person.name,
                         role: person.role,
+                        salary: personSalary,
                         costPerWeightedPoint: costPerWeightedPoint,
                         weightedPointsInContract: personWeightedPointsInContract,
                         totalCost: personCostInContract
@@ -123,7 +149,7 @@ class AnalyticsService {
         }
 
         // 2. CUSTO DO HEAD (POR CLIENTE)
-        const headCost = this.getHeadCostForContract(contractId);
+        const headCost = this.getHeadCostForContract(contractId, currentPeriod);
         
         if (headCost > 0) {
             cost += headCost;
@@ -137,6 +163,7 @@ class AnalyticsService {
                         personId: head.id,
                         name: head.name + ' (Head - Estratégia)',
                         role: head.role,
+                        salary: storage.getSalaryForPeriod(squad.headId, currentPeriod) || head.salary || 0,
                         costPerWeightedPoint: 0,
                         weightedPointsInContract: 0,
                         totalCost: headCost,
@@ -156,16 +183,20 @@ class AnalyticsService {
     }
 
     // ========================================
-    // OUTRAS FUNÇÕES
+    // FUNÇÕES AUXILIARES (ATUALIZADAS)
     // ========================================
 
-    getPersonCost(personId) {
+    getPersonCost(personId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
         const person = storage.getPersonById(personId);
-        return person ? person.salary : 0;
+        if (!person) return 0;
+        
+        return storage.getSalaryForPeriod(personId, currentPeriod) || person.salary || 0;
     }
 
-    getPersonTotalDeliverables(personId) {
-        const contracts = this.getPersonContracts(personId);
+    getPersonTotalDeliverables(personId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        const contracts = this.getPersonContractsForPeriod(personId, currentPeriod);
         const person = storage.getPersonById(personId);
         
         if (!person) return 0;
@@ -173,8 +204,11 @@ class AnalyticsService {
         let total = 0;
 
         contracts.forEach(contract => {
-            if (contract.deliverables) {
-                Object.values(contract.deliverables).forEach(qty => {
+            const projection = storage.getContractProjection(contract.id, currentPeriod);
+            const deliverables = projection ? projection.deliverables : contract.deliverables;
+            
+            if (deliverables) {
+                Object.values(deliverables).forEach(qty => {
                     total += qty;
                 });
             }
@@ -183,45 +217,63 @@ class AnalyticsService {
         return total;
     }
 
-    getPersonCostPerDeliverable(personId) {
-        const totalWeightedPoints = this.getPersonTotalWeightedDeliverables(personId);
-        const person = storage.getPersonById(personId);
+    getPersonCostPerDeliverable(personId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        const totalWeightedPoints = this.getPersonTotalWeightedDeliverables(personId, currentPeriod);
+        const personSalary = this.getPersonCost(personId, currentPeriod);
         
-        if (!person || totalWeightedPoints === 0) return 0;
+        if (totalWeightedPoints === 0) return 0;
         
-        return person.salary / totalWeightedPoints;
+        return personSalary / totalWeightedPoints;
     }
 
-    getPersonContracts(personId) {
-        const contracts = storage.getContracts();
-        return contracts.filter(contract => 
+    // NOVO: Pegar contratos da pessoa em período específico
+    getPersonContractsForPeriod(personId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        const activeContracts = storage.getActiveContractsForPeriod(currentPeriod);
+        
+        return activeContracts.filter(contract => 
             contract.assignedPeople && contract.assignedPeople.includes(personId)
         );
     }
 
-    getPersonAverageTicket(personId) {
-        const contracts = this.getPersonContracts(personId);
+    // Manter compatibilidade
+    getPersonContracts(personId) {
+        return this.getPersonContractsForPeriod(personId);
+    }
+
+    getPersonAverageTicket(personId, periodId = null) {
+        const contracts = this.getPersonContractsForPeriod(personId, periodId);
         if (contracts.length === 0) return 0;
         
-        const totalValue = contracts.reduce((sum, contract) => sum + contract.value, 0);
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        let totalValue = 0;
+        
+        contracts.forEach(contract => {
+            const projection = storage.getContractProjection(contract.id, currentPeriod);
+            totalValue += projection ? projection.value : contract.value;
+        });
+        
         return totalValue / contracts.length;
     }
 
-    getSquadContracts(squadId) {
-        const contracts = storage.getContracts();
-        return contracts.filter(contract => contract.squadTag === squadId);
+    getSquadContracts(squadId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        const activeContracts = storage.getActiveContractsForPeriod(currentPeriod);
+        return activeContracts.filter(contract => contract.squadTag === squadId);
     }
 
-    getPersonProratedCostBySquad(personId) {
+    getPersonProratedCostBySquad(personId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
         const squads = storage.getSquads().filter(squad => 
             squad.members.includes(personId)
         );
         
-        const person = storage.getPersonById(personId);
-        if (!person || squads.length === 0) return {};
+        const personSalary = this.getPersonCost(personId, currentPeriod);
+        if (squads.length === 0) return {};
 
         const costs = {};
-        const perSquadCost = person.salary / squads.length;
+        const perSquadCost = personSalary / squads.length;
         
         squads.forEach(squad => {
             costs[squad.id] = perSquadCost;
@@ -230,30 +282,34 @@ class AnalyticsService {
         return costs;
     }
 
-    getSquadROI(squadId) {
-        const contracts = this.getSquadContracts(squadId);
+    getSquadROI(squadId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        const contracts = this.getSquadContracts(squadId, currentPeriod);
         const squad = storage.getSquadById(squadId);
         
         if (!squad) {
             return { revenue: 0, cost: 0, profit: 0, margin: 0, contractCount: 0 };
         }
         
-        const totalRevenue = contracts.reduce((sum, contract) => sum + contract.value, 0);
+        let totalRevenue = 0;
+        contracts.forEach(contract => {
+            const projection = storage.getContractProjection(contract.id, currentPeriod);
+            totalRevenue += projection ? projection.value : 0;
+        });
         
         // Custo dos membros (sem Head)
         let membersCost = 0;
         squad.members.forEach(personId => {
             if (squad.headId === personId) return; // Pular Head
             
-            const proratedCosts = this.getPersonProratedCostBySquad(personId);
+            const proratedCosts = this.getPersonProratedCostBySquad(personId, currentPeriod);
             membersCost += proratedCosts[squadId] || 0;
         });
         
         // Custo do Head (se tiver)
         let headCost = 0;
         if (squad.headId) {
-            const head = storage.getPersonById(squad.headId);
-            if (head) headCost = head.salary;
+            headCost = this.getPersonCost(squad.headId, currentPeriod);
         }
         
         const totalCost = membersCost + headCost;
@@ -267,12 +323,18 @@ class AnalyticsService {
         };
     }
 
-    getOverallROI() {
-        const contracts = storage.getContracts();
-        const people = storage.getPeople();
+    getOverallROI(periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        const activeContracts = storage.getActiveContractsForPeriod(currentPeriod);
+        const activeSalaries = storage.getSalariesForPeriod(currentPeriod);
         
-        const totalRevenue = contracts.reduce((sum, contract) => sum + contract.value, 0);
-        const totalCost = people.reduce((sum, person) => sum + person.salary, 0);
+        let totalRevenue = 0;
+        activeContracts.forEach(contract => {
+            const projection = storage.getContractProjection(contract.id, currentPeriod);
+            totalRevenue += projection ? projection.value : 0;
+        });
+        
+        const totalCost = activeSalaries.reduce((sum, entry) => sum + entry.salary, 0);
         
         return {
             revenue: totalRevenue,
@@ -282,119 +344,105 @@ class AnalyticsService {
         };
     }
 
-    getProductivityRanking() {
+    // ========================================
+    // NOVAS FUNÇÕES - COMPARAÇÃO MENSAL
+    // ========================================
+
+    getMonthlyEvolution(months = 6) {
+        const currentPeriod = storage.getCurrentPeriod();
+        const [currentYear, currentMonth] = currentPeriod.split('-').map(Number);
+        
+        const evolution = [];
+        
+        for (let i = months - 1; i >= 0; i--) {
+            let month = currentMonth - i;
+            let year = currentYear;
+            
+            while (month < 1) {
+                month += 12;
+                year--;
+            }
+            
+            const periodId = `${year}-${String(month).padStart(2, '0')}`;
+            const roi = this.getOverallROI(periodId);
+            
+            evolution.push({
+                periodId,
+                label: this.getPeriodLabel(periodId),
+                ...roi
+            });
+        }
+        
+        return evolution;
+    }
+
+    getPeriodLabel(periodId) {
+        const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+        const [year, month] = periodId.split('-').map(Number);
+        return `${monthNames[month - 1]}/${year}`;
+    }
+
+    compareWithPreviousMonth(periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        const [year, month] = currentPeriod.split('-').map(Number);
+        
+        const prevMonth = month === 1 ? 12 : month - 1;
+        const prevYear = month === 1 ? year - 1 : year;
+        const previousPeriod = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+        
+        const current = this.getOverallROI(currentPeriod);
+        const previous = this.getOverallROI(previousPeriod);
+        
+        return {
+            current,
+            previous,
+            changes: {
+                revenue: current.revenue - previous.revenue,
+                revenuePercent: previous.revenue > 0 ? ((current.revenue - previous.revenue) / previous.revenue) * 100 : 0,
+                cost: current.cost - previous.cost,
+                costPercent: previous.cost > 0 ? ((current.cost - previous.cost) / previous.cost) * 100 : 0,
+                profit: current.profit - previous.profit,
+                margin: current.margin - previous.margin
+            }
+        };
+    }
+
+    // ========================================
+    // FUNÇÕES DE RANKING E COMPARAÇÃO
+    // ========================================
+
+    getProductivityRanking(periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
         const people = storage.getPeople();
+        const activeSalaries = storage.getSalariesForPeriod(currentPeriod);
         
         return people.map(person => {
-            const totalWeightedPoints = this.getPersonTotalWeightedDeliverables(person.id);
-            const costPerPoint = totalWeightedPoints > 0 ? person.salary / totalWeightedPoints : 0;
-            const contracts = this.getPersonContracts(person.id);
+            const salaryEntry = activeSalaries.find(s => s.personId === person.id);
+            const salary = salaryEntry ? salaryEntry.salary : 0;
+            
+            const totalWeightedPoints = this.getPersonTotalWeightedDeliverables(person.id, currentPeriod);
+            const costPerPoint = totalWeightedPoints > 0 ? salary / totalWeightedPoints : 0;
+            const contracts = this.getPersonContractsForPeriod(person.id, currentPeriod);
             
             return {
                 id: person.id,
                 name: person.name,
                 role: person.role,
-                salary: person.salary,
+                salary,
                 totalWeightedPoints,
                 costPerPoint,
                 contractCount: contracts.length,
-                efficiency: totalWeightedPoints > 0 ? person.salary / totalWeightedPoints : 0
+                efficiency: totalWeightedPoints > 0 ? salary / totalWeightedPoints : 0
             };
         }).sort((a, b) => a.costPerPoint - b.costPerPoint);
     }
 
-    comparePeopleByRole(role) {
-        const people = storage.getPeople().filter(p => p.role === role);
-        
-        return people.map(person => {
-            const totalDeliverables = this.getPersonTotalDeliverables(person.id);
-            const totalWeightedPoints = this.getPersonTotalWeightedDeliverables(person.id);
-            const costPerPoint = this.getPersonCostPerDeliverable(person.id);
-            const contracts = this.getPersonContracts(person.id);
-            
-            let totalContractValue = 0;
-            contracts.forEach(contract => {
-                totalContractValue += contract.value;
-            });
-            
-            const ticketMedio = contracts.length > 0 ? totalContractValue / contracts.length : 0;
-            
-            return {
-                id: person.id,
-                name: person.name,
-                role: person.role,
-                salary: person.salary,
-                totalDeliverables,
-                totalWeightedPoints,
-                costPerDeliverable: costPerPoint,
-                contractCount: contracts.length,
-                totalContractValue,
-                ticketMedio
-            };
-        }).sort((a, b) => a.costPerDeliverable - b.costPerDeliverable);
-    }
-
-    getContractProfitabilityRanking() {
-        const contracts = storage.getContracts();
-        
-        return contracts.map(contract => {
-            const roi = this.getContractROI(contract.id);
-            return {
-                id: contract.id,
-                client: contract.client,
-                value: contract.value,
-                ...roi
-            };
-        }).sort((a, b) => b.margin - a.margin);
-    }
-
-    getDeliverablesBreakdown() {
-        const contracts = storage.getContracts();
-        const deliverableTypes = storage.getDeliverableTypes();
-        const breakdown = {};
-        
-        contracts.forEach(contract => {
-            if (contract.deliverables) {
-                Object.entries(contract.deliverables).forEach(([typeId, quantity]) => {
-                    const deliverableType = deliverableTypes.find(dt => dt.id === typeId);
-                    const typeName = deliverableType ? deliverableType.name : typeId;
-                    
-                    if (!breakdown[typeName]) {
-                        breakdown[typeName] = 0;
-                    }
-                    breakdown[typeName] += quantity;
-                });
-            }
-        });
-
-        return breakdown;
-    }
-
-    getSquadComparison() {
-        const squads = storage.getSquads();
-        
-        return squads.map(squad => {
-            const roi = this.getSquadROI(squad.id);
-            
-            return {
-                id: squad.id,
-                name: squad.name,
-                memberCount: squad.members.length,
-                contractCount: roi.contractCount,
-                revenue: roi.revenue,
-                cost: roi.cost,
-                profit: roi.profit,
-                margin: roi.margin,
-                revenuePerMember: squad.members.length > 0 ? roi.revenue / squad.members.length : 0
-            };
-        }).sort((a, b) => b.profit - a.profit);
-    }
-
-    getPersonDeliverablesBreakdown(personId) {
+    getPersonDeliverablesBreakdown(personId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
         const person = storage.getPersonById(personId);
         if (!person) return { total: 0, byType: {}, byContract: {} };
 
-        const contracts = this.getPersonContracts(personId);
+        const contracts = this.getPersonContractsForPeriod(personId, currentPeriod);
         const breakdown = {
             total: 0,
             byType: {},
@@ -402,12 +450,15 @@ class AnalyticsService {
         };
 
         contracts.forEach(contract => {
-            if (!contract.deliverables) return;
+            const projection = storage.getContractProjection(contract.id, currentPeriod);
+            const deliverables = projection ? projection.deliverables : contract.deliverables;
+            
+            if (!deliverables) return;
 
             let contractTotal = 0;
             const contractBreakdown = {};
 
-            Object.entries(contract.deliverables).forEach(([typeId, quantity]) => {
+            Object.entries(deliverables).forEach(([typeId, quantity]) => {
                 const type = storage.getDeliverableTypeById(typeId);
                 
                 if (type && type.roles && type.roles.includes(person.role)) {

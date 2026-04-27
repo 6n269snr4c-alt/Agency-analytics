@@ -1,4 +1,4 @@
-// contractsPage.js - Contracts management page
+// contractsPage.js - COM BREAKDOWN DETALHADO
 
 import contractService from '../services/contractService.js';
 import squadService from '../services/squadService.js';
@@ -123,8 +123,9 @@ export function renderContractsPage() {
             </div>
         </div>
 
+        <!-- MODAL DE BREAKDOWN DETALHADO -->
         <div id="breakdown-modal" class="modal">
-            <div class="modal-content">
+            <div class="modal-content" style="max-width: 800px;">
                 <div class="modal-header">
                     <h2 class="modal-title" id="breakdown-title">Detalhamento de Custo</h2>
                     <button class="modal-close" onclick="window.closeBreakdownModal()">&times;</button>
@@ -253,8 +254,8 @@ function renderContractsList(contracts) {
                                 </span>
                             </td>
                             <td style="text-align: center;">
-                                <button class="btn btn-small btn-secondary" onclick="window.showContractDetails('${contract.id}')">
-                                    👥 ${assignedPeople.length} | 📦 ${Object.keys(contract.deliverables || {}).length}
+                                <button class="btn btn-small btn-primary" onclick="window.showContractBreakdown('${contract.id}')" title="Ver Cálculo Detalhado">
+                                    🔍 Ver Cálculo
                                 </button>
                             </td>
                             <td>
@@ -269,6 +270,125 @@ function renderContractsList(contracts) {
             </table>
         </div>
     `;
+}
+
+// BREAKDOWN DETALHADO DO CONTRATO
+function showContractBreakdown(contractId) {
+    const contract = contractService.getContract(contractId);
+    const roi = analyticsService.getContractROI(contractId);
+    const deliverableTypes = deliverableTypeService.getActiveDeliverableTypes();
+    
+    if (!roi) {
+        alert('ROI não calculado. Verifique pessoas/entregáveis.');
+        return;
+    }
+    
+    document.getElementById('breakdown-title').textContent = `${contract.client} - Cálculo Detalhado`;
+    
+    // Entregáveis do contrato
+    let deliverablesHtml = '';
+    if (contract.deliverables && Object.keys(contract.deliverables).length > 0) {
+        deliverablesHtml = `
+            <div style="background: var(--bg-darker); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                <h3 style="margin: 0 0 1rem 0; color: var(--fast-green); font-size: 1rem; text-transform: uppercase;">📦 Entregáveis do Contrato</h3>
+                <div style="display: grid; gap: 0.5rem;">
+                    ${Object.entries(contract.deliverables).map(([typeId, qty]) => {
+                        const type = deliverableTypes.find(dt => dt.id === typeId);
+                        return `
+                            <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px;">
+                                <span>${type ? type.name : 'Desconhecido'}</span>
+                                <strong>${qty}x</strong>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Breakdown por pessoa
+    let peopleBreakdownHtml = '';
+    if (roi.costBreakdown && roi.costBreakdown.length > 0) {
+        peopleBreakdownHtml = `
+            <div style="background: var(--bg-darker); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                <h3 style="margin: 0 0 1rem 0; color: var(--fast-green); font-size: 1rem; text-transform: uppercase;">👥 Custo por Pessoa</h3>
+                ${roi.costBreakdown.map(person => {
+                    const personData = personService.getPerson(person.personId);
+                    if (!personData && !person.isHead) return '';
+                    
+                    if (person.isHead) {
+                        // Head Executivo
+                        return `
+                            <div style="background: var(--bg); padding: 1rem; border-radius: 6px; margin-bottom: 1rem; border-left: 3px solid var(--fast-green);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                    <strong style="color: var(--fast-green);">${person.name}</strong>
+                                    <span class="badge badge-success">${person.role}</span>
+                                </div>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">
+                                    ├─ Salário: R$ ${formatCurrency(personData ? personData.salary : 0)}/mês<br>
+                                    ├─ Estratégia e Gestão do Squad<br>
+                                    ├─ Custo rateado entre clientes do squad<br>
+                                    └─ <strong style="color: var(--fast-green);">CUSTO NESTE CONTRATO: R$ ${formatCurrency(person.totalCost)}</strong>
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        // Pessoa normal
+                        const totalPoints = analyticsService.getPersonTotalWeightedDeliverables(person.personId);
+                        return `
+                            <div style="background: var(--bg); padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                    <strong>${person.name}</strong>
+                                    <span class="badge badge-success">${person.role}</span>
+                                </div>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">
+                                    ├─ Salário: R$ ${formatCurrency(personData.salary)}/mês<br>
+                                    ├─ Pontos neste contrato: ${person.weightedPointsInContract.toFixed(1)} pontos<br>
+                                    ├─ Total de pontos (todos contratos): ${totalPoints.toFixed(1)} pontos<br>
+                                    ├─ Custo por ponto: R$ ${formatCurrency(personData.salary)} ÷ ${totalPoints.toFixed(1)} = R$ ${formatCurrency(person.costPerWeightedPoint)}/ponto<br>
+                                    └─ <strong style="color: var(--fast-green);">CUSTO NESTE CONTRATO: ${person.weightedPointsInContract.toFixed(1)} × R$ ${formatCurrency(person.costPerWeightedPoint)} = R$ ${formatCurrency(person.totalCost)}</strong>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }).join('')}
+            </div>
+        `;
+    }
+    
+    // Resumo final
+    const summaryHtml = `
+        <div style="background: var(--bg-darker); padding: 1.5rem; border-radius: 8px; border: 2px solid ${roi.profit > 0 ? 'var(--fast-green)' : 'var(--error)'};">
+            <h3 style="color: ${roi.profit > 0 ? 'var(--fast-green)' : 'var(--error)'}; margin: 0 0 1rem 0; font-size: 1rem; text-transform: uppercase;">
+                ${roi.profit > 0 ? '✅ Resumo Financeiro' : '⚠️ Resumo Financeiro'}
+            </h3>
+            <div style="display: grid; gap: 0.75rem;">
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px;">
+                    <span>💵 Receita:</span>
+                    <strong>R$ ${formatCurrency(contract.value)}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px;">
+                    <span>💰 Custo Total:</span>
+                    <strong style="color: var(--error);">R$ ${formatCurrency(roi.cost)}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px; border: 1px solid ${roi.profit > 0 ? 'var(--fast-green)' : 'var(--error)'};">
+                    <span style="font-weight: 700;">${roi.profit > 0 ? '✅ Lucro:' : '⚠️ Prejuízo:'}</span>
+                    <strong style="color: ${roi.profit > 0 ? 'var(--fast-green)' : 'var(--error)'}; font-size: 1.2rem;">R$ ${formatCurrency(roi.profit)}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px;">
+                    <span>📊 Margem:</span>
+                    <strong style="color: ${roi.margin >= 30 ? 'var(--fast-green)' : roi.margin >= 15 ? 'var(--warning)' : 'var(--error)'};">${roi.margin.toFixed(1)}%</strong>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('breakdown-content').innerHTML = deliverablesHtml + peopleBreakdownHtml + summaryHtml;
+    document.getElementById('breakdown-modal').classList.add('active');
+}
+
+function closeBreakdownModal() {
+    document.getElementById('breakdown-modal').classList.remove('active');
 }
 
 function showDebug(contractId) {
@@ -295,12 +415,7 @@ function showDebug(contractId) {
 
             <div style="margin: 1rem 0; padding: 1rem; background: #2a2a2a; border-left: 3px solid #ff4444;">
                 <strong style="color: #ff4444;">❌ PROBLEMA DETECTADO:</strong><br>
-                Há pessoas E entregáveis, mas o custo está ZERO.<br><br>
-                
-                <strong>Possíveis causas:</strong><br>
-                1. Sistema de pesos NÃO está ativo no analyticsService.js<br>
-                2. Pessoa não tem entregáveis cadastrados no perfil<br>
-                3. Entregável não tem a role da pessoa configurada
+                Há pessoas E entregáveis, mas o custo está ZERO.
             </div>
         </div>
     `;
@@ -372,12 +487,9 @@ function closeDetailsModal() {
 }
 
 function renderTeamAssignment(people, squads) {
-    // ========================================
-    // FILTRAR: REMOVER HEADS DA LISTA
-    // ========================================
     const availablePeople = people.filter(person => {
         const isHead = squads.some(squad => squad.headId === person.id);
-        return !isHead; // Remove quem é Head
+        return !isHead;
     });
     
     const peopleByRole = {};
@@ -444,42 +556,6 @@ function closeContractModal() {
     document.getElementById('contract-modal').classList.remove('active');
     currentEditId = null;
     deliverables = {};
-}
-
-function showContractBreakdown(contractId) {
-    const contract = contractService.getContract(contractId);
-    const roi = analyticsService.getContractROI(contractId);
-    
-    if (!roi) {
-        alert('ROI não calculado. Verifique pessoas/entregáveis.');
-        return;
-    }
-    
-    document.getElementById('breakdown-title').textContent = `${contract.client} - Custo`;
-    document.getElementById('breakdown-content').innerHTML = `
-        <div style="background: var(--bg-darker); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
-            <h3 style="margin: 0 0 1rem 0; color: var(--primary);">Receita</h3>
-            <div style="font-size: 1.5rem; font-weight: bold;">R$ ${formatCurrency(contract.value)}</div>
-        </div>
-        <div style="background: var(--bg-darker); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
-            <h3 style="margin: 0 0 1rem 0; color: var(--primary);">Custo</h3>
-            <div style="font-size: 1.5rem; font-weight: bold; color: var(--primary);">R$ ${formatCurrency(roi.cost)}</div>
-        </div>
-        <div style="background: var(--bg-darker); border: 1px solid ${roi.profit > 0 ? 'var(--success)' : 'var(--error)'}; padding: 1.5rem; border-radius: 8px;">
-            <h3 style="color: ${roi.profit > 0 ? 'var(--success)' : 'var(--error)'}; margin: 0 0 1rem 0;">
-                ${roi.profit > 0 ? '✅ Lucro' : '⚠️ Prejuízo'}
-            </h3>
-            <div style="font-size: 1.8rem; font-weight: bold; color: ${roi.profit > 0 ? 'var(--success)' : 'var(--error)'};">
-                R$ ${formatCurrency(roi.profit)}
-            </div>
-            <div style="margin-top: 0.5rem; font-size: 1.1rem;">Margem: ${roi.margin.toFixed(1)}%</div>
-        </div>
-    `;
-    document.getElementById('breakdown-modal').classList.add('active');
-}
-
-function closeBreakdownModal() {
-    document.getElementById('breakdown-modal').classList.remove('active');
 }
 
 function sortContractsBy(column) {

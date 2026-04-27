@@ -1,3 +1,22 @@
+import migration from './migrations/migrateToMonthlySystem.js';
+
+// Rodar migração se necessário
+if (!migration.constructor.isMigrated()) {
+    console.log('⚠️ Sistema precisa ser migrado!');
+    const confirmMigration = confirm(
+        'O sistema foi atualizado!\n\n' +
+        'Precisa migrar dados para formato mensal.\n\n' +
+        '✅ Contratos → 12 meses (Abr/26 a Mar/27)\n' +
+        '✅ Salários → Histórico Abr/2026\n\n' +
+        'Continuar?'
+    );
+    
+    if (confirmMigration) {
+        migration.migrate();
+        alert('✅ Migração OK! Recarregando...');
+        location.reload();
+    }
+}
 // app.js - Main application entry point
 
 import { renderNavbar } from './components/navbar.js';

@@ -1,5 +1,4 @@
-// storage.js - LocalStorage wrapper COMPLETO
-// TODOS OS MÉTODOS NECESSÁRIOS PARA O SISTEMA
+// storage.js - LocalStorage wrapper COMPLETO COM SISTEMA MENSAL
 
 class Storage {
     constructor() {
@@ -12,7 +11,8 @@ class Storage {
             PERIODS: 'agency_periods',
             CURRENT_PERIOD: 'agency_current_period',
             CONTRACTS_PER_PERIOD: 'agency_contracts_per_period',
-            PAYROLL_PER_PERIOD: 'agency_payroll_per_period'
+            PAYROLL_PER_PERIOD: 'agency_payroll_per_period',
+            SALARY_HISTORY: 'agency_salary_history'
         };
         this.initStorage();
     }
@@ -44,6 +44,9 @@ class Storage {
         }
         if (!localStorage.getItem(this.keys.PAYROLL_PER_PERIOD)) {
             localStorage.setItem(this.keys.PAYROLL_PER_PERIOD, JSON.stringify([]));
+        }
+        if (!localStorage.getItem(this.keys.SALARY_HISTORY)) {
+            this.saveSalaryHistory([]);
         }
         
         // Set current period to current month if not set
@@ -271,7 +274,7 @@ class Storage {
     }
 
     // ====================
-    // ROLES (SISTEMA DE PESOS)
+    // ROLES
     // ====================
     
     getRoles() {
@@ -473,6 +476,170 @@ class Storage {
     }
 
     // ====================
+    // SALARY HISTORY (NOVO - Sistema Mensal)
+    // ====================
+
+    getSalaryHistory() {
+        try {
+            return JSON.parse(localStorage.getItem(this.keys.SALARY_HISTORY)) || [];
+        } catch (e) {
+            console.error('Error loading salary history:', e);
+            return [];
+        }
+    }
+
+    saveSalaryHistory(history) {
+        try {
+            localStorage.setItem(this.keys.SALARY_HISTORY, JSON.stringify(history));
+            return true;
+        } catch (e) {
+            console.error('Error saving salary history:', e);
+            return false;
+        }
+    }
+
+    getSalaryForPeriod(personId, periodId) {
+        const history = this.getSalaryHistory();
+        const entry = history.find(h => h.personId === personId && h.periodId === periodId);
+        return entry ? entry.salary : null;
+    }
+
+    setSalaryForPeriod(personId, periodId, salary, status = 'active') {
+        const history = this.getSalaryHistory();
+        const existingIndex = history.findIndex(h => h.personId === personId && h.periodId === periodId);
+        
+        const entry = {
+            personId,
+            periodId,
+            salary,
+            status,
+            updatedAt: new Date().toISOString()
+        };
+        
+        if (existingIndex >= 0) {
+            history[existingIndex] = entry;
+        } else {
+            history.push(entry);
+        }
+        
+        this.saveSalaryHistory(history);
+        return entry;
+    }
+
+    getSalariesForPeriod(periodId) {
+        const history = this.getSalaryHistory();
+        return history.filter(h => h.periodId === periodId && h.status === 'active');
+    }
+
+    copySalariesToNextPeriod(fromPeriodId, toPeriodId) {
+        const salaries = this.getSalariesForPeriod(fromPeriodId);
+        
+        salaries.forEach(entry => {
+            this.setSalaryForPeriod(entry.personId, toPeriodId, entry.salary, entry.status);
+        });
+        
+        return salaries.length;
+    }
+
+    // ====================
+    // CONTRACT PROJECTIONS (NOVO - Sistema Mensal)
+    // ====================
+
+    getContractProjection(contractId, periodId) {
+        const contract = this.getContractById(contractId);
+        if (!contract || !contract.monthlyProjections) return null;
+        
+        return contract.monthlyProjections.find(p => p.periodId === periodId);
+    }
+
+    updateContractProjection(contractId, periodId, updates) {
+        const contracts = this.getContracts();
+        const contractIndex = contracts.findIndex(c => c.id === contractId);
+        
+        if (contractIndex === -1) return null;
+        
+        const contract = contracts[contractIndex];
+        if (!contract.monthlyProjections) {
+            contract.monthlyProjections = [];
+        }
+        
+        const projectionIndex = contract.monthlyProjections.findIndex(p => p.periodId === periodId);
+        
+        if (projectionIndex >= 0) {
+            contract.monthlyProjections[projectionIndex] = {
+                ...contract.monthlyProjections[projectionIndex],
+                ...updates,
+                updatedAt: new Date().toISOString()
+            };
+        } else {
+            contract.monthlyProjections.push({
+                periodId,
+                ...updates,
+                createdAt: new Date().toISOString()
+            });
+        }
+        
+        contracts[contractIndex] = contract;
+        this.saveContracts(contracts);
+        
+        return contract.monthlyProjections.find(p => p.periodId === periodId);
+    }
+
+    generateContractProjections(contractId) {
+        const contract = this.getContractById(contractId);
+        if (!contract) return null;
+        
+        const startPeriod = contract.startPeriod || this.getCurrentPeriod();
+        const duration = contract.duration || 12;
+        const baseValue = contract.baseValue || contract.value || 0;
+        const baseDeliverables = contract.baseDeliverables || contract.deliverables || {};
+        
+        const projections = [];
+        let [year, month] = startPeriod.split('-').map(Number);
+        
+        for (let i = 0; i < duration; i++) {
+            const periodId = `${year}-${String(month).padStart(2, '0')}`;
+            
+            projections.push({
+                periodId,
+                value: baseValue,
+                deliverables: { ...baseDeliverables },
+                status: i === 0 ? 'confirmed' : 'projected',
+                createdAt: new Date().toISOString()
+            });
+            
+            month++;
+            if (month > 12) {
+                month = 1;
+                year++;
+            }
+        }
+        
+        const contracts = this.getContracts();
+        const contractIndex = contracts.findIndex(c => c.id === contractId);
+        
+        if (contractIndex >= 0) {
+            contracts[contractIndex].monthlyProjections = projections;
+            this.saveContracts(contracts);
+        }
+        
+        return projections;
+    }
+
+    getActiveContractsForPeriod(periodId) {
+        const contracts = this.getContracts();
+        
+        return contracts.filter(contract => {
+            if (!contract.monthlyProjections || contract.monthlyProjections.length === 0) {
+                return false;
+            }
+            
+            const projection = contract.monthlyProjections.find(p => p.periodId === periodId);
+            return projection && contract.status === 'active';
+        });
+    }
+
+    // ====================
     // UTILITY
     // ====================
     
@@ -495,6 +662,7 @@ class Storage {
             currentPeriod: this.getCurrentPeriod(),
             contractsPerPeriod: this.getContractsPerPeriod(),
             payrollPerPeriod: this.getPayrollPerPeriod(),
+            salaryHistory: this.getSalaryHistory(),
             exportedAt: new Date().toISOString()
         };
     }
@@ -513,6 +681,9 @@ class Storage {
             }
             if (data.payrollPerPeriod) {
                 localStorage.setItem(this.keys.PAYROLL_PER_PERIOD, JSON.stringify(data.payrollPerPeriod));
+            }
+            if (data.salaryHistory) {
+                this.saveSalaryHistory(data.salaryHistory);
             }
             return true;
         } catch (e) {

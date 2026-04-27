@@ -1,4 +1,4 @@
-// contractsPage.js - COM BREAKDOWN DETALHADO
+// contractsPage.js - COM SISTEMA MENSAL + BREAKDOWN DETALHADO
 
 import contractService from '../services/contractService.js';
 import squadService from '../services/squadService.js';
@@ -13,11 +13,12 @@ let deliverables = {};
 
 export function renderContractsPage() {
     const contentEl = document.getElementById('content');
-    
+
     const contracts = contractService.getAllContracts();
     const squads = squadService.getAllSquads();
     const people = personService.getAllPeople();
     const deliverableTypes = deliverableTypeService.getActiveDeliverableTypes();
+    const currentPeriod = storage.getCurrentPeriod();
 
     contentEl.innerHTML = `
         <div class="page-header">
@@ -37,10 +38,10 @@ export function renderContractsPage() {
                 </button>
             </div>
             <div class="action-bar-right">
-                <input 
-                    type="text" 
-                    class="form-input" 
-                    id="contract-search" 
+                <input
+                    type="text"
+                    class="form-input"
+                    id="contract-search"
                     placeholder="🔍 Buscar contrato..."
                     style="max-width: 300px;"
                     oninput="window.filterContracts()"
@@ -52,6 +53,7 @@ export function renderContractsPage() {
             ${renderContractsList(contracts)}
         </div>
 
+        <!-- MODAL PRINCIPAL: NOVO / EDITAR CONTRATO -->
         <div id="contract-modal" class="modal">
             <div class="modal-content">
                 <div class="modal-header">
@@ -65,8 +67,32 @@ export function renderContractsPage() {
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">Valor (R$) *</label>
+                        <label class="form-label">Valor Mensal (R$) *</label>
                         <input type="number" class="form-input" id="value" step="0.01" required>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label class="form-label">Duração (meses)</label>
+                            <input
+                                type="number"
+                                class="form-input"
+                                id="duration"
+                                min="1"
+                                max="36"
+                                value="12"
+                                placeholder="Ex: 12"
+                            >
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Data de Início</label>
+                            <input
+                                type="month"
+                                class="form-input"
+                                id="startPeriod"
+                                value="${currentPeriod}"
+                            >
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -78,12 +104,12 @@ export function renderContractsPage() {
                                     <option value="${dt.id}">${dt.name}</option>
                                 `).join('')}
                             </select>
-                            <input 
-                                type="number" 
-                                class="form-input" 
-                                id="deliverable-qty" 
-                                placeholder="Qtd" 
-                                min="1" 
+                            <input
+                                type="number"
+                                class="form-input"
+                                id="deliverable-qty"
+                                placeholder="Qtd"
+                                min="1"
                                 style="width: 100px;"
                             >
                             <button type="button" class="btn btn-primary" onclick="window.addDeliverable()">
@@ -134,6 +160,7 @@ export function renderContractsPage() {
             </div>
         </div>
 
+        <!-- MODAL DE DETALHES (equipe e entregáveis) -->
         <div id="details-modal" class="modal">
             <div class="modal-content">
                 <div class="modal-header">
@@ -144,6 +171,7 @@ export function renderContractsPage() {
             </div>
         </div>
 
+        <!-- MODAL DE DEBUG -->
         <div id="debug-modal" class="modal">
             <div class="modal-content">
                 <div class="modal-header">
@@ -159,8 +187,12 @@ export function renderContractsPage() {
     renderDeliverables();
 }
 
+// ─── ORDENAÇÃO ────────────────────────────────────────────────────────────────
+
 let sortColumn = 'client';
 let sortDirection = 'asc';
+
+// ─── LISTA DE CONTRATOS ───────────────────────────────────────────────────────
 
 function renderContractsList(contracts) {
     if (contracts.length === 0) {
@@ -176,15 +208,16 @@ function renderContractsList(contracts) {
     const contractsData = contracts.map(contract => {
         const roi = analyticsService.getContractROI(contract.id);
         const safeRoi = roi || { cost: 0, profit: 0, margin: 0 };
-        
+
         const assignedPeople = contract.assignedPeople || [];
         const squad = contract.squadTag ? squadService.getSquad(contract.squadTag) : null;
         const warnings = validateContractConsistency(contract);
-        
-        const hasCalculationError = assignedPeople.length > 0 && 
-                                    Object.keys(contract.deliverables || {}).length > 0 && 
-                                    safeRoi.cost === 0;
-        
+
+        const hasCalculationError =
+            assignedPeople.length > 0 &&
+            Object.keys(contract.deliverables || {}).length > 0 &&
+            safeRoi.cost === 0;
+
         return {
             contract,
             roi: safeRoi,
@@ -201,7 +234,6 @@ function renderContractsList(contracts) {
 
     contractsData.sort((a, b) => {
         let comparison = 0;
-        
         if (sortColumn === 'client') {
             comparison = a.clientName.localeCompare(b.clientName);
         } else if (sortColumn === 'squad') {
@@ -209,7 +241,6 @@ function renderContractsList(contracts) {
         } else {
             comparison = a[sortColumn] - b[sortColumn];
         }
-        
         return sortDirection === 'asc' ? comparison : -comparison;
     });
 
@@ -227,6 +258,7 @@ function renderContractsList(contracts) {
                         <th onclick="window.sortContractsBy('value')" style="cursor: pointer;">
                             Valor ${sortColumn === 'value' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
                         </th>
+                        <th>Duração</th>
                         <th onclick="window.sortContractsBy('cost')" style="cursor: pointer;">
                             Custo ${sortColumn === 'cost' ? (sortDirection === 'asc' ? '▲' : '▼') : ''}
                         </th>
@@ -237,11 +269,18 @@ function renderContractsList(contracts) {
                     </tr>
                 </thead>
                 <tbody>
-                    ${contractsData.map(({ contract, roi, assignedPeople, squad }) => `
+                    ${contractsData.map(({ contract, roi, squad }) => `
                         <tr>
-                            <td><strong>${contract.client}</strong></td>
+                            <td>
+                                <strong>${contract.client}</strong>
+                                ${contract.status === 'inactive' ? '<span class="badge badge-error" style="margin-left:0.5rem; font-size:0.7rem;">Inativo</span>' : ''}
+                            </td>
                             <td>${squad ? squad.name : '-'}</td>
                             <td>R$ ${formatCurrency(contract.value)}</td>
+                            <td style="color: var(--text-secondary); font-size: 0.9rem;">
+                                ${contract.duration ? `${contract.duration} meses` : '-'}
+                                ${contract.startPeriod ? `<br><small>${contract.startPeriod}</small>` : ''}
+                            </td>
                             <td>R$ ${formatCurrency(roi.cost)}</td>
                             <td>
                                 <span class="badge ${roi.profit >= 0 ? 'badge-success' : 'badge-error'}">
@@ -272,19 +311,48 @@ function renderContractsList(contracts) {
     `;
 }
 
-// BREAKDOWN DETALHADO DO CONTRATO
+// ─── BREAKDOWN DETALHADO ──────────────────────────────────────────────────────
+
 function showContractBreakdown(contractId) {
     const contract = contractService.getContract(contractId);
     const roi = analyticsService.getContractROI(contractId);
     const deliverableTypes = deliverableTypeService.getActiveDeliverableTypes();
-    
+
     if (!roi) {
         alert('ROI não calculado. Verifique pessoas/entregáveis.');
         return;
     }
-    
+
     document.getElementById('breakdown-title').textContent = `${contract.client} - Cálculo Detalhado`;
-    
+
+    // Informações do período do contrato
+    let periodInfoHtml = '';
+    if (contract.duration || contract.startPeriod) {
+        const startPeriod = contract.startPeriod || storage.getCurrentPeriod();
+        const duration = contract.duration || 12;
+        const totalValue = contract.value * duration;
+
+        periodInfoHtml = `
+            <div style="background: var(--bg-darker); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem; border-left: 3px solid var(--fast-green);">
+                <h3 style="margin: 0 0 1rem 0; color: var(--fast-green); font-size: 1rem; text-transform: uppercase;">📅 Informações do Contrato</h3>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; text-align: center;">
+                    <div style="background: var(--bg); padding: 0.75rem; border-radius: 6px;">
+                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Início</div>
+                        <strong>${startPeriod}</strong>
+                    </div>
+                    <div style="background: var(--bg); padding: 0.75rem; border-radius: 6px;">
+                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Duração</div>
+                        <strong>${duration} meses</strong>
+                    </div>
+                    <div style="background: var(--bg); padding: 0.75rem; border-radius: 6px;">
+                        <div style="font-size: 0.8rem; color: var(--text-secondary);">Valor Total</div>
+                        <strong style="color: var(--fast-green);">R$ ${formatCurrency(totalValue)}</strong>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     // Entregáveis do contrato
     let deliverablesHtml = '';
     if (contract.deliverables && Object.keys(contract.deliverables).length > 0) {
@@ -305,7 +373,7 @@ function showContractBreakdown(contractId) {
             </div>
         `;
     }
-    
+
     // Breakdown por pessoa
     let peopleBreakdownHtml = '';
     if (roi.costBreakdown && roi.costBreakdown.length > 0) {
@@ -315,9 +383,8 @@ function showContractBreakdown(contractId) {
                 ${roi.costBreakdown.map(person => {
                     const personData = personService.getPerson(person.personId);
                     if (!personData && !person.isHead) return '';
-                    
+
                     if (person.isHead) {
-                        // Head Executivo
                         return `
                             <div style="background: var(--bg); padding: 1rem; border-radius: 6px; margin-bottom: 1rem; border-left: 3px solid var(--fast-green);">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
@@ -333,7 +400,6 @@ function showContractBreakdown(contractId) {
                             </div>
                         `;
                     } else {
-                        // Pessoa normal
                         const totalPoints = analyticsService.getPersonTotalWeightedDeliverables(person.personId);
                         return `
                             <div style="background: var(--bg); padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
@@ -355,8 +421,8 @@ function showContractBreakdown(contractId) {
             </div>
         `;
     }
-    
-    // Resumo final
+
+    // Resumo financeiro
     const summaryHtml = `
         <div style="background: var(--bg-darker); padding: 1.5rem; border-radius: 8px; border: 2px solid ${roi.profit > 0 ? 'var(--fast-green)' : 'var(--error)'};">
             <h3 style="color: ${roi.profit > 0 ? 'var(--fast-green)' : 'var(--error)'}; margin: 0 0 1rem 0; font-size: 1rem; text-transform: uppercase;">
@@ -364,7 +430,7 @@ function showContractBreakdown(contractId) {
             </h3>
             <div style="display: grid; gap: 0.75rem;">
                 <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px;">
-                    <span>💵 Receita:</span>
+                    <span>💵 Receita (mês):</span>
                     <strong>R$ ${formatCurrency(contract.value)}</strong>
                 </div>
                 <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px;">
@@ -379,11 +445,18 @@ function showContractBreakdown(contractId) {
                     <span>📊 Margem:</span>
                     <strong style="color: ${roi.margin >= 30 ? 'var(--fast-green)' : roi.margin >= 15 ? 'var(--warning)' : 'var(--error)'};">${roi.margin.toFixed(1)}%</strong>
                 </div>
+                ${contract.duration ? `
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px; border-top: 1px solid var(--border); margin-top: 0.5rem;">
+                    <span>📅 Lucro projetado (${contract.duration} meses):</span>
+                    <strong style="color: ${roi.profit > 0 ? 'var(--fast-green)' : 'var(--error)'};">R$ ${formatCurrency(roi.profit * contract.duration)}</strong>
+                </div>
+                ` : ''}
             </div>
         </div>
     `;
-    
-    document.getElementById('breakdown-content').innerHTML = deliverablesHtml + peopleBreakdownHtml + summaryHtml;
+
+    document.getElementById('breakdown-content').innerHTML =
+        periodInfoHtml + deliverablesHtml + peopleBreakdownHtml + summaryHtml;
     document.getElementById('breakdown-modal').classList.add('active');
 }
 
@@ -391,15 +464,19 @@ function closeBreakdownModal() {
     document.getElementById('breakdown-modal').classList.remove('active');
 }
 
+// ─── DEBUG MODAL ──────────────────────────────────────────────────────────────
+
 function showDebug(contractId) {
     const contract = contractService.getContract(contractId);
-    const people = (contract.assignedPeople || []).map(id => personService.getPerson(id)).filter(Boolean);
+    const people = (contract.assignedPeople || [])
+        .map(id => personService.getPerson(id))
+        .filter(Boolean);
     const deliverableTypes = deliverableTypeService.getActiveDeliverableTypes();
-    
-    let debugHtml = `
+
+    const debugHtml = `
         <div style="background: #1a1a1a; color: #00ff41; padding: 1.5rem; border-radius: 4px; line-height: 1.8;">
             <h3 style="color: #ff4444; margin-top: 0;">🐛 DEBUG: ${contract.client}</h3>
-            
+
             <div style="margin: 1rem 0;">
                 <strong style="color: #ffaa00;">PESSOAS ATRIBUÍDAS: ${people.length}</strong><br>
                 ${people.map(p => `- ${p.name} (${p.role}) - R$ ${formatCurrency(p.salary)}`).join('<br>')}
@@ -413,13 +490,20 @@ function showDebug(contractId) {
                 }).join('<br>')}
             </div>
 
+            <div style="margin: 1rem 0;">
+                <strong style="color: #ffaa00;">PERÍODO:</strong><br>
+                - startPeriod: ${contract.startPeriod || 'não definido'}<br>
+                - duration: ${contract.duration || 'não definido'}<br>
+                - status: ${contract.status || 'não definido'}
+            </div>
+
             <div style="margin: 1rem 0; padding: 1rem; background: #2a2a2a; border-left: 3px solid #ff4444;">
                 <strong style="color: #ff4444;">❌ PROBLEMA DETECTADO:</strong><br>
                 Há pessoas E entregáveis, mas o custo está ZERO.
             </div>
         </div>
     `;
-    
+
     document.getElementById('debug-content').innerHTML = debugHtml;
     document.getElementById('debug-modal').classList.add('active');
 }
@@ -428,13 +512,17 @@ function closeDebugModal() {
     document.getElementById('debug-modal').classList.remove('active');
 }
 
+// ─── DETALHES (equipe + entregáveis) ─────────────────────────────────────────
+
 function showContractDetails(contractId) {
     const contract = contractService.getContract(contractId);
-    const assignedPeople = (contract.assignedPeople || []).map(id => personService.getPerson(id)).filter(Boolean);
+    const assignedPeople = (contract.assignedPeople || [])
+        .map(id => personService.getPerson(id))
+        .filter(Boolean);
     const deliverableTypes = deliverableTypeService.getActiveDeliverableTypes();
-    
+
     document.getElementById('details-title').textContent = `${contract.client} - Equipe e Entregáveis`;
-    
+
     document.getElementById('details-content').innerHTML = `
         <div style="display: grid; gap: 2rem;">
             <div>
@@ -478,7 +566,7 @@ function showContractDetails(contractId) {
             </div>
         </div>
     `;
-    
+
     document.getElementById('details-modal').classList.add('active');
 }
 
@@ -486,12 +574,15 @@ function closeDetailsModal() {
     document.getElementById('details-modal').classList.remove('active');
 }
 
+// ─── TEAM ASSIGNMENT ──────────────────────────────────────────────────────────
+
 function renderTeamAssignment(people, squads) {
+    // Filtrar Heads para não aparecerem na lista de pessoas atribuíveis
     const availablePeople = people.filter(person => {
         const isHead = squads.some(squad => squad.headId === person.id);
         return !isHead;
     });
-    
+
     const peopleByRole = {};
     availablePeople.forEach(person => {
         if (!peopleByRole[person.role]) peopleByRole[person.role] = [];
@@ -517,30 +608,32 @@ function renderTeamAssignment(people, squads) {
     `;
 }
 
+// ─── HANDLERS ────────────────────────────────────────────────────────────────
+
 function attachContractHandlers() {
     document.getElementById('contract-form').addEventListener('submit', handleContractSubmit);
-    
+
     setTimeout(() => {
         document.querySelectorAll('.person-checkbox').forEach(cb => {
             cb.addEventListener('change', updateFormValidationWarnings);
         });
     }, 100);
 
-    window.openContractModal = openContractModal;
-    window.closeContractModal = closeContractModal;
-    window.editContract = editContract;
-    window.deleteContract = deleteContract;
-    window.addDeliverable = addDeliverable;
-    window.removeDeliverable = removeDeliverable;
-    window.exportContracts = exportContracts;
+    window.openContractModal    = openContractModal;
+    window.closeContractModal   = closeContractModal;
+    window.editContract         = editContract;
+    window.deleteContract       = deleteContract;
+    window.addDeliverable       = addDeliverable;
+    window.removeDeliverable    = removeDeliverable;
+    window.exportContracts      = exportContracts;
     window.showContractBreakdown = showContractBreakdown;
-    window.closeBreakdownModal = closeBreakdownModal;
-    window.showContractDetails = showContractDetails;
-    window.closeDetailsModal = closeDetailsModal;
-    window.showDebug = showDebug;
-    window.closeDebugModal = closeDebugModal;
-    window.filterContracts = filterContracts;
-    window.sortContractsBy = sortContractsBy;
+    window.closeBreakdownModal  = closeBreakdownModal;
+    window.showContractDetails  = showContractDetails;
+    window.closeDetailsModal    = closeDetailsModal;
+    window.showDebug            = showDebug;
+    window.closeDebugModal      = closeDebugModal;
+    window.filterContracts      = filterContracts;
+    window.sortContractsBy      = sortContractsBy;
 }
 
 function openContractModal() {
@@ -549,6 +642,11 @@ function openContractModal() {
     document.getElementById('contract-modal').classList.add('active');
     document.getElementById('modal-title').textContent = 'Novo Contrato';
     document.getElementById('contract-form').reset();
+
+    // Restaurar defaults após reset
+    document.getElementById('duration').value = 12;
+    document.getElementById('startPeriod').value = storage.getCurrentPeriod();
+
     renderDeliverables();
 }
 
@@ -589,15 +687,17 @@ function updateFormValidationWarnings() {
     const warningsContainer = document.getElementById('form-validation-warnings');
     if (!warningsContainer) return;
 
-    const selectedPeople = Array.from(document.querySelectorAll('.person-checkbox:checked')).map(cb => cb.value);
-    
+    const selectedPeople = Array.from(
+        document.querySelectorAll('.person-checkbox:checked')
+    ).map(cb => cb.value);
+
     if (selectedPeople.length === 0 || Object.keys(deliverables).length === 0) {
         warningsContainer.innerHTML = '';
         return;
     }
 
     const warnings = validateContractConsistency({ assignedPeople: selectedPeople, deliverables });
-    
+
     if (warnings.length > 0) {
         warningsContainer.innerHTML = `
             <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 1rem; margin-top: 1rem;">
@@ -615,7 +715,7 @@ function updateFormValidationWarnings() {
 function validateContractConsistency(contract) {
     const warnings = [];
     const deliverableTypes = deliverableTypeService.getActiveDeliverableTypes();
-    
+
     const rolesNeeded = new Set();
     if (contract.deliverables) {
         Object.keys(contract.deliverables).forEach(typeId => {
@@ -625,7 +725,7 @@ function validateContractConsistency(contract) {
             }
         });
     }
-    
+
     const rolesAssigned = new Set();
     if (contract.assignedPeople) {
         contract.assignedPeople.forEach(personId => {
@@ -633,25 +733,29 @@ function validateContractConsistency(contract) {
             if (person) rolesAssigned.add(person.role);
         });
     }
-    
+
     rolesNeeded.forEach(role => {
         if (!rolesAssigned.has(role)) {
             warnings.push({ type: 'missing_person', role, message: `Falta ${role}` });
         }
     });
-    
+
     return warnings;
 }
+
+// ─── EDITAR ───────────────────────────────────────────────────────────────────
 
 function editContract(id) {
     currentEditId = id;
     const contract = contractService.getContract(id);
-    
-    document.getElementById('client').value = contract.client;
-    document.getElementById('value').value = contract.value;
-    document.getElementById('notes').value = contract.notes || '';
-    
-    deliverables = { ...contract.deliverables };
+
+    document.getElementById('client').value       = contract.client;
+    document.getElementById('value').value        = contract.value;
+    document.getElementById('notes').value        = contract.notes || '';
+    document.getElementById('duration').value     = contract.duration || 12;
+    document.getElementById('startPeriod').value  = contract.startPeriod || storage.getCurrentPeriod();
+
+    deliverables = { ...(contract.deliverables || contract.baseDeliverables || {}) };
     renderDeliverables();
 
     if (contract.squadTag) {
@@ -672,27 +776,51 @@ function editContract(id) {
     document.getElementById('contract-modal').classList.add('active');
 }
 
+// ─── SUBMIT ───────────────────────────────────────────────────────────────────
+
 function handleContractSubmit(e) {
     e.preventDefault();
 
-    const assignedPeople = Array.from(document.querySelectorAll('.person-checkbox:checked')).map(cb => cb.value);
-    const squadTagValue = document.getElementById('squad-tag').value;
+    const assignedPeople  = Array.from(
+        document.querySelectorAll('.person-checkbox:checked')
+    ).map(cb => cb.value);
+
+    const squadTagValue   = document.getElementById('squad-tag').value;
+    const baseValue       = parseFloat(document.getElementById('value').value);
+    const duration        = parseInt(document.getElementById('duration').value) || 12;
+    const startPeriod     = document.getElementById('startPeriod').value || storage.getCurrentPeriod();
 
     const formData = {
-        client: document.getElementById('client').value,
-        value: parseFloat(document.getElementById('value').value),
-        deliverables,
-        notes: document.getElementById('notes').value,
-        assignedPeople,
-        squadTag: squadTagValue || null
+        client:           document.getElementById('client').value,
+        value:            baseValue,
+        baseValue:        baseValue,
+        deliverables:     { ...deliverables },
+        baseDeliverables: { ...deliverables },
+        duration:         duration,
+        startPeriod:      startPeriod,
+        status:           'active',
+        notes:            document.getElementById('notes').value,
+        assignedPeople:   assignedPeople,
+        squadTag:         squadTagValue || null
     };
 
     try {
         if (currentEditId) {
             contractService.updateContract(currentEditId, formData);
+
+            // Regenerar projeções ao editar
+            if (typeof storage.generateContractProjections === 'function') {
+                storage.generateContractProjections(currentEditId);
+            }
         } else {
-            contractService.createContract(formData);
+            const newContract = contractService.createContract(formData);
+
+            // Gerar projeções mensais para o novo contrato
+            if (newContract && typeof storage.generateContractProjections === 'function') {
+                storage.generateContractProjections(newContract.id);
+            }
         }
+
         closeContractModal();
         renderContractsPage();
     } catch (error) {
@@ -700,12 +828,16 @@ function handleContractSubmit(e) {
     }
 }
 
+// ─── EXCLUIR ──────────────────────────────────────────────────────────────────
+
 function deleteContract(id) {
     if (confirm('Excluir este contrato?')) {
         contractService.deleteContract(id);
         renderContractsPage();
     }
 }
+
+// ─── ENTREGÁVEIS ─────────────────────────────────────────────────────────────
 
 function addDeliverable() {
     const typeSelect = document.getElementById('deliverable-type-select');
@@ -716,14 +848,13 @@ function addDeliverable() {
         alert('Selecione um tipo');
         return;
     }
-
     if (!qty || qty < 1) {
         alert('Quantidade inválida');
         return;
     }
 
     deliverables[typeId] = qty;
-    
+
     if (typeSelect) typeSelect.value = '';
     document.getElementById('deliverable-qty').value = '';
     renderDeliverables();
@@ -757,13 +888,19 @@ function renderDeliverables() {
                                 ${qty}x | ${type ? type.roles.join(', ') : ''}
                             </span>
                         </div>
-                        <button type="button" onclick="window.removeDeliverable('${typeId}')" style="background: none; border: none; color: var(--error); cursor: pointer; font-size: 1.2rem;">×</button>
+                        <button
+                            type="button"
+                            onclick="window.removeDeliverable('${typeId}')"
+                            style="background: none; border: none; color: var(--error); cursor: pointer; font-size: 1.2rem;"
+                        >×</button>
                     </div>
                 `;
             }).join('')}
         </div>
     `;
 }
+
+// ─── UTILITÁRIOS ─────────────────────────────────────────────────────────────
 
 function formatCurrency(value) {
     return new Intl.NumberFormat('pt-BR', {

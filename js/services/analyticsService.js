@@ -1,4 +1,5 @@
 // analyticsService.js - Analytics and ROI calculation service
+// VERSÃO COM HEAD POR CLIENTE
 
 import storage from '../store/storage.js';
 
@@ -41,7 +42,34 @@ class AnalyticsService {
     }
 
     // ========================================
-    // CÁLCULO DE ROI DO CONTRATO
+    // HEAD EXECUTIVO - CUSTO POR CLIENTE
+    // ========================================
+
+    getHeadCostForContract(contractId) {
+        const contract = storage.getContractById(contractId);
+        if (!contract || !contract.squadTag) return 0;
+        
+        const squad = storage.getSquadById(contract.squadTag);
+        if (!squad || !squad.headId) return 0;
+        
+        const head = storage.getPersonById(squad.headId);
+        if (!head) return 0;
+        
+        // Contar clientes únicos do squad
+        const allContracts = storage.getContracts();
+        const squadContracts = allContracts.filter(c => c.squadTag === squad.id);
+        
+        const uniqueClients = [...new Set(squadContracts.map(c => c.client))];
+        const clientCount = uniqueClients.length;
+        
+        if (clientCount === 0) return 0;
+        
+        // Custo do Head dividido igualmente entre clientes
+        return head.salary / clientCount;
+    }
+
+    // ========================================
+    // CÁLCULO DE ROI DO CONTRATO (COM HEAD)
     // ========================================
     
     getContractROI(contractId) {
@@ -54,11 +82,15 @@ class AnalyticsService {
         let cost = 0;
         const costBreakdown = [];
 
-        // CUSTO DAS PESSOAS
+        // 1. CUSTO DAS PESSOAS (exceto Head)
         if (contract.assignedPeople && contract.assignedPeople.length > 0) {
             contract.assignedPeople.forEach(personId => {
                 const person = storage.getPersonById(personId);
                 if (!person) return;
+
+                // Pular se for Head (calculado separadamente)
+                const squad = storage.getSquadById(contract.squadTag);
+                if (squad && squad.headId === personId) return;
 
                 let personWeightedPointsInContract = 0;
 
@@ -88,6 +120,30 @@ class AnalyticsService {
                     });
                 }
             });
+        }
+
+        // 2. CUSTO DO HEAD (POR CLIENTE)
+        const headCost = this.getHeadCostForContract(contractId);
+        
+        if (headCost > 0) {
+            cost += headCost;
+            
+            const squad = storage.getSquadById(contract.squadTag);
+            if (squad && squad.headId) {
+                const head = storage.getPersonById(squad.headId);
+                
+                if (head) {
+                    costBreakdown.push({
+                        personId: head.id,
+                        name: head.name + ' (Head - Estratégia)',
+                        role: head.role,
+                        costPerWeightedPoint: 0,
+                        weightedPointsInContract: 0,
+                        totalCost: headCost,
+                        isHead: true
+                    });
+                }
+            }
         }
 
         return {
@@ -153,7 +209,7 @@ class AnalyticsService {
 
     getSquadContracts(squadId) {
         const contracts = storage.getContracts();
-        return contracts.filter(contract => contract.squadId === squadId);
+        return contracts.filter(contract => contract.squadTag === squadId);
     }
 
     getPersonProratedCostBySquad(personId) {
@@ -184,11 +240,23 @@ class AnalyticsService {
         
         const totalRevenue = contracts.reduce((sum, contract) => sum + contract.value, 0);
         
-        let totalCost = 0;
+        // Custo dos membros (sem Head)
+        let membersCost = 0;
         squad.members.forEach(personId => {
+            if (squad.headId === personId) return; // Pular Head
+            
             const proratedCosts = this.getPersonProratedCostBySquad(personId);
-            totalCost += proratedCosts[squadId] || 0;
+            membersCost += proratedCosts[squadId] || 0;
         });
+        
+        // Custo do Head (se tiver)
+        let headCost = 0;
+        if (squad.headId) {
+            const head = storage.getPersonById(squad.headId);
+            if (head) headCost = head.salary;
+        }
+        
+        const totalCost = membersCost + headCost;
 
         return {
             revenue: totalRevenue,

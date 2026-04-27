@@ -1,8 +1,9 @@
-// peoplePage.js - People management page
-import { renderPeriodSelector } from '../components/periodSelector.js';
+// peoplePage.js - COM BREAKDOWN DETALHADO
 
+import { renderPeriodSelector } from '../components/periodSelector.js';
 import personService from '../services/personService.js';
 import analyticsService from '../services/analyticsService.js';
+import deliverableTypeService from '../services/deliverableTypeService.js';
 import ROLES from '../utils/roles.js';
 
 let currentEditId = null;
@@ -19,7 +20,6 @@ export function renderPeoplePage() {
             <p class="page-subtitle">Gerenciar equipe e colaboradores</p>
         </div>
 
-        <!-- Period Selector -->
         ${renderPeriodSelector()}
 
         <div class="action-bar">
@@ -30,12 +30,11 @@ export function renderPeoplePage() {
             </div>
         </div>
 
-        <!-- People List -->
         <div id="people-list">
             ${renderPeopleList(people)}
         </div>
 
-        <!-- Modal -->
+        <!-- Modal de Edição -->
         <div id="person-modal" class="modal">
             <div class="modal-content">
                 <div class="modal-header">
@@ -68,6 +67,17 @@ export function renderPeoplePage() {
                 </form>
             </div>
         </div>
+
+        <!-- Modal de Breakdown Detalhado -->
+        <div id="person-breakdown-modal" class="modal">
+            <div class="modal-content" style="max-width: 800px;">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="breakdown-title">Detalhamento de Custos</h2>
+                    <button class="modal-close" onclick="window.closePersonBreakdownModal()">&times;</button>
+                </div>
+                <div id="breakdown-content" style="padding: 1.5rem;"></div>
+            </div>
+        </div>
     `;
 
     attachPeopleHandlers();
@@ -84,7 +94,6 @@ function renderPeopleList(people) {
         `;
     }
 
-    // Group people by role
     const peopleByRole = {};
     people.forEach(person => {
         if (!peopleByRole[person.role]) {
@@ -93,7 +102,6 @@ function renderPeopleList(people) {
         peopleByRole[person.role].push(person);
     });
 
-    // Sort roles alphabetically
     const sortedRoles = Object.keys(peopleByRole).sort();
 
     return sortedRoles.map(role => {
@@ -114,7 +122,7 @@ function renderPeopleList(people) {
                         <div>Entreg.</div>
                         <div>Tipo de Entrega</div>
                         <div>Custo/Ent</div>
-                        <div>Ticket Médio Clientes</div>
+                        <div>Ticket Médio</div>
                         <div>Ações</div>
                     </div>
                     
@@ -148,8 +156,11 @@ function renderPeopleList(people) {
                                     ${avgTicket > 0 ? `R$ ${formatCurrency(avgTicket)}` : '-'}
                                 </div>
                                 <div style="display: flex; gap: 0.5rem;">
-                                    <button class="btn btn-small btn-secondary" onclick="window.editPerson('${person.id}')">✏️</button>
-                                    <button class="btn btn-small btn-danger" onclick="window.deletePerson('${person.id}')">🗑️</button>
+                                    <button class="btn btn-small btn-primary" onclick="window.showPersonBreakdown('${person.id}')" title="Ver Cálculo Detalhado">
+                                        🔍
+                                    </button>
+                                    <button class="btn btn-small btn-secondary" onclick="window.editPerson('${person.id}')" title="Editar">✏️</button>
+                                    <button class="btn btn-small btn-danger" onclick="window.deletePerson('${person.id}')" title="Excluir">🗑️</button>
                                 </div>
                             </div>
                         `;
@@ -160,6 +171,127 @@ function renderPeopleList(people) {
     }).join('');
 }
 
+// BREAKDOWN DETALHADO DA PESSOA
+function showPersonBreakdown(personId) {
+    const person = personService.getPerson(personId);
+    const contracts = analyticsService.getPersonContracts(personId);
+    const totalWeightedPoints = analyticsService.getPersonTotalWeightedDeliverables(personId);
+    const costPerPoint = person.salary / totalWeightedPoints;
+    const deliverableTypes = deliverableTypeService.getActiveDeliverableTypes();
+    
+    document.getElementById('breakdown-title').textContent = `${person.name} - Detalhamento de Custos`;
+    
+    // Informações gerais
+    const infoHtml = `
+        <div style="background: var(--bg-darker); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
+            <h3 style="margin: 0 0 1rem 0; color: var(--fast-green); font-size: 1rem; text-transform: uppercase;">💼 Informações Gerais</h3>
+            <div style="display: grid; gap: 0.5rem;">
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px;">
+                    <span>Cargo:</span>
+                    <strong>${person.role}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px;">
+                    <span>Salário Mensal:</span>
+                    <strong>R$ ${formatCurrency(person.salary)}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px;">
+                    <span>Contratos Ativos:</span>
+                    <strong>${contracts.length}</strong>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Breakdown por contrato
+    let contractsHtml = '';
+    if (contracts.length > 0) {
+        contractsHtml = `
+            <div style="background: var(--bg-darker); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
+                <h3 style="margin: 0 0 1rem 0; color: var(--fast-green); font-size: 1rem; text-transform: uppercase;">📊 Distribuição por Contrato</h3>
+                ${contracts.map(contract => {
+                    // Calcular pontos ponderados deste contrato
+                    let contractWeightedPoints = 0;
+                    let deliverablesDetail = [];
+                    
+                    if (contract.deliverables) {
+                        Object.entries(contract.deliverables).forEach(([typeId, qty]) => {
+                            const type = deliverableTypes.find(dt => dt.id === typeId);
+                            if (type && type.roles && type.roles.includes(person.role)) {
+                                const weight = analyticsService.getWeightForRole(person.role, typeId);
+                                const points = qty * weight;
+                                contractWeightedPoints += points;
+                                deliverablesDetail.push({
+                                    name: type.name,
+                                    qty,
+                                    weight,
+                                    points
+                                });
+                            }
+                        });
+                    }
+                    
+                    const contractCost = contractWeightedPoints * costPerPoint;
+                    
+                    if (contractWeightedPoints === 0) return '';
+                    
+                    return `
+                        <div style="background: var(--bg); padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <strong style="color: var(--fast-green);">${contract.client}</strong>
+                                <span style="color: var(--fast-green); font-weight: bold;">R$ ${formatCurrency(contractCost)}</span>
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">
+                                ${deliverablesDetail.map(d => `
+                                    ├─ ${d.qty} ${d.name} × peso ${d.weight.toFixed(1)} = ${d.points.toFixed(1)} pontos
+                                `).join('<br>')}
+                                <br>
+                                └─ <strong style="color: var(--text-primary);">SUBTOTAL: ${contractWeightedPoints.toFixed(1)} pontos × R$ ${formatCurrency(costPerPoint)} = R$ ${formatCurrency(contractCost)}</strong>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    }
+    
+    // Resumo final
+    const summaryHtml = `
+        <div style="background: var(--bg-darker); padding: 1.5rem; border-radius: 8px; border: 2px solid var(--fast-green);">
+            <h3 style="color: var(--fast-green); margin: 0 0 1rem 0; font-size: 1rem; text-transform: uppercase;">✅ Resumo do Cálculo</h3>
+            <div style="display: grid; gap: 0.75rem;">
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px;">
+                    <span>📦 Total de Pontos (todos contratos):</span>
+                    <strong>${totalWeightedPoints.toFixed(1)} pontos</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px;">
+                    <span>💰 Custo por Ponto:</span>
+                    <strong>R$ ${formatCurrency(person.salary)} ÷ ${totalWeightedPoints.toFixed(1)} = R$ ${formatCurrency(costPerPoint)}/ponto</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px; border: 1px solid var(--fast-green);">
+                    <span style="font-weight: 700;">✅ Validação:</span>
+                    <strong style="color: var(--fast-green);">${totalWeightedPoints.toFixed(1)} × R$ ${formatCurrency(costPerPoint)} = R$ ${formatCurrency(totalWeightedPoints * costPerPoint)}</strong>
+                </div>
+                ${Math.abs((totalWeightedPoints * costPerPoint) - person.salary) < 0.01 ? `
+                    <div style="text-align: center; padding: 0.75rem; background: var(--success); color: white; border-radius: 4px; font-weight: bold;">
+                        ✓ Cálculo correto! O total bate com o salário.
+                    </div>
+                ` : `
+                    <div style="text-align: center; padding: 0.75rem; background: var(--error); color: white; border-radius: 4px; font-weight: bold;">
+                        ⚠️ Diferença detectada! Verifique os contratos.
+                    </div>
+                `}
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('breakdown-content').innerHTML = infoHtml + contractsHtml + summaryHtml;
+    document.getElementById('person-breakdown-modal').classList.add('active');
+}
+
+function closePersonBreakdownModal() {
+    document.getElementById('person-breakdown-modal').classList.remove('active');
+}
+
 function attachPeopleHandlers() {
     const form = document.getElementById('person-form');
     form.addEventListener('submit', handlePersonSubmit);
@@ -168,6 +300,8 @@ function attachPeopleHandlers() {
     window.closePersonModal = closePersonModal;
     window.editPerson = editPerson;
     window.deletePerson = deletePerson;
+    window.showPersonBreakdown = showPersonBreakdown;
+    window.closePersonBreakdownModal = closePersonBreakdownModal;
 }
 
 function openPersonModal() {

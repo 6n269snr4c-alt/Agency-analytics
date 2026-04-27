@@ -1,4 +1,4 @@
-// peoplePage.js - COM BREAKDOWN DETALHADO
+// peoplePage.js - COM TODOS OS ENTREGÁVEIS VISÍVEIS
 
 import { renderPeriodSelector } from '../components/periodSelector.js';
 import personService from '../services/personService.js';
@@ -115,7 +115,7 @@ function renderPeopleList(people) {
                 
                 <div style="background: var(--bg-darker); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
                     <!-- Table Header -->
-                    <div style="display: grid; grid-template-columns: 2fr 1.2fr 0.8fr 0.8fr 1.5fr 1.2fr 1.3fr auto; gap: 1rem; padding: 1rem; background: var(--bg); border-bottom: 2px solid var(--border); font-weight: bold; font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase;">
+                    <div style="display: grid; grid-template-columns: 2fr 1.2fr 0.8fr 0.8fr 2fr 1.2fr 1.3fr auto; gap: 1rem; padding: 1rem; background: var(--bg); border-bottom: 2px solid var(--border); font-weight: bold; font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase;">
                         <div>Nome</div>
                         <div>Salário</div>
                         <div>Contr.</div>
@@ -135,16 +135,15 @@ function renderPeopleList(people) {
                         const breakdown = analyticsService.getPersonDeliverablesBreakdown(person.id);
 
                         return `
-                            <div style="display: grid; grid-template-columns: 2fr 1.2fr 0.8fr 0.8fr 1.5fr 1.2fr 1.3fr auto; gap: 1rem; padding: 1rem; border-bottom: 1px solid var(--border); align-items: center;">
+                            <div style="display: grid; grid-template-columns: 2fr 1.2fr 0.8fr 0.8fr 2fr 1.2fr 1.3fr auto; gap: 1rem; padding: 1rem; border-bottom: 1px solid var(--border); align-items: center;">
                                 <div style="font-weight: 500;">${person.name}</div>
                                 <div>R$ ${formatCurrency(person.salary)}</div>
                                 <div>${contracts.length}</div>
                                 <div>${totalDeliverables}</div>
-                                <div style="font-size: 0.85rem;">
+                                <div style="font-size: 0.85rem; line-height: 1.4;">
                                     ${Object.keys(breakdown.byType).length > 0 ? 
                                         Object.entries(breakdown.byType)
                                             .sort((a, b) => b[1] - a[1])
-                                            .slice(0, 3)
                                             .map(([type, qty]) => `<div>${type}: <strong>${qty}</strong></div>`)
                                             .join('')
                                     : '<span style="color: var(--text-secondary);">-</span>'}

@@ -18,7 +18,6 @@ class Storage {
     }
 
     initStorage() {
-        // Initialize empty arrays if nothing exists
         if (!localStorage.getItem(this.keys.CONTRACTS)) {
             this.saveContracts([]);
         }
@@ -34,8 +33,6 @@ class Storage {
         if (!localStorage.getItem(this.keys.ROLES)) {
             this.saveRoles([]);
         }
-        
-        // Initialize period-based data
         if (!localStorage.getItem(this.keys.PERIODS)) {
             this.savePeriods([]);
         }
@@ -48,12 +45,35 @@ class Storage {
         if (!localStorage.getItem(this.keys.SALARY_HISTORY)) {
             this.saveSalaryHistory([]);
         }
-        
-        // Set current period to current month if not set
         if (!localStorage.getItem(this.keys.CURRENT_PERIOD)) {
             const now = new Date();
             const currentPeriodId = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
             this.setCurrentPeriod(currentPeriodId);
+        }
+
+        // ── AUTO-CORREÇÃO: garantir status 'active' em contratos legados ──
+        this._fixLegacyContractStatus();
+    }
+
+    // Corrige contratos antigos que não têm o campo status
+    _fixLegacyContractStatus() {
+        try {
+            const contracts = this.getContracts();
+            let changed = false;
+
+            contracts.forEach(contract => {
+                if (!contract.status) {
+                    contract.status = 'active';
+                    changed = true;
+                }
+            });
+
+            if (changed) {
+                this.saveContracts(contracts);
+                console.log('✅ storage: status corrigido em contratos legados');
+            }
+        } catch (e) {
+            console.error('Erro ao corrigir status de contratos:', e);
         }
     }
 
@@ -64,7 +84,7 @@ class Storage {
     // ====================
     // CONTRACTS
     // ====================
-    
+
     getContracts() {
         try {
             return JSON.parse(localStorage.getItem(this.keys.CONTRACTS)) || [];
@@ -88,6 +108,8 @@ class Storage {
         const contracts = this.getContracts();
         contract.id = this.generateId();
         contract.createdAt = new Date().toISOString();
+        // Garantir status ao criar
+        if (!contract.status) contract.status = 'active';
         contracts.push(contract);
         this.saveContracts(contracts);
         return contract;
@@ -117,7 +139,7 @@ class Storage {
     // ====================
     // PEOPLE
     // ====================
-    
+
     getPeople() {
         try {
             return JSON.parse(localStorage.getItem(this.keys.PEOPLE)) || [];
@@ -170,7 +192,7 @@ class Storage {
     // ====================
     // SQUADS
     // ====================
-    
+
     getSquads() {
         try {
             return JSON.parse(localStorage.getItem(this.keys.SQUADS)) || [];
@@ -223,7 +245,7 @@ class Storage {
     // ====================
     // DELIVERABLE TYPES
     // ====================
-    
+
     getDeliverableTypes() {
         try {
             return JSON.parse(localStorage.getItem(this.keys.DELIVERABLE_TYPES)) || [];
@@ -276,7 +298,7 @@ class Storage {
     // ====================
     // ROLES
     // ====================
-    
+
     getRoles() {
         try {
             return JSON.parse(localStorage.getItem(this.keys.ROLES)) || [];
@@ -331,9 +353,9 @@ class Storage {
     }
 
     // ====================
-    // PERIODS (SISTEMA DE PERÍODOS)
+    // PERIODS
     // ====================
-    
+
     getPeriods() {
         try {
             return JSON.parse(localStorage.getItem(this.keys.PERIODS)) || [];
@@ -370,8 +392,7 @@ class Storage {
     getPeriod(periodId) {
         const periods = this.getPeriods();
         let period = periods.find(p => p.id === periodId);
-        
-        // Se não existir, criar período
+
         if (!period) {
             const [year, month] = periodId.split('-');
             const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -385,7 +406,7 @@ class Storage {
             };
             this.addPeriod(period);
         }
-        
+
         return period;
     }
 
@@ -399,8 +420,6 @@ class Storage {
 
     setCurrentPeriod(periodId) {
         localStorage.setItem(this.keys.CURRENT_PERIOD, periodId);
-        
-        // Create period if it doesn't exist
         this.getPeriod(periodId);
     }
 
@@ -423,13 +442,13 @@ class Storage {
     saveContractsForPeriod(periodId, contracts) {
         const allData = this.getContractsPerPeriod();
         const existingIndex = allData.findIndex(p => p.periodId === periodId);
-        
+
         if (existingIndex >= 0) {
             allData[existingIndex] = { periodId, contracts };
         } else {
             allData.push({ periodId, contracts });
         }
-        
+
         localStorage.setItem(this.keys.CONTRACTS_PER_PERIOD, JSON.stringify(allData));
     }
 
@@ -452,31 +471,28 @@ class Storage {
     savePayrollForPeriod(periodId, payroll) {
         const allData = this.getPayrollPerPeriod();
         const existingIndex = allData.findIndex(p => p.periodId === periodId);
-        
+
         if (existingIndex >= 0) {
             allData[existingIndex] = { periodId, payroll };
         } else {
             allData.push({ periodId, payroll });
         }
-        
+
         localStorage.setItem(this.keys.PAYROLL_PER_PERIOD, JSON.stringify(allData));
     }
 
-    // Copy previous period data to new period
     copyPeriodData(fromPeriodId, toPeriodId) {
-        // Copy contracts
         const contracts = this.getContractsForPeriod(fromPeriodId);
         this.saveContractsForPeriod(toPeriodId, contracts);
-        
-        // Copy payroll
+
         const payroll = this.getPayrollForPeriod(fromPeriodId);
         this.savePayrollForPeriod(toPeriodId, payroll);
-        
+
         return true;
     }
 
     // ====================
-    // SALARY HISTORY (NOVO - Sistema Mensal)
+    // SALARY HISTORY
     // ====================
 
     getSalaryHistory() {
@@ -507,7 +523,7 @@ class Storage {
     setSalaryForPeriod(personId, periodId, salary, status = 'active') {
         const history = this.getSalaryHistory();
         const existingIndex = history.findIndex(h => h.personId === personId && h.periodId === periodId);
-        
+
         const entry = {
             personId,
             periodId,
@@ -515,13 +531,13 @@ class Storage {
             status,
             updatedAt: new Date().toISOString()
         };
-        
+
         if (existingIndex >= 0) {
             history[existingIndex] = entry;
         } else {
             history.push(entry);
         }
-        
+
         this.saveSalaryHistory(history);
         return entry;
     }
@@ -533,38 +549,38 @@ class Storage {
 
     copySalariesToNextPeriod(fromPeriodId, toPeriodId) {
         const salaries = this.getSalariesForPeriod(fromPeriodId);
-        
+
         salaries.forEach(entry => {
             this.setSalaryForPeriod(entry.personId, toPeriodId, entry.salary, entry.status);
         });
-        
+
         return salaries.length;
     }
 
     // ====================
-    // CONTRACT PROJECTIONS (NOVO - Sistema Mensal)
+    // CONTRACT PROJECTIONS
     // ====================
 
     getContractProjection(contractId, periodId) {
         const contract = this.getContractById(contractId);
         if (!contract || !contract.monthlyProjections) return null;
-        
+
         return contract.monthlyProjections.find(p => p.periodId === periodId);
     }
 
     updateContractProjection(contractId, periodId, updates) {
         const contracts = this.getContracts();
         const contractIndex = contracts.findIndex(c => c.id === contractId);
-        
+
         if (contractIndex === -1) return null;
-        
+
         const contract = contracts[contractIndex];
         if (!contract.monthlyProjections) {
             contract.monthlyProjections = [];
         }
-        
+
         const projectionIndex = contract.monthlyProjections.findIndex(p => p.periodId === periodId);
-        
+
         if (projectionIndex >= 0) {
             contract.monthlyProjections[projectionIndex] = {
                 ...contract.monthlyProjections[projectionIndex],
@@ -578,28 +594,28 @@ class Storage {
                 createdAt: new Date().toISOString()
             });
         }
-        
+
         contracts[contractIndex] = contract;
         this.saveContracts(contracts);
-        
+
         return contract.monthlyProjections.find(p => p.periodId === periodId);
     }
 
     generateContractProjections(contractId) {
         const contract = this.getContractById(contractId);
         if (!contract) return null;
-        
-        const startPeriod = contract.startPeriod || this.getCurrentPeriod();
-        const duration = contract.duration || 12;
-        const baseValue = contract.baseValue || contract.value || 0;
+
+        const startPeriod     = contract.startPeriod     || this.getCurrentPeriod();
+        const duration        = contract.duration        || 12;
+        const baseValue       = contract.baseValue       || contract.value       || 0;
         const baseDeliverables = contract.baseDeliverables || contract.deliverables || {};
-        
+
         const projections = [];
         let [year, month] = startPeriod.split('-').map(Number);
-        
+
         for (let i = 0; i < duration; i++) {
             const periodId = `${year}-${String(month).padStart(2, '0')}`;
-            
+
             projections.push({
                 periodId,
                 value: baseValue,
@@ -607,42 +623,53 @@ class Storage {
                 status: i === 0 ? 'confirmed' : 'projected',
                 createdAt: new Date().toISOString()
             });
-            
+
             month++;
             if (month > 12) {
                 month = 1;
                 year++;
             }
         }
-        
+
         const contracts = this.getContracts();
         const contractIndex = contracts.findIndex(c => c.id === contractId);
-        
+
         if (contractIndex >= 0) {
             contracts[contractIndex].monthlyProjections = projections;
+            // Garantir status ao regenerar projeções
+            if (!contracts[contractIndex].status) {
+                contracts[contractIndex].status = 'active';
+            }
             this.saveContracts(contracts);
         }
-        
+
         return projections;
     }
 
+    // ── CORREÇÃO APLICADA ────────────────────────────────────────────────────
+    // Contratos legados (sem campo status) são tratados como 'active'
+    // para não desaparecerem ao mudar de período.
     getActiveContractsForPeriod(periodId) {
         const contracts = this.getContracts();
-        
+
         return contracts.filter(contract => {
             if (!contract.monthlyProjections || contract.monthlyProjections.length === 0) {
                 return false;
             }
-            
+
             const projection = contract.monthlyProjections.find(p => p.periodId === periodId);
-            return projection && contract.status === 'active';
+
+            // status ausente (legado) = tratado como 'active'
+            const isActive = !contract.status || contract.status === 'active';
+
+            return projection && isActive;
         });
     }
 
     // ====================
     // UTILITY
     // ====================
-    
+
     clearAll() {
         Object.values(this.keys).forEach(key => {
             localStorage.removeItem(key);
@@ -653,38 +680,36 @@ class Storage {
 
     exportData() {
         return {
-            contracts: this.getContracts(),
-            people: this.getPeople(),
-            squads: this.getSquads(),
-            deliverableTypes: this.getDeliverableTypes(),
-            roles: this.getRoles(),
-            periods: this.getPeriods(),
-            currentPeriod: this.getCurrentPeriod(),
-            contractsPerPeriod: this.getContractsPerPeriod(),
-            payrollPerPeriod: this.getPayrollPerPeriod(),
-            salaryHistory: this.getSalaryHistory(),
-            exportedAt: new Date().toISOString()
+            contracts:           this.getContracts(),
+            people:              this.getPeople(),
+            squads:              this.getSquads(),
+            deliverableTypes:    this.getDeliverableTypes(),
+            roles:               this.getRoles(),
+            periods:             this.getPeriods(),
+            currentPeriod:       this.getCurrentPeriod(),
+            contractsPerPeriod:  this.getContractsPerPeriod(),
+            payrollPerPeriod:    this.getPayrollPerPeriod(),
+            salaryHistory:       this.getSalaryHistory(),
+            exportedAt:          new Date().toISOString()
         };
     }
 
     importData(data) {
         try {
-            if (data.contracts) this.saveContracts(data.contracts);
-            if (data.people) this.savePeople(data.people);
-            if (data.squads) this.saveSquads(data.squads);
-            if (data.deliverableTypes) this.saveDeliverableTypes(data.deliverableTypes);
-            if (data.roles) this.saveRoles(data.roles);
-            if (data.periods) this.savePeriods(data.periods);
-            if (data.currentPeriod) this.setCurrentPeriod(data.currentPeriod);
+            if (data.contracts)          this.saveContracts(data.contracts);
+            if (data.people)             this.savePeople(data.people);
+            if (data.squads)             this.saveSquads(data.squads);
+            if (data.deliverableTypes)   this.saveDeliverableTypes(data.deliverableTypes);
+            if (data.roles)              this.saveRoles(data.roles);
+            if (data.periods)            this.savePeriods(data.periods);
+            if (data.currentPeriod)      this.setCurrentPeriod(data.currentPeriod);
             if (data.contractsPerPeriod) {
                 localStorage.setItem(this.keys.CONTRACTS_PER_PERIOD, JSON.stringify(data.contractsPerPeriod));
             }
             if (data.payrollPerPeriod) {
                 localStorage.setItem(this.keys.PAYROLL_PER_PERIOD, JSON.stringify(data.payrollPerPeriod));
             }
-            if (data.salaryHistory) {
-                this.saveSalaryHistory(data.salaryHistory);
-            }
+            if (data.salaryHistory)      this.saveSalaryHistory(data.salaryHistory);
             return true;
         } catch (e) {
             console.error('Error importing data:', e);

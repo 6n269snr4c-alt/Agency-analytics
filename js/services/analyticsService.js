@@ -46,11 +46,8 @@ class AnalyticsService {
     }
 
     /**
-     * Retorna os pontos ponderados que uma pessoa gera dentro de um squad específico.
-     * Usado para calcular o rateio de custo quando a pessoa está em múltiplos squads.
-     *
-     * Lógica: soma os pontos ponderados (qty × peso) de todos os contratos daquele squad
-     * onde a pessoa está em assignedPeople e os entregáveis batem com o cargo dela.
+     * Pontos ponderados de uma pessoa dentro de um squad específico.
+     * Filtra apenas entregáveis cujo tipo inclui o cargo da pessoa.
      */
     getPersonWeightedDeliverablesInSquad(personId, squadId, periodId = null) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
@@ -58,7 +55,6 @@ class AnalyticsService {
         if (!person) return 0;
 
         const squadContracts = this.getSquadContracts(squadId, currentPeriod);
-        // Considera apenas contratos onde a pessoa está atribuída
         const personContracts = squadContracts.filter(c =>
             c.assignedPeople && c.assignedPeople.includes(personId)
         );
@@ -70,7 +66,6 @@ class AnalyticsService {
 
             if (deliverables) {
                 Object.entries(deliverables).forEach(([typeId, quantity]) => {
-                    // Conta apenas entregáveis cujo tipo inclui o cargo desta pessoa
                     const type = storage.getDeliverableTypeById(typeId);
                     if (type && type.roles && type.roles.includes(person.role)) {
                         const weight = this.getWeightForRole(person.role, typeId);
@@ -84,21 +79,17 @@ class AnalyticsService {
     }
 
     /**
-     * Calcula o custo alocado de uma pessoa em um squad específico,
-     * rateado pela proporção de pontos ponderados naquele squad
-     * em relação ao total de pontos da pessoa em todos os squads.
-     *
-     * Se a pessoa não tiver entregáveis mapeados em nenhum squad (dados ausentes),
-     * cai no fallback de divisão igual (1/N squads) para não zerar o custo.
+     * Custo alocado de uma pessoa em um squad, rateado pela proporção
+     * de pontos ponderados naquele squad vs total de todos os squads.
+     * Fallback: divisão igual (1/N) se não houver entregáveis mapeados.
      */
     getPersonAllocatedCostInSquad(personId, squadId, periodId = null) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
         const fullSalary = this.getPersonCost(personId, currentPeriod);
 
         const allSquads = storage.getSquads().filter(sq => sq.members.includes(personId));
-        if (allSquads.length <= 1) return fullSalary; // único squad: 100%
+        if (allSquads.length <= 1) return fullSalary;
 
-        // Soma pontos em cada squad onde é membro
         let totalPoints = 0;
         const pointsPerSquad = {};
         allSquads.forEach(sq => {
@@ -107,7 +98,7 @@ class AnalyticsService {
             totalPoints += pts;
         });
 
-        // Fallback: sem entregáveis mapeados → divisão igual
+        // Fallback: sem entregáveis → divisão igual
         if (totalPoints === 0) {
             return fullSalary / allSquads.length;
         }
@@ -301,9 +292,7 @@ class AnalyticsService {
     getPersonProratedCostBySquad(personId, periodId = null) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
         const squads = storage.getSquads().filter(sq => sq.members.includes(personId));
-        const personSalary = this.getPersonCost(personId, currentPeriod);
         if (squads.length === 0) return {};
-
         const costs = {};
         squads.forEach(sq => {
             costs[sq.id] = this.getPersonAllocatedCostInSquad(personId, sq.id, currentPeriod);
@@ -336,14 +325,12 @@ class AnalyticsService {
             totalRevenue += projection ? projection.value : 0;
         });
 
-        // Custo dos membros com rateio por entregáveis
         let membersCost = 0;
         squad.members.forEach(personId => {
             if (squad.headId === personId) return;
             membersCost += this.getPersonAllocatedCostInSquad(personId, squadId, currentPeriod);
         });
 
-        // Custo do Head (100% alocado neste squad)
         let headCost = 0;
         if (squad.headId) {
             headCost = this.getPersonCost(squad.headId, currentPeriod);
@@ -361,24 +348,14 @@ class AnalyticsService {
     }
 
     // ========================================
-    // DRE POR SQUAD (rateio por entregáveis ponderados)
+    // DRE POR SQUAD
     // ========================================
 
-    /**
-     * Retorna o DRE completo de um squad para o período informado.
-     *
-     * Rateio de pessoas compartilhadas (em múltiplos squads):
-     *   custo_alocado = salário × (pontos_ponderados_neste_squad / pontos_totais_da_pessoa)
-     *   Fallback: divisão igual (1/N) se não houver entregáveis mapeados.
-     *
-     * Head: sempre 100% alocado no squad onde é head, sem rateio.
-     */
     getSquadDRE(squadId, periodId = null) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
         const squad = storage.getSquadById(squadId);
         if (!squad) return null;
 
-        // ── Receita ──────────────────────────────────────────────────────────
         const contracts = this.getSquadContracts(squadId, currentPeriod);
         const revenuePerContract = contracts.map(contract => {
             const projection = storage.getContractProjection(contract.id, currentPeriod);
@@ -391,7 +368,6 @@ class AnalyticsService {
         });
         const totalRevenue = revenuePerContract.reduce((s, c) => s + c.value, 0);
 
-        // ── Mapeamento de pontos por pessoa (para mostrar na UI) ─────────────
         const allSquads = storage.getSquads();
         const squadCountByPerson = {};
         allSquads.forEach(sq => {
@@ -401,7 +377,6 @@ class AnalyticsService {
             });
         });
 
-        // ── Custos de membros ────────────────────────────────────────────────
         const memberCosts = [];
         squad.members.forEach(personId => {
             if (personId === squad.headId) return;
@@ -413,10 +388,7 @@ class AnalyticsService {
             const squadsCount = squadCountByPerson[personId] || 1;
             const isShared = squadsCount > 1;
 
-            // Pontos ponderados desta pessoa neste squad
             const pointsHere = this.getPersonWeightedDeliverablesInSquad(personId, squadId, currentPeriod);
-
-            // Pontos totais em todos os squads
             let pointsTotal = 0;
             if (isShared) {
                 allSquads
@@ -427,11 +399,7 @@ class AnalyticsService {
             }
 
             const allocatedCost = this.getPersonAllocatedCostInSquad(personId, squadId, currentPeriod);
-
-            // Percentual real alocado
             const allocationPct = fullSalary > 0 ? (allocatedCost / fullSalary) * 100 : 0;
-
-            // Método de rateio: por entregáveis ou por divisão igual (fallback)
             const allocationMethod = isShared
                 ? (pointsTotal > 0 ? 'deliverables' : 'equal')
                 : 'full';
@@ -453,7 +421,6 @@ class AnalyticsService {
 
         const totalMembersCost = memberCosts.reduce((s, m) => s + m.allocatedCost, 0);
 
-        // ── Custo do Head ────────────────────────────────────────────────────
         let headData = null;
         if (squad.headId) {
             const head = storage.getPersonById(squad.headId);
@@ -477,10 +444,7 @@ class AnalyticsService {
             squadName: squad.name,
             squadIcon: squad.icon || null,
             squadDescription: squad.description || '',
-            revenue: {
-                total: totalRevenue,
-                perContract: revenuePerContract
-            },
+            revenue: { total: totalRevenue, perContract: revenuePerContract },
             costs: {
                 total: totalCost,
                 members: memberCosts,
@@ -496,8 +460,7 @@ class AnalyticsService {
     }
 
     getAllSquadsDRE(periodId = null) {
-        const squads = storage.getSquads();
-        return squads.map(sq => this.getSquadDRE(sq.id, periodId));
+        return storage.getSquads().map(sq => this.getSquadDRE(sq.id, periodId));
     }
 
     // ========================================
@@ -598,6 +561,7 @@ class AnalyticsService {
                 role: person.role,
                 salary,
                 totalWeightedPoints,
+                totalDeliverables: this.getPersonTotalDeliverables(person.id, currentPeriod),
                 costPerPoint,
                 contractCount: contracts.length,
                 efficiency: totalWeightedPoints > 0 ? salary / totalWeightedPoints : 0
@@ -606,8 +570,7 @@ class AnalyticsService {
     }
 
     getSquadComparison(periodId = null) {
-        const squads = storage.getSquads();
-        return squads.map(squad => {
+        return storage.getSquads().map(squad => {
             const roi = this.getSquadROI(squad.id, periodId);
             return {
                 id: squad.id,
@@ -637,7 +600,6 @@ class AnalyticsService {
         activeContracts.forEach(contract => {
             const projection = storage.getContractProjection(contract.id, currentPeriod);
             const deliverables = projection ? projection.deliverables : contract.deliverables;
-
             if (deliverables) {
                 Object.entries(deliverables).forEach(([typeId, qty]) => {
                     const type = storage.getDeliverableTypeById(typeId);
@@ -651,7 +613,12 @@ class AnalyticsService {
         return breakdown;
     }
 
-    getRoleComparison(role, periodId = null) {
+    /**
+     * Compara pessoas do mesmo cargo por custo/entregável.
+     * Usado por insightsService e comparisonPage.
+     * Também exposto como getRoleComparison() para uso interno.
+     */
+    comparePeopleByRole(role, periodId = null) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
         const people = storage.getPeople().filter(p => p.role === role);
         const activeSalaries = storage.getSalariesForPeriod(currentPeriod);
@@ -675,6 +642,11 @@ class AnalyticsService {
         });
     }
 
+    // Alias para compatibilidade
+    getRoleComparison(role, periodId = null) {
+        return this.comparePeopleByRole(role, periodId);
+    }
+
     getPersonDeliverablesBreakdown(personId, periodId = null) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
         const person = storage.getPersonById(personId);
@@ -686,7 +658,6 @@ class AnalyticsService {
         contracts.forEach(contract => {
             const projection = storage.getContractProjection(contract.id, currentPeriod);
             const deliverables = projection ? projection.deliverables : contract.deliverables;
-
             if (!deliverables) return;
 
             let contractTotal = 0;
@@ -694,7 +665,6 @@ class AnalyticsService {
 
             Object.entries(deliverables).forEach(([typeId, quantity]) => {
                 const type = storage.getDeliverableTypeById(typeId);
-
                 if (type && type.roles && type.roles.includes(person.role)) {
                     if (!breakdown.byType[type.name]) breakdown.byType[type.name] = 0;
                     breakdown.byType[type.name] += quantity;

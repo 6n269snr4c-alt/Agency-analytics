@@ -1,10 +1,10 @@
-// projectsPage.js - Página de Projetos Pontuais
-// Projetos one-off atribuídos a squads, com receita somada aos contratos recorrentes.
+// projectsPage.js - Página de Projetos Pontuais + Autocomplete de Cliente
 
 import { renderPeriodSelector } from '../components/periodSelector.js';
 import projectService from '../services/projectService.js';
 import squadService from '../services/squadService.js';
 import storage from '../store/storage.js';
+import { attachClientAutocomplete } from '../components/clientAutocomplete.js'; // ← NOVO
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -43,8 +43,7 @@ function marginClass(margin) {
     return 'color: var(--error, #f44336)';
 }
 
-// Gera lista de períodos YYYY-MM para os próximos/anteriores N meses
-function generatePeriodOptions(centered, range = 12) {
+function generatePeriodOptions(centered, range = 18) {
     const options = [];
     const [y, m] = centered.split('-').map(Number);
     for (let i = -range; i <= range; i++) {
@@ -66,7 +65,6 @@ export function renderProjectsPage() {
     const allProjects   = projectService.getAllProjects();
     const squads        = squadService.getAllSquads();
 
-    // ── Totais do período ──
     const periodProjects = projectService.getProjectsForPeriod(currentPeriod);
     const periodRevenue  = periodProjects.reduce((s, p) => s + (p.value || 0), 0);
     const periodExtCost  = periodProjects.reduce((s, p) => s + (p.externalCost || 0), 0);
@@ -108,7 +106,7 @@ export function renderProjectsPage() {
             <div class="action-bar-left">
                 <button class="btn btn-primary" onclick="window.openProjectModal()">+ Novo Projeto</button>
             </div>
-            <div class="action-bar-right" style="display:flex;gap:0.75rem;align-items:center;">
+            <div class="action-bar-right">
                 <span style="font-size:0.85rem;color:var(--text-secondary);">Total: ${allProjects.length} projeto(s)</span>
             </div>
         </div>
@@ -151,7 +149,6 @@ function renderProjectsList(projects, squads) {
         `;
     }
 
-    // Ordenar: em_andamento primeiro, depois por data de entrega
     const sorted = [...projects].sort((a, b) => {
         const order = { em_andamento: 0, concluido: 1, cancelado: 2 };
         const diff = (order[a.status] || 0) - (order[b.status] || 0);
@@ -191,7 +188,6 @@ function renderProjectCard(p, squads) {
                 </div>
             </div>
 
-            <!-- Grid financeiro + datas -->
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:1rem;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);">
                 <div class="project-metric">
                     <span class="project-metric-label">💵 Valor do Projeto</span>
@@ -218,7 +214,6 @@ function renderProjectCard(p, squads) {
                 </div>
             </div>
 
-            <!-- Entregáveis -->
             ${(deliverableEntries.length > 0 || customEntries.length > 0) ? `
             <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid var(--border);">
                 <span style="font-size:0.8rem;color:var(--text-secondary);font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Entregáveis</span>
@@ -250,7 +245,6 @@ function renderProjectForm(project, squads, currentPeriod) {
     return `
         <div style="padding:1.5rem;display:flex;flex-direction:column;gap:1.25rem;">
 
-            <!-- Nome + Cliente -->
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
                 <div class="form-group" style="margin:0;">
                     <label class="form-label">Nome do Projeto *</label>
@@ -258,11 +252,15 @@ function renderProjectForm(project, squads, currentPeriod) {
                 </div>
                 <div class="form-group" style="margin:0;">
                     <label class="form-label">Cliente</label>
-                    <input type="text" class="form-input" id="proj-client" placeholder="Nome do cliente" value="${project?.client || ''}">
+                    <input type="text" class="form-input" id="proj-client"
+                           placeholder="Digite ou selecione um cliente existente"
+                           value="${project?.client || ''}">
+                    <small style="color:var(--text-secondary);font-size:0.78rem;">
+                        Clientes já cadastrados aparecerão como sugestão ao digitar.
+                    </small>
                 </div>
             </div>
 
-            <!-- Squad + Status -->
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
                 <div class="form-group" style="margin:0;">
                     <label class="form-label">Squad responsável</label>
@@ -281,13 +279,11 @@ function renderProjectForm(project, squads, currentPeriod) {
                 </div>
             </div>
 
-            <!-- Descrição -->
             <div class="form-group" style="margin:0;">
                 <label class="form-label">Descrição</label>
                 <input type="text" class="form-input" id="proj-description" placeholder="Breve descrição do projeto" value="${project?.description || ''}">
             </div>
 
-            <!-- Financeiro -->
             <div style="background:var(--bg-darker);border:1px solid var(--border);border-radius:8px;padding:1rem;">
                 <div style="font-size:0.85rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:1rem;">💰 Financeiro</div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
@@ -307,7 +303,6 @@ function renderProjectForm(project, squads, currentPeriod) {
                 </div>
             </div>
 
-            <!-- Datas -->
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;">
                 <div class="form-group" style="margin:0;">
                     <label class="form-label">Início</label>
@@ -327,7 +322,6 @@ function renderProjectForm(project, squads, currentPeriod) {
                 </div>
             </div>
 
-            <!-- Entregáveis padrão -->
             ${deliverableTypes.length > 0 ? `
             <div style="background:var(--bg-darker);border:1px solid var(--border);border-radius:8px;padding:1rem;">
                 <div style="font-size:0.85rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:1rem;">📦 Entregáveis do Escopo</div>
@@ -346,7 +340,6 @@ function renderProjectForm(project, squads, currentPeriod) {
             </div>
             ` : ''}
 
-            <!-- Entregáveis customizados -->
             <div style="background:var(--bg-darker);border:1px solid rgba(255,160,0,0.2);border-radius:8px;padding:1rem;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
                     <div style="font-size:0.85rem;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.05em;">✏️ Entregáveis Customizados</div>
@@ -358,13 +351,11 @@ function renderProjectForm(project, squads, currentPeriod) {
                 <small style="color:var(--text-secondary);font-size:0.78rem;margin-top:0.5rem;display:block;">Para entregas específicas deste projeto que não estão na lista padrão</small>
             </div>
 
-            <!-- Observações -->
             <div class="form-group" style="margin:0;">
                 <label class="form-label">Observações</label>
                 <textarea class="form-textarea" id="proj-notes" placeholder="Informações adicionais sobre o projeto..." style="min-height:80px;">${project?.notes || ''}</textarea>
             </div>
 
-            <!-- Botões -->
             <div class="modal-footer" style="padding:0;margin-top:0.5rem;">
                 <button type="button" class="btn btn-secondary" onclick="window.closeProjectModal()">Cancelar</button>
                 <button type="button" class="btn btn-primary" onclick="window.saveProject()">💾 Salvar Projeto</button>
@@ -390,11 +381,14 @@ function attachHandlers(squads) {
 
     window.openProjectModal = function(id = null) {
         editingId = id;
-        const project  = id ? projectService.getProjectById(id) : null;
+        const project       = id ? projectService.getProjectById(id) : null;
         const currentPeriod = storage.getCurrentPeriod();
         document.getElementById('project-modal-title').textContent = id ? 'Editar Projeto' : 'Novo Projeto Pontual';
         document.getElementById('project-modal-body').innerHTML = renderProjectForm(project, squads, currentPeriod);
         document.getElementById('project-modal').style.display = 'flex';
+
+        // ← Autocomplete de cliente
+        setTimeout(() => attachClientAutocomplete(document.getElementById('proj-client')), 50);
     };
 
     window.closeProjectModal = function() {
@@ -415,10 +409,10 @@ function attachHandlers(squads) {
     };
 
     window.addCustomDeliverable = function() {
-        const list    = document.getElementById('custom-deliverables-list');
-        const rows    = list.querySelectorAll('.custom-deliv-row');
-        const newIdx  = rows.length;
-        const div     = document.createElement('div');
+        const list   = document.getElementById('custom-deliverables-list');
+        const rows   = list.querySelectorAll('.custom-deliv-row');
+        const newIdx = rows.length;
+        const div    = document.createElement('div');
         div.innerHTML = renderCustomDeliverableRow({ label: '', qty: 1 }, newIdx);
         list.appendChild(div.firstElementChild);
     };
@@ -427,7 +421,6 @@ function attachHandlers(squads) {
         const list = document.getElementById('custom-deliverables-list');
         const rows = list.querySelectorAll('.custom-deliv-row');
         if (rows[index]) rows[index].remove();
-        // Re-index
         list.querySelectorAll('.custom-deliv-row').forEach((row, i) => {
             row.dataset.index = i;
             row.querySelector('.btn-danger').setAttribute('onclick', `window.removeCustomDeliverable(${i})`);
@@ -436,27 +429,25 @@ function attachHandlers(squads) {
 
     window.saveProject = function() {
         try {
-            const name           = document.getElementById('proj-name').value.trim();
-            const client         = document.getElementById('proj-client').value.trim();
-            const squadId        = document.getElementById('proj-squad').value;
-            const status         = document.getElementById('proj-status').value;
-            const description    = document.getElementById('proj-description').value.trim();
-            const value          = parseFloat(document.getElementById('proj-value').value) || 0;
-            const externalCost   = parseFloat(document.getElementById('proj-external-cost').value) || 0;
+            const name             = document.getElementById('proj-name').value.trim();
+            const client           = document.getElementById('proj-client').value.trim();
+            const squadId          = document.getElementById('proj-squad').value;
+            const status           = document.getElementById('proj-status').value;
+            const description      = document.getElementById('proj-description').value.trim();
+            const value            = parseFloat(document.getElementById('proj-value').value) || 0;
+            const externalCost     = parseFloat(document.getElementById('proj-external-cost').value) || 0;
             const externalCostNote = document.getElementById('proj-external-note').value.trim();
-            const startDate      = document.getElementById('proj-start').value || null;
-            const deliveryDate   = document.getElementById('proj-delivery').value || null;
-            const billingPeriod  = document.getElementById('proj-billing-period').value || null;
-            const notes          = document.getElementById('proj-notes').value.trim();
+            const startDate        = document.getElementById('proj-start').value || null;
+            const deliveryDate     = document.getElementById('proj-delivery').value || null;
+            const billingPeriod    = document.getElementById('proj-billing-period').value || null;
+            const notes            = document.getElementById('proj-notes').value.trim();
 
-            // Entregáveis padrão
             const deliverables = {};
             document.querySelectorAll('.deliverable-qty').forEach(input => {
                 const qty = parseInt(input.value, 10);
                 if (qty > 0) deliverables[input.dataset.typeId] = qty;
             });
 
-            // Entregáveis customizados
             const customDeliverables = [];
             document.querySelectorAll('.custom-deliv-row').forEach(row => {
                 const label = row.querySelector('.custom-deliv-label').value.trim();
@@ -485,7 +476,6 @@ function attachHandlers(squads) {
         }
     };
 
-    // Fechar modal clicando no backdrop
     document.getElementById('project-modal').addEventListener('click', function(e) {
         if (e.target === this) window.closeProjectModal();
     });
@@ -495,27 +485,11 @@ function attachHandlers(squads) {
 
 function projectStyles() {
     return `
-        .project-card {
-            transition: border-color 0.2s;
-        }
-        .project-card:hover {
-            border-color: rgba(124,252,0,0.3);
-        }
-        .project-metric {
-            display: flex;
-            flex-direction: column;
-            gap: 0.2rem;
-        }
-        .project-metric-label {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-        }
-        .project-metric-value {
-            font-size: 1.05rem;
-            font-weight: 700;
-        }
+        .project-card { transition: border-color 0.2s; }
+        .project-card:hover { border-color: rgba(124,252,0,0.3); }
+        .project-metric { display: flex; flex-direction: column; gap: 0.2rem; }
+        .project-metric-label { font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+        .project-metric-value { font-size: 1.05rem; font-weight: 700; }
         #project-modal {
             display: none;
             position: fixed;
@@ -534,5 +508,6 @@ function projectStyles() {
             max-height: 90vh;
             overflow-y: auto;
         }
+        .badge-info { background: rgba(33,150,243,0.15); color: #64b5f6; }
     `;
 }

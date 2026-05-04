@@ -13,7 +13,8 @@ import { renderDeliverableTypesPage } from './pages/deliverableTypesPage.js';
 import { renderValidationPage } from './pages/validationPage.js';
 import { renderEvolutionPage } from './pages/evolutionPage.js';
 import { renderRolesPage } from './pages/rolesPage.js';
-import { renderProjectsPage } from './pages/projectsPage.js'; // ← NOVO
+import { renderProjectsPage } from './pages/projectsPage.js';
+import { renderClientsPage } from './pages/clientsPage.js';   // ← NOVO
 import { migrateToPeriods } from './migrateToPeriods.js';
 import migration from './migrations/migrateToMonthlySystem.js';
 
@@ -37,15 +38,13 @@ if (!migration.constructor.isMigrated()) {
 
 // Initialize app
 function init() {
-    // Run migration to period-based model
     migrateToPeriods();
-
-    // Render navbar
     renderNavbar();
 
-    // Register routes
     router.register('/', renderDashboard);
     router.register('/contracts', renderContractsPage);
+    router.register('/projects', renderProjectsPage);
+    router.register('/clients', renderClientsPage);            // ← NOVO
     router.register('/people', renderPeoplePage);
     router.register('/squads', renderSquadsPage);
     router.register('/comparison', renderSquadComparisonPage);
@@ -53,15 +52,11 @@ function init() {
     router.register('/validation', renderValidationPage);
     router.register('/evolution', renderEvolutionPage);
     router.register('/roles', renderRolesPage);
-    router.register('/projects', renderProjectsPage); // ← NOVO
 
-    // Initialize router
     router.init();
-
-    console.log('🚀 Agency Analytics initialized with Projetos Pontuais');
+    console.log('🚀 Fast Analytics — Clientes + Projetos Pontuais');
 }
 
-// Start app when DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {

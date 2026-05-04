@@ -13,7 +13,7 @@ export function renderNavbar() {
                 </div>
             </div>
 
-            <!-- Navigation - SEM DIVISÕES -->
+            <!-- Navigation -->
             <div class="sidebar-nav">
                 <a href="#/" class="nav-link" data-route="/">
                     <span class="nav-icon">📊</span>
@@ -28,6 +28,11 @@ export function renderNavbar() {
                 <a href="#/contracts" class="nav-link" data-route="/contracts">
                     <span class="nav-icon">📋</span>
                     <span class="nav-text">Contratos</span>
+                </a>
+
+                <a href="#/projects" class="nav-link" data-route="/projects">
+                    <span class="nav-icon">🚀</span>
+                    <span class="nav-text">Proj. Pontuais</span>
                 </a>
                 
                 <a href="#/people" class="nav-link" data-route="/people">

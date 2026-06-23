@@ -1,11 +1,11 @@
-// navbar.js - Fast Analytics
+// navbar.js - v3: removidos os links de Entregáveis e Funções (sistema de pesos descontinuado)
+// Adicionado link de Conferência Salarial no lugar de "Validação" genérica.
 
 export function renderNavbar() {
     const navbarContainer = document.getElementById('navbar');
 
     navbarContainer.innerHTML = `
         <nav class="sidebar">
-            <!-- Header -->
             <div class="sidebar-header">
                 <div class="sidebar-logo">
                     <img src="./LOGOFASTWHITE.png" alt="Fast" class="logo-image" onerror="this.style.display='none'">
@@ -13,7 +13,6 @@ export function renderNavbar() {
                 </div>
             </div>
 
-            <!-- Navigation -->
             <div class="sidebar-nav">
                 <a href="#/" class="nav-link" data-route="/">
                     <span class="nav-icon">📊</span>
@@ -50,16 +49,6 @@ export function renderNavbar() {
                     <span class="nav-text">Squads</span>
                 </a>
 
-                <a href="#/deliverables" class="nav-link" data-route="/deliverables">
-                    <span class="nav-icon">📦</span>
-                    <span class="nav-text">Entregáveis</span>
-                </a>
-
-                <a href="#/roles" class="nav-link" data-route="/roles">
-                    <span class="nav-icon">⚖️</span>
-                    <span class="nav-text">Funções</span>
-                </a>
-
                 <a href="#/comparison" class="nav-link" data-route="/comparison">
                     <span class="nav-icon">📊</span>
                     <span class="nav-text">DRE Squads</span>
@@ -67,11 +56,10 @@ export function renderNavbar() {
 
                 <a href="#/validation" class="nav-link" data-route="/validation">
                     <span class="nav-icon">✓</span>
-                    <span class="nav-text">Validação</span>
+                    <span class="nav-text">Conferência Salarial</span>
                 </a>
             </div>
 
-            <!-- Footer -->
             <div class="sidebar-footer">
                 <div class="sidebar-footer-text">Fast Digital 360</div>
             </div>

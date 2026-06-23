@@ -31,6 +31,7 @@ class Storage {
         }
 
         this._migrateToV3();
+        this._migrateToConfirmedPeriods();
     }
 
     generateId() {
@@ -81,6 +82,46 @@ class Storage {
             }
         } catch (e) {
             console.error('Erro na migração v3:', e);
+        }
+    }
+
+    // ====================
+    // MIGRAÇÃO PARA CONFIRMAÇÃO MENSAL (confirmedPeriods)
+    // ====================
+    // Contratos do modelo anterior tinham monthlyProjections[{periodId,...}] e
+    // contract.status ('active'/'inactive'). getActiveContractsForPeriod() antigo
+    // considerava ativo qualquer mês presente em monthlyProjections, desde que o
+    // contrato não estivesse com status 'inactive'. Migramos isso 1:1 para
+    // confirmedPeriods, sem precisar redigitar nada.
+
+    _migrateToConfirmedPeriods() {
+        try {
+            const contracts = this.getContracts();
+            let changed = false;
+
+            contracts.forEach(contract => {
+                if (contract.confirmedPeriods) return;
+
+                const wasActive = !contract.status || contract.status === 'active';
+                const oldPeriods = Array.isArray(contract.monthlyProjections)
+                    ? contract.monthlyProjections.map(p => p.periodId)
+                    : [];
+
+                contract.confirmedPeriods = wasActive
+                    ? Array.from(new Set(oldPeriods)).sort()
+                    : [];
+
+                if (contract.trafficManagement === undefined) contract.trafficManagement = false;
+
+                changed = true;
+            });
+
+            if (changed) {
+                this.saveContracts(contracts);
+                console.log('✅ storage: contratos migrados para confirmedPeriods (a partir de monthlyProjections)');
+            }
+        } catch (e) {
+            console.error('Erro na migração para confirmedPeriods:', e);
         }
     }
 

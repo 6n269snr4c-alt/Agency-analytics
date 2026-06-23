@@ -99,6 +99,9 @@ export function renderContractsPage() {
                     ${getMonthOptions().map(p => `
                         <button class="month-pill ${p === selectedMonth ? 'active' : ''}" onclick="window.selectMonth('${p}')">${monthShortLabel(p)}</button>
                     `).join('')}
+                    <button class="btn btn-secondary btn-small" style="margin-left:0.4rem;" onclick="window.changePeriod('${periodService.getNextPeriod(storage.getCurrentPeriod())}')" title="Avança o mês atual do sistema (afeta o app todo)">
+                        Avançar mês ▸ ${monthShortLabel(periodService.getNextPeriod(storage.getCurrentPeriod()))}/${periodService.getNextPeriod(storage.getCurrentPeriod()).split('-')[0].slice(2)}
+                    </button>
                 </div>
                 <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.82rem; color:var(--text-secondary); cursor:pointer;">
                     <input type="checkbox" id="show-inactive" ${showInactive ? 'checked' : ''} onchange="window.toggleShowInactive(this.checked)">
@@ -840,16 +843,19 @@ function contractStyles() {
 
         .inline-input {
             background: transparent;
-            border: 1px solid transparent;
-            border-radius: 6px;
+            border: none;
+            border-bottom: 1px dashed var(--border);
+            border-radius: 4px 4px 0 0;
             color: var(--text-primary, #fff);
             padding: 0.3rem 0.4rem;
             font-size: 0.82rem;
             width: 100%;
+            cursor: text;
         }
-        .inline-input:hover:not(:disabled) { border-color: var(--border); }
-        .inline-input:focus:not(:disabled) { border-color: var(--fast-green, #7cfc00); outline: none; background: var(--bg-card, #1a1a1a); }
-        .inline-input:disabled { color: var(--text-secondary); cursor: default; }
+        .inline-input:hover:not(:disabled) { background: rgba(124,252,0,0.06); border-bottom-color: var(--fast-green, #7cfc00); }
+        .inline-input:focus:not(:disabled) { border-bottom: 1px solid var(--fast-green, #7cfc00); outline: none; background: var(--bg-card, #1a1a1a); }
+        .inline-input:disabled { color: var(--text-secondary); cursor: default; border-bottom-color: transparent; }
+        select.inline-input { cursor: pointer; }
         .inline-input-num { text-align: center; width: 56px; }
 
         .traffic-pill {

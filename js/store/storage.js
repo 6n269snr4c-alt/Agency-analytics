@@ -111,10 +111,11 @@ class Storage {
         const contracts = this.getContracts();
         contract.id = this.generateId();
         contract.createdAt = new Date().toISOString();
-        if (!contract.status) contract.status = 'active';
         if (contract.videoCount === undefined) contract.videoCount = 0;
         if (contract.staticCount === undefined) contract.staticCount = 0;
+        if (contract.trafficManagement === undefined) contract.trafficManagement = false;
         if (!contract.peopleAllocations) contract.peopleAllocations = [];
+        if (!contract.confirmedPeriods) contract.confirmedPeriods = [];
         contract._v3Migrated = true;
         contracts.push(contract);
         this.saveContracts(contracts);
@@ -143,96 +144,38 @@ class Storage {
     }
 
     // ====================
-    // CONTRACT PROJECTIONS (sistema mensal)
+    // CONTRATOS — confirmação mensal manual
     // ====================
+    // Não há mais "duração" nem projeção automática. Cada contrato carrega um
+    // único valor/squad/equipe (válidos enquanto não houver novo contrato), e
+    // um array confirmedPeriods com os meses em que ele foi confirmado como
+    // "continua igual". Qualquer mudança real (valor, entregáveis, squad,
+    // equipe) deve gerar um contrato novo — ver contractService.duplicateContract.
 
-    getContractProjection(contractId, periodId) {
-        const contract = this.getContractById(contractId);
-        if (!contract || !contract.monthlyProjections) return null;
-        return contract.monthlyProjections.find(p => p.periodId === periodId);
-    }
-
-    updateContractProjection(contractId, periodId, updates) {
+    confirmContractPeriod(contractId, periodId) {
         const contracts = this.getContracts();
-        const contractIndex = contracts.findIndex(c => c.id === contractId);
-        if (contractIndex === -1) return null;
+        const index = contracts.findIndex(c => c.id === contractId);
+        if (index === -1) return null;
 
-        const contract = contracts[contractIndex];
-        if (!contract.monthlyProjections) contract.monthlyProjections = [];
-
-        const projectionIndex = contract.monthlyProjections.findIndex(p => p.periodId === periodId);
-
-        if (projectionIndex >= 0) {
-            contract.monthlyProjections[projectionIndex] = {
-                ...contract.monthlyProjections[projectionIndex],
-                ...updates,
-                updatedAt: new Date().toISOString()
-            };
-        } else {
-            contract.monthlyProjections.push({
-                periodId,
-                ...updates,
-                createdAt: new Date().toISOString()
-            });
-        }
-
-        contracts[contractIndex] = contract;
+        const set = new Set(contracts[index].confirmedPeriods || []);
+        set.add(periodId);
+        contracts[index].confirmedPeriods = Array.from(set).sort();
         this.saveContracts(contracts);
-        return contract.monthlyProjections.find(p => p.periodId === periodId);
+        return contracts[index];
     }
 
-    /**
-     * Gera projeções mensais para um contrato.
-     * Cada mês carrega: value, videoCount, staticCount, peopleAllocations (cópia do base).
-     */
-    generateContractProjections(contractId) {
-        const contract = this.getContractById(contractId);
-        if (!contract) return null;
-
-        const startPeriod = contract.startPeriod || this.getCurrentPeriod();
-        const duration     = contract.duration || 12;
-        const baseValue    = contract.baseValue ?? contract.value ?? 0;
-        const baseVideo    = contract.videoCount ?? 0;
-        const baseStatic   = contract.staticCount ?? 0;
-        const baseAlloc    = contract.peopleAllocations || [];
-
-        const projections = [];
-        let [year, month] = startPeriod.split('-').map(Number);
-
-        for (let i = 0; i < duration; i++) {
-            const periodId = `${year}-${String(month).padStart(2, '0')}`;
-            projections.push({
-                periodId,
-                value: baseValue,
-                videoCount: baseVideo,
-                staticCount: baseStatic,
-                peopleAllocations: baseAlloc.map(a => ({ ...a })),
-                status: i === 0 ? 'confirmed' : 'projected',
-                createdAt: new Date().toISOString()
-            });
-            month++;
-            if (month > 12) { month = 1; year++; }
-        }
-
+    unconfirmContractPeriod(contractId, periodId) {
         const contracts = this.getContracts();
-        const contractIndex = contracts.findIndex(c => c.id === contractId);
-        if (contractIndex >= 0) {
-            contracts[contractIndex].monthlyProjections = projections;
-            if (!contracts[contractIndex].status) contracts[contractIndex].status = 'active';
-            this.saveContracts(contracts);
-        }
+        const index = contracts.findIndex(c => c.id === contractId);
+        if (index === -1) return null;
 
-        return projections;
+        contracts[index].confirmedPeriods = (contracts[index].confirmedPeriods || []).filter(p => p !== periodId);
+        this.saveContracts(contracts);
+        return contracts[index];
     }
 
     getActiveContractsForPeriod(periodId) {
-        const contracts = this.getContracts();
-        return contracts.filter(contract => {
-            if (!contract.monthlyProjections || contract.monthlyProjections.length === 0) return false;
-            const projection = contract.monthlyProjections.find(p => p.periodId === periodId);
-            const isActive = !contract.status || contract.status === 'active';
-            return projection && isActive;
-        });
+        return this.getContracts().filter(c => (c.confirmedPeriods || []).includes(periodId));
     }
 
     // ====================

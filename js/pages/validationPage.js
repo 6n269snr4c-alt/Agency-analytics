@@ -1,298 +1,81 @@
-// validationPage.js - Validation page for cost verification
+// validationPage.js — v3
+// Conferência salarial: compara o salário cadastrado de cada pessoa
+// com o total que foi alocado a ela em contratos (rateado + fixo).
+
 import { renderPeriodSelector } from '../components/periodSelector.js';
-
-import contractService from '../services/contractService.js';
-import personService from '../services/personService.js';
 import analyticsService from '../services/analyticsService.js';
+import storage from '../store/storage.js';
 
-let validationSortColumn = 'client';
-let validationSortDirection = 'asc';
+function fmt(value) {
+    return Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 export function renderValidationPage() {
     const contentEl = document.getElementById('content');
-    
-    const contracts = contractService.getAllContracts();
-    const people = personService.getAllPeople();
-    
-    // Calculate total contract costs
-    let totalContractCost = 0;
-    const contractBreakdown = [];
-    
-    contracts.forEach(contract => {
-        const roi = analyticsService.getContractROI(contract.id);
-        totalContractCost += roi.cost;
-        contractBreakdown.push({
-            client: contract.client,
-            cost: roi.cost,
-            value: contract.value,
-            profit: roi.profit
-        });
-    });
-    
-    // Sort breakdown
-    contractBreakdown.sort((a, b) => {
-        let comparison = 0;
-        
-        if (validationSortColumn === 'client') {
-            comparison = a.client.toLowerCase().localeCompare(b.client.toLowerCase());
-        } else {
-            comparison = a[validationSortColumn] - b[validationSortColumn];
-        }
-        
-        return validationSortDirection === 'asc' ? comparison : -comparison;
-    });
-    
-    // Calculate total payroll
-    const totalPayroll = people.reduce((sum, person) => sum + person.salary, 0);
-    
-    // Calculate difference
-    const difference = totalPayroll - totalContractCost;
-    const differencePercentage = totalPayroll > 0 ? (difference / totalPayroll) * 100 : 0;
-    
-    const isValid = Math.abs(difference) < 0.01; // tolerance of 1 cent
-    
-    // Expose sort function
-    window.sortValidationBy = sortValidationBy;
-    
+    const currentPeriod = storage.getCurrentPeriod();
+
+    const reconciliation = analyticsService.getSalaryReconciliation(currentPeriod);
+
+    const totalSalary    = reconciliation.reduce((s, r) => s + r.salary, 0);
+    const totalAllocated = reconciliation.reduce((s, r) => s + r.allocated, 0);
+    const problemCount    = reconciliation.filter(r => !r.isOk).length;
+
     contentEl.innerHTML = `
         <div class="page-header">
-            <h1 class="page-title">Validação de Custos</h1>
-            <p class="page-subtitle">Prova real: a soma dos custos dos contratos deve igualar a folha de pagamento</p>
+            <h1 class="page-title">Conferência Salarial</h1>
+            <p class="page-subtitle">Compara o salário de cada pessoa com o total alocado em contratos no período</p>
         </div>
 
-        <!-- Period Selector -->
         ${renderPeriodSelector()}
 
-        <div class="action-bar">
-            <div class="action-bar-left">
-                <button class="btn btn-secondary" onclick="window.exportBackup()">
-                    💾 Fazer Backup
-                </button>
-                <button class="btn btn-secondary" onclick="window.importBackup()">
-                    📥 Restaurar Backup
-                </button>
-                <input type="file" id="backup-file-input" accept=".json" style="display: none;" onchange="window.handleBackupFile(event)">
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:1.5rem; margin-bottom:2rem;">
+            <div class="stat-card">
+                <div class="stat-value">R$ ${fmt(totalSalary)}</div>
+                <div class="stat-label">Folha Total (cadastrada)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">R$ ${fmt(totalAllocated)}</div>
+                <div class="stat-label">Total Alocado em Contratos</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color:${problemCount > 0 ? 'var(--error,#f44336)' : 'var(--fast-green,#7cfc00)'}">${problemCount}</div>
+                <div class="stat-label">Pessoa(s) com divergência</div>
             </div>
         </div>
 
-        <!-- Summary Cards -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-            <!-- Total Contract Costs -->
-            <div class="card" style="background: var(--bg-darker); border: 2px solid var(--border); padding: 1.5rem; border-radius: 8px;">
-                <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.5rem;">
-                    📊 Soma de CUSTO de Todos os Contratos
-                </div>
-                <div style="font-size: 2rem; font-weight: bold; color: var(--primary);">
-                    R$ ${formatCurrency(totalContractCost)}
-                </div>
-                <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">
-                    ${contracts.length} ${contracts.length === 1 ? 'contrato' : 'contratos'}
-                </div>
-            </div>
-
-            <!-- Total Payroll -->
-            <div class="card" style="background: var(--bg-darker); border: 2px solid var(--border); padding: 1.5rem; border-radius: 8px;">
-                <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.5rem;">
-                    💰 Folha de Pagamento Total
-                </div>
-                <div style="font-size: 2rem; font-weight: bold; color: var(--primary);">
-                    R$ ${formatCurrency(totalPayroll)}
-                </div>
-                <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">
-                    ${people.length} ${people.length === 1 ? 'pessoa' : 'pessoas'}
-                </div>
-            </div>
-
-            <!-- Difference -->
-            <div class="card" style="background: var(--bg-darker); border: 2px solid ${isValid ? 'var(--success)' : 'var(--error)'}; padding: 1.5rem; border-radius: 8px;">
-                <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.5rem;">
-                    ${isValid ? '✅ Validação' : '⚠️ Diferença'}
-                </div>
-                <div style="font-size: 2rem; font-weight: bold; color: ${isValid ? 'var(--success)' : 'var(--error)'};">
-                    ${isValid ? 'CORRETO' : 'R$ ' + formatCurrency(Math.abs(difference))}
-                </div>
-                <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.5rem;">
-                    ${isValid ? 'Custos batem perfeitamente!' : `${differencePercentage.toFixed(1)}% da folha`}
-                </div>
-            </div>
-        </div>
-
-        ${!isValid ? `
-            <div style="background: var(--bg-darker); border: 2px solid var(--error); border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem;">
-                <h3 style="margin: 0 0 1rem 0; color: var(--error);">⚠️ Atenção: Valores não batem!</h3>
-                <p style="margin: 0; color: var(--text-secondary);">
-                    ${difference > 0 
-                        ? `Há <strong>R$ ${formatCurrency(difference)}</strong> na folha que não está sendo alocado aos contratos. Verifique se todos os colaboradores estão em contratos ativos.`
-                        : `Os contratos têm <strong>R$ ${formatCurrency(Math.abs(difference))}</strong> a mais que a folha. Isso pode indicar erro nos cálculos ou pessoas duplicadas.`
-                    }
-                </p>
-            </div>
-        ` : ''}
-
-        <!-- Breakdown by Contract -->
-        <div style="background: var(--bg-darker); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                <h3 style="margin: 0; color: var(--primary);">Breakdown por Contrato</h3>
-                <div style="display: flex; gap: 0.5rem;">
-                    <button class="btn btn-small" onclick="window.sortValidationBy('client')" id="sort-client-btn">
-                        Cliente ↕
-                    </button>
-                    <button class="btn btn-small" onclick="window.sortValidationBy('cost')" id="sort-cost-btn">
-                        Custo ↕
-                    </button>
-                    <button class="btn btn-small" onclick="window.sortValidationBy('value')" id="sort-value-btn">
-                        Faturamento ↕
-                    </button>
-                    <button class="btn btn-small" onclick="window.sortValidationBy('profit')" id="sort-profit-btn">
-                        Lucro ↕
-                    </button>
-                </div>
-            </div>
-            
-            ${contractBreakdown.length > 0 ? `
-                <div style="display: grid; gap: 0.75rem;">
-                    ${contractBreakdown.map(item => `
-                        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 1rem; padding: 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; align-items: center;">
-                            <span style="font-weight: 500;">${item.client}</span>
-                            <span style="color: var(--text-secondary);">R$ ${formatCurrency(item.value)}</span>
-                            <span style="color: var(--primary); font-weight: bold;">R$ ${formatCurrency(item.cost)}</span>
-                            <span style="color: ${item.profit > 0 ? 'var(--success)' : 'var(--error)'}; font-weight: bold;">R$ ${formatCurrency(item.profit)}</span>
-                        </div>
-                    `).join('')}
-                </div>
-                
-                <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 2px solid var(--border);">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <strong style="font-size: 1.1rem;">TOTAL:</strong>
-                        <strong style="font-size: 1.3rem; color: var(--primary);">R$ ${formatCurrency(totalContractCost)}</strong>
-                    </div>
-                </div>
-            ` : `
-                <p style="color: var(--text-secondary); text-align: center;">Nenhum contrato cadastrado</p>
-            `}
-        </div>
-        </div>
-
-        <!-- Breakdown by Person -->
         <div style="background: var(--bg-darker); border: 1px solid var(--border); border-radius: 8px; padding: 1.5rem;">
-            <h3 style="margin: 0 0 1.5rem 0; color: var(--primary);">Folha de Pagamento</h3>
-            
-            ${people.length > 0 ? `
-                <div style="display: grid; gap: 0.75rem;">
-                    ${people.map(person => `
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: var(--bg); border: 1px solid var(--border); border-radius: 4px;">
-                            <div>
-                                <span style="font-weight: 500;">${person.name}</span>
-                                <span style="color: var(--text-secondary); font-size: 0.85rem; margin-left: 0.5rem;">(${person.role})</span>
-                            </div>
-                            <span style="color: var(--primary); font-weight: bold;">R$ ${formatCurrency(person.salary)}</span>
-                        </div>
-                    `).join('')}
-                </div>
-                
-                <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 2px solid var(--border);">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <strong style="font-size: 1.1rem;">TOTAL:</strong>
-                        <strong style="font-size: 1.3rem; color: var(--primary);">R$ ${formatCurrency(totalPayroll)}</strong>
-                    </div>
-                </div>
+            <h3 style="margin: 0 0 1.5rem 0; color: var(--primary, var(--fast-green));">Detalhamento por Pessoa</h3>
+            ${reconciliation.length === 0 ? `
+                <p style="color: var(--text-secondary);">Nenhuma pessoa cadastrada</p>
             ` : `
-                <p style="color: var(--text-secondary); text-align: center;">Nenhuma pessoa cadastrada</p>
+                <div style="display:grid; gap:0.75rem;">
+                    ${reconciliation.map(r => renderPersonRow(r)).join('')}
+                </div>
             `}
-        </div>
-
-        <!-- Info Box -->
-        <div style="background: var(--bg-darker); border-left: 4px solid var(--primary); padding: 1.5rem; margin-top: 2rem; border-radius: 4px;">
-            <h4 style="margin: 0 0 0.5rem 0; color: var(--primary);">💡 Como interpretar</h4>
-            <ul style="margin: 0; padding-left: 1.5rem; color: var(--text-secondary);">
-                <li style="margin-bottom: 0.5rem;">Se os valores <strong>batem</strong>: todos os salários estão sendo alocados corretamente aos contratos</li>
-                <li style="margin-bottom: 0.5rem;">Se <strong>sobra na folha</strong>: há pessoas sem contratos ou com poucos entregáveis</li>
-                <li>Se <strong>falta na folha</strong>: erro nos cálculos ou pessoas duplicadas em contratos</li>
-            </ul>
         </div>
     `;
 }
 
-function formatCurrency(value) {
-    return value.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-}
+function renderPersonRow(r) {
+    const statusColor = r.isOk ? 'var(--fast-green,#7cfc00)' : 'var(--error,#f44336)';
+    const statusLabel = r.isFixedOnly
+        ? '✓ Só valores fixos (não precisa bater)'
+        : r.isOk
+            ? '✓ Bate com o salário'
+            : (r.diff > 0
+                ? `⚠️ Faltam R$ ${fmt(r.diff)} sem contrato`
+                : `⚠️ R$ ${fmt(Math.abs(r.diff))} acima do salário`);
 
-// Backup/Restore functions
-function exportBackup() {
-    const backup = {
-        contracts: localStorage.getItem('agency_contracts'),
-        people: localStorage.getItem('agency_people'),
-        squads: localStorage.getItem('agency_squads'),
-        deliverableTypes: localStorage.getItem('agency_deliverable_types'),
-        timestamp: new Date().toISOString()
-    };
-    
-    if (!backup.contracts && !backup.people && !backup.squads && !backup.deliverableTypes) {
-        alert('Não há dados para fazer backup');
-        return;
-    }
-    
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const timestamp = new Date().toISOString().split('T')[0];
-    
-    link.href = url;
-    link.download = `agency-analytics-backup-${timestamp}.json`;
-    link.click();
-    
-    URL.revokeObjectURL(url);
-    alert('✅ Backup realizado com sucesso!');
-}
-
-function importBackup() {
-    document.getElementById('backup-file-input').click();
-}
-
-function handleBackupFile(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    if (confirm('⚠️ ATENÇÃO: Isso vai substituir TODOS os dados atuais. Deseja continuar?')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const backup = JSON.parse(e.target.result);
-                
-                // Restore all data
-                if (backup.contracts) localStorage.setItem('agency_contracts', backup.contracts);
-                if (backup.people) localStorage.setItem('agency_people', backup.people);
-                if (backup.squads) localStorage.setItem('agency_squads', backup.squads);
-                if (backup.deliverableTypes) localStorage.setItem('agency_deliverable_types', backup.deliverableTypes);
-                
-                alert('✅ Backup restaurado com sucesso! A página será recarregada.');
-                window.location.reload();
-            } catch (error) {
-                alert('❌ Erro ao restaurar backup: arquivo inválido');
-                console.error(error);
-            }
-        };
-        reader.readAsText(file);
-    }
-    
-    // Reset input
-    event.target.value = '';
-}
-
-function sortValidationBy(column) {
-    if (validationSortColumn === column) {
-        validationSortDirection = validationSortDirection === 'asc' ? 'desc' : 'asc';
-    } else {
-        validationSortColumn = column;
-        validationSortDirection = 'asc';
-    }
-    renderValidationPage();
-}
-
-// Expose functions to window
-if (typeof window !== 'undefined') {
-    window.exportBackup = exportBackup;
-    window.importBackup = importBackup;
-    window.handleBackupFile = handleBackupFile;
-    window.sortValidationBy = sortValidationBy;
+    return `
+        <div style="display:grid; grid-template-columns: 2fr 1fr 1fr 2fr; gap:1rem; align-items:center;
+                     padding:0.875rem; background:var(--bg); border:1px solid var(--border); border-radius:6px;">
+            <div>
+                <strong>${r.name}</strong>
+                <div style="font-size:0.8rem; color:var(--text-secondary);">${r.role}</div>
+            </div>
+            <div style="color:var(--text-secondary);">Salário: <strong>R$ ${fmt(r.salary)}</strong></div>
+            <div style="color:var(--text-secondary);">Alocado: <strong style="color:var(--fast-green,#7cfc00);">R$ ${fmt(r.allocated)}</strong></div>
+            <div style="color:${statusColor}; font-size:0.85rem; font-weight:600; text-align:right;">${statusLabel}</div>
+        </div>
+    `;
 }

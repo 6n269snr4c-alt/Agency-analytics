@@ -1,157 +1,77 @@
-// contractsPage.js - COM SISTEMA MENSAL + BREAKDOWN DETALHADO + AUTOCOMPLETE DE CLIENTE
+// contractsPage.js — v3
+// Formulário simplificado: Cliente/Valor → Vídeo/Estático → Pessoas (rateado ou fixo)
+// Sem catálogo de entregáveis, sem pesos. Inclui autocomplete de cliente e duplicar contrato.
 
 import contractService from '../services/contractService.js';
 import squadService from '../services/squadService.js';
 import personService from '../services/personService.js';
 import analyticsService from '../services/analyticsService.js';
-import deliverableTypeService from '../services/deliverableTypeService.js';
 import storage from '../store/storage.js';
 import { renderPeriodSelector } from '../components/periodSelector.js';
-import { attachClientAutocomplete } from '../components/clientAutocomplete.js'; // ← NOVO
+import { attachClientAutocomplete } from '../components/clientAutocomplete.js';
 
 let currentEditId = null;
-let deliverables = {};
+let draftAllocations = []; // [{ personId, mode, fixedValue }] — estado do formulário aberto
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+
+function fmt(value) {
+    return Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function marginBadgeClass(margin) {
+    if (margin >= 30) return 'badge-success';
+    if (margin >= 15) return 'badge-warning';
+    return 'badge-error';
+}
+
+// ─── entry point ──────────────────────────────────────────────────────────────
 
 export function renderContractsPage() {
     const contentEl = document.getElementById('content');
 
     const contracts = contractService.getAllContracts();
     const squads = squadService.getAllSquads();
-    const people = personService.getAllPeople();
-    const deliverableTypes = deliverableTypeService.getActiveDeliverableTypes();
     const currentPeriod = storage.getCurrentPeriod();
 
     contentEl.innerHTML = `
         <div class="page-header">
             <h1 class="page-title">Contratos</h1>
-            <p class="page-subtitle">Gerenciar contratos e clientes</p>
+            <p class="page-subtitle">Gerenciar contratos, volume de entregas e alocação de equipe</p>
         </div>
 
         ${renderPeriodSelector()}
 
         <div class="action-bar">
             <div class="action-bar-left">
-                <button class="btn btn-primary" onclick="window.openContractModal()">
-                    + Novo Contrato
-                </button>
-                <button class="btn btn-secondary" onclick="window.exportContracts()">
-                    📥 Exportar Dados
-                </button>
+                <button class="btn btn-primary" onclick="window.openContractModal()">+ Novo Contrato</button>
+                <button class="btn btn-secondary" onclick="window.exportContracts()">📥 Exportar Dados</button>
             </div>
             <div class="action-bar-right">
-                <input
-                    type="text"
-                    class="form-input"
-                    id="contract-search"
-                    placeholder="🔍 Buscar contrato..."
-                    style="max-width: 300px;"
-                    oninput="window.filterContracts()"
-                >
+                <input type="text" class="form-input" id="contract-search"
+                       placeholder="🔍 Buscar contrato..." style="max-width: 280px;"
+                       oninput="window.filterContracts()">
             </div>
         </div>
 
         <div id="contracts-list">
-            ${renderContractsList(contracts)}
+            ${renderContractsList(contracts, squads)}
         </div>
 
-        <!-- MODAL PRINCIPAL: NOVO / EDITAR CONTRATO -->
+        <!-- MODAL: NOVO/EDITAR CONTRATO -->
         <div id="contract-modal" class="modal">
-            <div class="modal-content">
+            <div class="modal-content" style="max-width: 720px;">
                 <div class="modal-header">
                     <h2 class="modal-title" id="modal-title">Novo Contrato</h2>
                     <button class="modal-close" onclick="window.closeContractModal()">&times;</button>
                 </div>
-                <form id="contract-form">
-                    <div class="form-group">
-                        <label class="form-label">Cliente *</label>
-                        <input type="text" class="form-input" id="client" required
-                               placeholder="Digite ou selecione um cliente existente">
-                        <small style="color:var(--text-secondary);font-size:0.78rem;">
-                            Clientes já cadastrados aparecerão como sugestão ao digitar.
-                        </small>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Valor Mensal (R$) *</label>
-                        <input type="number" class="form-input" id="value" step="0.01" required>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                        <div class="form-group">
-                            <label class="form-label">Duração (meses)</label>
-                            <input
-                                type="number"
-                                class="form-input"
-                                id="duration"
-                                min="1"
-                                max="36"
-                                value="12"
-                                placeholder="Ex: 12"
-                            >
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Início (período)</label>
-                            <input
-                                type="month"
-                                class="form-input"
-                                id="startPeriod"
-                                value="${currentPeriod}"
-                            >
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Entregáveis</label>
-                        <div style="display: flex; gap: 0.75rem; align-items: flex-end; margin-bottom: 1rem;">
-                            <div style="flex: 1;">
-                                <select class="form-input" id="deliverable-type-select">
-                                    <option value="">Selecionar tipo...</option>
-                                    ${deliverableTypes.map(dt => `<option value="${dt.id}">${dt.name}</option>`).join('')}
-                                </select>
-                            </div>
-                            <div style="width: 100px;">
-                                <input type="number" class="form-input" id="deliverable-qty" min="1" placeholder="Qtd">
-                            </div>
-                            <button type="button" class="btn btn-secondary" onclick="window.addDeliverable()">
-                                + Adicionar
-                            </button>
-                        </div>
-                        <div id="deliverables-container"></div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Squad</label>
-                        <select class="form-select" id="squad-tag">
-                            <option value="">Nenhum</option>
-                            ${squads.map(s => `<option value="${s.id}">${s.name}</option>`).join('')}
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Equipe do Contrato</label>
-                        <div id="team-assignment">
-                            ${renderTeamAssignment(people, squads)}
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Observações</label>
-                        <textarea class="form-textarea" id="notes"></textarea>
-                    </div>
-
-                    <div id="form-validation-warnings"></div>
-
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" onclick="window.closeContractModal()">Cancelar</button>
-                        <button type="submit" class="btn btn-primary">Salvar</button>
-                    </div>
-                </form>
+                <div id="contract-form-body"></div>
             </div>
         </div>
 
-        <!-- MODAL DE BREAKDOWN DETALHADO -->
+        <!-- MODAL: BREAKDOWN -->
         <div id="breakdown-modal" class="modal">
-            <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-content" style="max-width: 720px;">
                 <div class="modal-header">
                     <h2 class="modal-title" id="breakdown-title">Detalhamento de Custo</h2>
                     <button class="modal-close" onclick="window.closeBreakdownModal()">&times;</button>
@@ -160,41 +80,18 @@ export function renderContractsPage() {
             </div>
         </div>
 
-        <!-- MODAL DE DETALHES (equipe e entregáveis) -->
-        <div id="details-modal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2 class="modal-title" id="details-title">Detalhes do Contrato</h2>
-                    <button class="modal-close" onclick="window.closeDetailsModal()">&times;</button>
-                </div>
-                <div id="details-content" style="padding: 1.5rem;"></div>
-            </div>
-        </div>
-
-        <!-- MODAL DE DEBUG -->
-        <div id="debug-modal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2 class="modal-title">🐛 Debug do Cálculo</h2>
-                    <button class="modal-close" onclick="window.closeDebugModal()">&times;</button>
-                </div>
-                <div id="debug-content" style="padding: 1.5rem; font-family: monospace; font-size: 0.9rem;"></div>
-            </div>
-        </div>
+        <style>${contractStyles()}</style>
     `;
 
-    attachContractHandlers();
-    renderDeliverables();
+    attachContractHandlers(squads);
 }
 
-// ─── ORDENAÇÃO ────────────────────────────────────────────────────────────────
+// ─── ORDENAÇÃO E LISTA ────────────────────────────────────────────────────────
 
 let sortColumn = 'client';
 let sortDirection = 'asc';
 
-// ─── LISTA DE CONTRATOS ───────────────────────────────────────────────────────
-
-function renderContractsList(contracts) {
+function renderContractsList(contracts, squads) {
     if (contracts.length === 0) {
         return `
             <div class="empty-state">
@@ -205,43 +102,18 @@ function renderContractsList(contracts) {
         `;
     }
 
-    const contractsData = contracts.map(contract => {
+    const rows = contracts.map(contract => {
         const roi = analyticsService.getContractROI(contract.id);
-        const safeRoi = roi || { cost: 0, profit: 0, margin: 0 };
-
-        const assignedPeople = contract.assignedPeople || [];
         const squad = contract.squadTag ? squadService.getSquad(contract.squadTag) : null;
-        const warnings = validateContractConsistency(contract);
-
-        const hasCalculationError =
-            assignedPeople.length > 0 &&
-            Object.keys(contract.deliverables || {}).length > 0 &&
-            safeRoi.cost === 0;
-
-        return {
-            contract,
-            roi: safeRoi,
-            assignedPeople,
-            squad,
-            warnings,
-            hasCalculationError,
-            clientName: contract.client.toLowerCase(),
-            cost: safeRoi.cost,
-            squadName: squad ? squad.name.toLowerCase() : '',
-            value: contract.value
-        };
+        return { contract, roi, squad };
     });
 
-    contractsData.sort((a, b) => {
-        let comparison = 0;
-        if (sortColumn === 'client') {
-            comparison = a.clientName.localeCompare(b.clientName);
-        } else if (sortColumn === 'squad') {
-            comparison = a.squadName.localeCompare(b.squadName);
-        } else {
-            comparison = a[sortColumn] - b[sortColumn];
-        }
-        return sortDirection === 'asc' ? comparison : -comparison;
+    rows.sort((a, b) => {
+        let cmp = 0;
+        if (sortColumn === 'client') cmp = a.contract.client.toLowerCase().localeCompare(b.contract.client.toLowerCase());
+        else if (sortColumn === 'value') cmp = a.contract.value - b.contract.value;
+        else if (sortColumn === 'cost') cmp = a.roi.cost - b.roi.cost;
+        return sortDirection === 'asc' ? cmp : -cmp;
     });
 
     return `
@@ -249,65 +121,31 @@ function renderContractsList(contracts) {
             <table>
                 <thead>
                     <tr>
-                        <th onclick="window.sortContractsBy('client')" style="cursor:pointer;">
-                            Cliente ${sortColumn === 'client' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}
-                        </th>
+                        <th onclick="window.sortContractsBy('client')" style="cursor:pointer;">Cliente ${sortColumn==='client' ? (sortDirection==='asc'?'↑':'↓') : '↕'}</th>
                         <th>Squad</th>
-                        <th onclick="window.sortContractsBy('value')" style="cursor:pointer;">
-                            Receita ${sortColumn === 'value' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}
-                        </th>
-                        <th>Duração</th>
-                        <th onclick="window.sortContractsBy('cost')" style="cursor:pointer;">
-                            Custo ${sortColumn === 'cost' ? (sortDirection === 'asc' ? '↑' : '↓') : '↕'}
-                        </th>
-                        <th>Lucro</th>
+                        <th>🎬 Vídeo</th>
+                        <th>🖼️ Estático</th>
+                        <th onclick="window.sortContractsBy('value')" style="cursor:pointer;">Receita ${sortColumn==='value' ? (sortDirection==='asc'?'↑':'↓') : '↕'}</th>
+                        <th onclick="window.sortContractsBy('cost')" style="cursor:pointer;">Custo ${sortColumn==='cost' ? (sortDirection==='asc'?'↑':'↓') : '↕'}</th>
                         <th>Margem</th>
-                        <th>Análise</th>
                         <th>Ações</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${contractsData.map(({ contract, roi, squad, warnings, hasCalculationError }) => `
+                    ${rows.map(({ contract, roi, squad }) => `
                         <tr>
+                            <td><strong>${contract.client}</strong></td>
+                            <td>${squad ? `${squad.icon || ''} ${squad.name}` : '-'}</td>
+                            <td style="text-align:center;">${contract.videoCount || 0}</td>
+                            <td style="text-align:center;">${contract.staticCount || 0}</td>
+                            <td>R$ ${fmt(contract.value)}</td>
+                            <td>R$ ${fmt(roi.cost)}</td>
+                            <td><span class="badge ${marginBadgeClass(roi.margin)}">${roi.margin.toFixed(1)}%</span></td>
                             <td>
-                                <strong>${contract.client}</strong>
-                                ${warnings.length > 0 ? `
-                                    <div style="font-size: 0.8rem; color: var(--warning); margin-top: 0.25rem;">
-                                        ⚠️ ${warnings.map(w => w.message).join(', ')}
-                                    </div>
-                                ` : ''}
-                                ${hasCalculationError ? `
-                                    <div style="font-size: 0.8rem; color: var(--error); margin-top: 0.25rem;">
-                                        ❌ Erro no cálculo
-                                        <button onclick="window.showDebug('${contract.id}')" style="background:none;border:none;color:var(--error);cursor:pointer;font-size:0.75rem;padding:0;margin-left:4px;">🐛 Debug</button>
-                                    </div>
-                                ` : ''}
-                            </td>
-                            <td>${squad ? squad.name : '-'}</td>
-                            <td>R$ ${formatCurrency(contract.value)}</td>
-                            <td style="color: var(--text-secondary); font-size: 0.9rem;">
-                                ${contract.duration ? `${contract.duration} meses` : '-'}
-                                ${contract.startPeriod ? `<br><small>${contract.startPeriod}</small>` : ''}
-                            </td>
-                            <td>R$ ${formatCurrency(roi.cost)}</td>
-                            <td>
-                                <span class="badge ${roi.profit >= 0 ? 'badge-success' : 'badge-error'}">
-                                    R$ ${formatCurrency(roi.profit)}
-                                </span>
-                            </td>
-                            <td>
-                                <span class="badge ${roi.margin >= 30 ? 'badge-success' : roi.margin >= 15 ? 'badge-warning' : 'badge-error'}">
-                                    ${roi.margin.toFixed(1)}%
-                                </span>
-                            </td>
-                            <td style="text-align: center;">
-                                <button class="btn btn-small btn-primary" onclick="window.showContractBreakdown('${contract.id}')" title="Ver Cálculo Detalhado">
-                                    🔍 Ver Cálculo
-                                </button>
-                            </td>
-                            <td>
-                                <div style="display: flex; gap: 0.5rem; justify-content: center;">
+                                <div style="display:flex; gap:0.4rem; justify-content:center;">
+                                    <button class="btn btn-small btn-primary" onclick="window.showContractBreakdown('${contract.id}')" title="Ver cálculo">🔍</button>
                                     <button class="btn btn-small btn-secondary" onclick="window.editContract('${contract.id}')" title="Editar">✏️</button>
+                                    <button class="btn btn-small btn-secondary" onclick="window.duplicateContractPrompt('${contract.id}')" title="Duplicar">📄</button>
                                     <button class="btn btn-small btn-error" onclick="window.deleteContract('${contract.id}')" title="Excluir">🗑️</button>
                                 </div>
                             </td>
@@ -319,129 +157,207 @@ function renderContractsList(contracts) {
     `;
 }
 
-// ─── BREAKDOWN DETALHADO ──────────────────────────────────────────────────────
+// ─── FORMULÁRIO (etapas) ──────────────────────────────────────────────────────
+
+function renderContractForm(contract, squads, currentPeriod) {
+    const allPeople = personService.getAllPeople();
+    draftAllocations = contract
+        ? (contract.peopleAllocations || []).map(a => ({ ...a }))
+        : [];
+
+    return `
+        <div style="padding: 1.5rem; display:flex; flex-direction:column; gap:1.5rem;">
+
+            <!-- ETAPA 1: Cliente e valor -->
+            <div class="form-step">
+                <div class="form-step-label">1. Cliente e contrato</div>
+                <div style="display:grid; grid-template-columns: 2fr 1fr; gap: 1rem;">
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label">Cliente *</label>
+                        <input type="text" class="form-input" id="client" required
+                               value="${contract?.client || ''}"
+                               placeholder="Digite ou selecione um cliente existente">
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label">Valor Mensal (R$) *</label>
+                        <input type="number" class="form-input" id="value" step="0.01" required
+                               value="${contract?.value || ''}">
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label">Duração (meses)</label>
+                        <input type="number" class="form-input" id="duration" min="1" max="36"
+                               value="${contract?.duration || 12}">
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label">Início</label>
+                        <input type="month" class="form-input" id="startPeriod"
+                               value="${contract?.startPeriod || currentPeriod}">
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label">Squad</label>
+                        <select class="form-select" id="squad-tag">
+                            <option value="">Nenhum</option>
+                            ${squads.map(s => `<option value="${s.id}" ${contract?.squadTag === s.id ? 'selected' : ''}>${s.icon||''} ${s.name}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ETAPA 2: Volume de entregáveis -->
+            <div class="form-step">
+                <div class="form-step-label">2. Volume de entregas no mês</div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label">🎬 Conteúdo em Vídeo</label>
+                        <input type="number" class="form-input" id="video-count" min="0" step="1"
+                               value="${contract?.videoCount || 0}">
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label">🖼️ Conteúdo Estático</label>
+                        <input type="number" class="form-input" id="static-count" min="0" step="1"
+                               value="${contract?.staticCount || 0}">
+                    </div>
+                </div>
+                <small style="color:var(--text-secondary); font-size:0.78rem;">
+                    Usado para ratear automaticamente o custo de Copy, Filmmaker, Designer e o Head do squad.
+                </small>
+            </div>
+
+            <!-- ETAPA 3: Pessoas -->
+            <div class="form-step">
+                <div class="form-step-label">3. Equipe atribuída</div>
+
+                <div style="position:relative; margin-bottom: 1rem;">
+                    <input type="text" class="form-input" id="person-search"
+                           placeholder="🔍 Buscar pessoa para adicionar...">
+                    <div id="person-search-results" class="person-search-dropdown"></div>
+                </div>
+
+                <div id="allocations-list">
+                    ${renderAllocationsList(allPeople)}
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="window.closeContractModal()">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="window.saveContract()">💾 Salvar Contrato</button>
+            </div>
+        </div>
+    `;
+}
+
+function renderAllocationsList(allPeople) {
+    if (draftAllocations.length === 0) {
+        return `<p style="color:var(--text-secondary); font-size:0.9rem; padding: 0.5rem 0;">Nenhuma pessoa atribuída ainda. Use a busca acima.</p>`;
+    }
+
+    return draftAllocations.map(alloc => {
+        const person = allPeople.find(p => p.id === alloc.personId);
+        if (!person) return '';
+        return `
+            <div class="allocation-row" data-person-id="${person.id}">
+                <div class="allocation-person">
+                    <strong>${person.name}</strong>
+                    <span class="allocation-role">${person.role}</span>
+                </div>
+                <div class="allocation-mode">
+                    <label class="mode-toggle">
+                        <input type="radio" name="mode-${person.id}" value="rateado"
+                               ${alloc.mode === 'rateado' ? 'checked' : ''}
+                               onchange="window.setAllocationMode('${person.id}', 'rateado')">
+                        Rateado
+                    </label>
+                    <label class="mode-toggle">
+                        <input type="radio" name="mode-${person.id}" value="fixo"
+                               ${alloc.mode === 'fixo' ? 'checked' : ''}
+                               onchange="window.setAllocationMode('${person.id}', 'fixo')">
+                        Fixo
+                    </label>
+                </div>
+                <div class="allocation-fixed-value" style="${alloc.mode === 'fixo' ? '' : 'visibility:hidden;'}">
+                    <span style="font-size:0.85rem; color:var(--text-secondary);">R$</span>
+                    <input type="number" class="form-input allocation-fixed-input" min="0" step="0.01"
+                           value="${alloc.fixedValue || ''}" placeholder="0,00"
+                           oninput="window.setFixedValue('${person.id}', this.value)"
+                           style="width:110px;">
+                </div>
+                <button type="button" class="btn btn-small btn-danger" onclick="window.removeAllocation('${person.id}')">✕</button>
+            </div>
+        `;
+    }).join('');
+}
+
+// ─── BREAKDOWN ────────────────────────────────────────────────────────────────
 
 function showContractBreakdown(contractId) {
     const contract = contractService.getContract(contractId);
     const roi = analyticsService.getContractROI(contractId);
-    const deliverableTypes = deliverableTypeService.getActiveDeliverableTypes();
-
-    if (!roi) {
-        alert('ROI não calculado. Verifique pessoas/entregáveis.');
-        return;
-    }
-
-    const currentPeriod = storage.getCurrentPeriod();
-    const projection = storage.getContractProjection(contractId, currentPeriod);
-
-    const periodInfoHtml = `
-        <div style="background: var(--bg-darker); padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem; border: 1px solid var(--border);">
-            <h3 style="margin: 0 0 0.75rem 0; color: var(--primary);">📅 Período: ${currentPeriod}</h3>
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; font-size: 0.9rem;">
-                <div>Início do contrato: <strong>${contract.startPeriod || 'N/A'}</strong></div>
-                <div>Duração: <strong>${contract.duration || 'N/A'} meses</strong></div>
-                <div>Status: <strong>${contract.status || 'active'}</strong></div>
-                <div>Projeção encontrada: <strong>${projection ? '✅ Sim' : '❌ Não'}</strong></div>
-            </div>
-        </div>
-    `;
-
-    const currentDeliverables = projection ? projection.deliverables : (contract.deliverables || {});
-    const deliverablesHtml = `
-        <div style="margin-bottom: 1.5rem;">
-            <h3 style="margin: 0 0 1rem 0; color: var(--primary);">📦 Entregáveis (${currentPeriod})</h3>
-            <div style="display: grid; gap: 0.5rem;">
-                ${Object.entries(currentDeliverables).map(([typeId, qty]) => {
-                    const type = deliverableTypes.find(dt => dt.id === typeId);
-                    return `
-                        <div style="background: var(--bg-darker); padding: 0.75rem; border-radius: 4px; display: flex; justify-content: space-between;">
-                            <span>${type ? type.name : 'Desconhecido'} — ${type ? type.roles.join(', ') : ''}</span>
-                            <strong>${qty}×</strong>
-                        </div>
-                    `;
-                }).join('')}
-            </div>
-        </div>
-    `;
-
-    let peopleBreakdownHtml = '<div style="margin-bottom: 1.5rem;"><h3 style="margin: 0 0 1rem 0; color: var(--primary);">👥 Custo por Pessoa</h3>';
-    if (roi.costBreakdown && roi.costBreakdown.length > 0) {
-        roi.costBreakdown.forEach(person => {
-            const personData = storage.getPersonById(person.personId);
-            if (person.isHead) {
-                peopleBreakdownHtml += `
-                    <div style="background: var(--bg-darker); padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                            <strong>${person.name}</strong>
-                            <span class="badge badge-success">${person.role}</span>
-                        </div>
-                        <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">
-                            ├─ Salário: R$ ${formatCurrency(personData ? personData.salary : 0)}/mês<br>
-                            ├─ Estratégia e Gestão do Squad<br>
-                            ├─ Custo rateado entre clientes do squad<br>
-                            └─ <strong style="color: var(--fast-green);">CUSTO NESTE CONTRATO: R$ ${formatCurrency(person.totalCost)}</strong>
-                        </div>
-                    </div>
-                `;
-            } else {
-                const totalPoints = analyticsService.getPersonTotalWeightedDeliverables(person.personId);
-                peopleBreakdownHtml += `
-                    <div style="background: var(--bg-darker); padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                            <strong>${person.name}</strong>
-                            <span class="badge badge-success">${person.role}</span>
-                        </div>
-                        <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">
-                            ├─ Salário: R$ ${formatCurrency(personData ? personData.salary : 0)}/mês<br>
-                            ├─ Pontos neste contrato: ${person.weightedPointsInContract.toFixed(1)} pontos<br>
-                            ├─ Total de pontos (todos contratos): ${totalPoints.toFixed(1)} pontos<br>
-                            ├─ Custo por ponto: R$ ${formatCurrency(person.costPerWeightedPoint)}/ponto<br>
-                            └─ <strong style="color: var(--fast-green);">CUSTO NESTE CONTRATO: R$ ${formatCurrency(person.totalCost)}</strong>
-                        </div>
-                    </div>
-                `;
-            }
-        });
-    } else {
-        peopleBreakdownHtml += '<p style="color: var(--text-secondary);">Nenhuma pessoa atribuída</p>';
-    }
-    peopleBreakdownHtml += '</div>';
-
-    const summaryHtml = `
-        <div style="background: var(--bg-darker); padding: 1.5rem; border-radius: 8px; border: 2px solid ${roi.profit > 0 ? 'var(--fast-green)' : 'var(--error)'};">
-            <h3 style="color: ${roi.profit > 0 ? 'var(--fast-green)' : 'var(--error)'}; margin: 0 0 1rem 0; font-size: 1rem; text-transform: uppercase;">
-                ${roi.profit > 0 ? '✅ Resumo Financeiro' : '⚠️ Resumo Financeiro'}
-            </h3>
-            <div style="display: grid; gap: 0.75rem;">
-                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px;">
-                    <span>💵 Receita (mês):</span>
-                    <strong>R$ ${formatCurrency(contract.value)}</strong>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px;">
-                    <span>💰 Custo Total:</span>
-                    <strong style="color: var(--error);">R$ ${formatCurrency(roi.cost)}</strong>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px; border: 1px solid ${roi.profit > 0 ? 'var(--fast-green)' : 'var(--error)'};">
-                    <span style="font-weight: 700;">${roi.profit > 0 ? '✅ Lucro:' : '⚠️ Prejuízo:'}</span>
-                    <strong style="color: ${roi.profit > 0 ? 'var(--fast-green)' : 'var(--error)'}; font-size: 1.2rem;">R$ ${formatCurrency(roi.profit)}</strong>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px;">
-                    <span>📊 Margem:</span>
-                    <strong style="color: ${roi.margin >= 30 ? 'var(--fast-green)' : roi.margin >= 15 ? 'var(--warning)' : 'var(--error)'};">${roi.margin.toFixed(1)}%</strong>
-                </div>
-                ${contract.duration ? `
-                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px; border-top: 1px solid var(--border); margin-top: 0.5rem;">
-                    <span>📅 Lucro projetado (${contract.duration} meses):</span>
-                    <strong style="color: ${roi.profit > 0 ? 'var(--fast-green)' : 'var(--error)'};">R$ ${formatCurrency(roi.profit * contract.duration)}</strong>
-                </div>
-                ` : ''}
-            </div>
-        </div>
-    `;
 
     document.getElementById('breakdown-title').textContent = `Detalhamento: ${contract.client}`;
-    document.getElementById('breakdown-content').innerHTML =
-        periodInfoHtml + deliverablesHtml + peopleBreakdownHtml + summaryHtml;
+
+    const volumeHtml = `
+        <div style="background:var(--bg-darker); padding:1rem; border-radius:8px; margin-bottom:1.5rem; display:flex; gap:2rem;">
+            <div><span style="color:var(--text-secondary); font-size:0.8rem;">🎬 Vídeo</span><br><strong style="font-size:1.2rem;">${roi.videoCount}</strong></div>
+            <div><span style="color:var(--text-secondary); font-size:0.8rem;">🖼️ Estático</span><br><strong style="font-size:1.2rem;">${roi.staticCount}</strong></div>
+        </div>
+    `;
+
+    const peopleHtml = roi.costBreakdown.map(item => {
+        if (item.mode === 'fixo') {
+            return `
+                <div class="breakdown-person-card">
+                    <div class="breakdown-person-header">
+                        <strong>${item.name}</strong>
+                        <span class="badge" style="background:rgba(255,160,0,0.15); color:#ff9800;">Fixo</span>
+                    </div>
+                    <div style="font-size:0.85rem; color:var(--text-secondary);">Valor travado neste contrato</div>
+                    <div style="margin-top:0.5rem; font-size:1.1rem; font-weight:700; color:var(--fast-green,#7cfc00);">R$ ${fmt(item.totalCost)}</div>
+                </div>
+            `;
+        }
+        if (item.mode === 'head') {
+            return `
+                <div class="breakdown-person-card">
+                    <div class="breakdown-person-header">
+                        <strong>${item.name}</strong>
+                        <span class="badge badge-success">Automático</span>
+                    </div>
+                    <div style="font-size:0.85rem; color:var(--text-secondary);">Rateado por volume (vídeo+estático) dos clientes do squad</div>
+                    <div style="margin-top:0.5rem; font-size:1.1rem; font-weight:700; color:var(--fast-green,#7cfc00);">R$ ${fmt(item.totalCost)}</div>
+                </div>
+            `;
+        }
+        return `
+            <div class="breakdown-person-card">
+                <div class="breakdown-person-header">
+                    <strong>${item.name}</strong>
+                    <span class="badge badge-info">Rateado</span>
+                </div>
+                <div style="font-size:0.85rem; color:var(--text-secondary); line-height:1.6;">
+                    Salário: R$ ${fmt(item.salary)}<br>
+                    Entregas aqui: ${item.relevantHere} de ${item.totalRateable} totais (${item.totalRateable > 0 ? ((item.relevantHere/item.totalRateable)*100).toFixed(1) : 0}%)
+                </div>
+                <div style="margin-top:0.5rem; font-size:1.1rem; font-weight:700; color:var(--fast-green,#7cfc00);">R$ ${fmt(item.totalCost)}</div>
+            </div>
+        `;
+    }).join('');
+
+    const summaryHtml = `
+        <div style="background:var(--bg-darker); padding:1.25rem; border-radius:8px; border:2px solid ${roi.profit > 0 ? 'var(--fast-green,#7cfc00)' : 'var(--error,#f44336)'}; margin-top:1.5rem;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;"><span>Receita</span><strong>R$ ${fmt(roi.revenue)}</strong></div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;"><span>Custo Total</span><strong style="color:var(--error,#f44336)">R$ ${fmt(roi.cost)}</strong></div>
+            <div style="display:flex; justify-content:space-between; padding-top:0.5rem; border-top:1px solid var(--border);">
+                <span style="font-weight:700;">Lucro</span>
+                <strong style="color:${roi.profit > 0 ? 'var(--fast-green,#7cfc00)' : 'var(--error,#f44336)'}; font-size:1.2rem;">R$ ${fmt(roi.profit)} (${roi.margin.toFixed(1)}%)</strong>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('breakdown-content').innerHTML = volumeHtml +
+        `<div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:1rem;">${peopleHtml}</div>` +
+        summaryHtml;
     document.getElementById('breakdown-modal').classList.add('active');
 }
 
@@ -449,294 +365,131 @@ function closeBreakdownModal() {
     document.getElementById('breakdown-modal').classList.remove('active');
 }
 
-// ─── DEBUG MODAL ──────────────────────────────────────────────────────────────
+// ─── HANDLERS ─────────────────────────────────────────────────────────────────
 
-function showDebug(contractId) {
-    const contract = contractService.getContract(contractId);
-    const people = (contract.assignedPeople || [])
-        .map(id => personService.getPerson(id))
-        .filter(Boolean);
-    const deliverableTypes = deliverableTypeService.getActiveDeliverableTypes();
-
-    const debugHtml = `
-        <div style="background: #1a1a1a; color: #00ff41; padding: 1.5rem; border-radius: 4px; line-height: 1.8;">
-            <h3 style="color: #ff4444; margin-top: 0;">🐛 DEBUG: ${contract.client}</h3>
-
-            <div style="margin: 1rem 0;">
-                <strong style="color: #ffaa00;">PESSOAS ATRIBUÍDAS: ${people.length}</strong><br>
-                ${people.map(p => `- ${p.name} (${p.role}) - R$ ${formatCurrency(p.salary)}`).join('<br>')}
-            </div>
-
-            <div style="margin: 1rem 0;">
-                <strong style="color: #ffaa00;">ENTREGÁVEIS: ${Object.keys(contract.deliverables || {}).length}</strong><br>
-                ${Object.entries(contract.deliverables || {}).map(([typeId, qty]) => {
-                    const type = deliverableTypes.find(t => t.id === typeId);
-                    return `- ${type ? type.name : 'Desconhecido'}: ${qty}x`;
-                }).join('<br>')}
-            </div>
-
-            <div style="margin: 1rem 0;">
-                <strong style="color: #ffaa00;">PERÍODO:</strong><br>
-                - startPeriod: ${contract.startPeriod || 'não definido'}<br>
-                - duration: ${contract.duration || 'não definido'}<br>
-                - status: ${contract.status || 'não definido'}
-            </div>
-        </div>
-    `;
-
-    document.getElementById('debug-content').innerHTML = debugHtml;
-    document.getElementById('debug-modal').classList.add('active');
-}
-
-function closeDebugModal() {
-    document.getElementById('debug-modal').classList.remove('active');
-}
-
-// ─── DETALHES (equipe + entregáveis) ─────────────────────────────────────────
-
-function showContractDetails(contractId) {
-    const contract = contractService.getContract(contractId);
-    const assignedPeople = (contract.assignedPeople || [])
-        .map(id => personService.getPerson(id))
-        .filter(Boolean);
-    const deliverableTypes = deliverableTypeService.getActiveDeliverableTypes();
-
-    document.getElementById('details-title').textContent = `${contract.client} - Equipe e Entregáveis`;
-
-    document.getElementById('details-content').innerHTML = `
-        <div style="display: grid; gap: 2rem;">
-            <div>
-                <h3 style="margin: 0 0 1rem 0; color: var(--primary);">👥 Equipe (${assignedPeople.length})</h3>
-                ${assignedPeople.length > 0 ? `
-                    <div style="display: grid; gap: 0.75rem;">
-                        ${assignedPeople.map(person => `
-                            <div style="background: var(--bg-darker); padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
-                                <strong>${person.name}</strong>
-                                <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 0.25rem;">
-                                    ${person.role} • R$ ${formatCurrency(person.salary)}/mês
-                                </div>
-                            </div>
-                        `).join('')}
-                    </div>
-                ` : '<p style="color: var(--text-secondary);">Nenhuma pessoa atribuída</p>'}
-            </div>
-
-            <div>
-                <h3 style="margin: 0 0 1rem 0; color: var(--primary);">📦 Entregáveis (${Object.keys(contract.deliverables || {}).length})</h3>
-                ${Object.keys(contract.deliverables || {}).length > 0 ? `
-                    <div style="display: grid; gap: 0.75rem;">
-                        ${Object.entries(contract.deliverables).map(([typeId, qty]) => {
-                            const type = deliverableTypes.find(dt => dt.id === typeId);
-                            return `
-                                <div style="background: var(--bg-darker); padding: 1rem; border-radius: 6px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-                                    <div>
-                                        <strong>${type ? type.name : 'Desconhecido'}</strong>
-                                        <div style="color: var(--text-secondary); font-size: 0.9rem;">
-                                            ${type ? 'Requer: ' + type.roles.join(', ') : ''}
-                                        </div>
-                                    </div>
-                                    <div style="background: var(--primary); color: var(--bg); padding: 0.5rem 1rem; border-radius: 4px; font-weight: bold;">
-                                        ${qty}x
-                                    </div>
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                ` : '<p style="color: var(--text-secondary);">Nenhum entregável</p>'}
-            </div>
-        </div>
-    `;
-
-    document.getElementById('details-modal').classList.add('active');
-}
-
-function closeDetailsModal() {
-    document.getElementById('details-modal').classList.remove('active');
-}
-
-// ─── TEAM ASSIGNMENT ──────────────────────────────────────────────────────────
-
-function renderTeamAssignment(people, squads) {
-    const availablePeople = people.filter(person => {
-        const isHead = squads.some(squad => squad.headId === person.id);
-        return !isHead;
-    });
-
-    const peopleByRole = {};
-    availablePeople.forEach(person => {
-        if (!peopleByRole[person.role]) peopleByRole[person.role] = [];
-        peopleByRole[person.role].push(person);
-    });
-
-    return `
-        <div style="display: grid; gap: 1rem;">
-            ${Object.entries(peopleByRole).map(([role, rolePeople]) => `
-                <div style="background: var(--bg-darker); padding: 1rem; border-radius: 4px; border: 1px solid var(--border);">
-                    <h4 style="margin: 0 0 0.75rem 0; color: var(--primary); font-size: 0.95rem;">${role}</h4>
-                    <div style="display: grid; gap: 0.5rem;">
-                        ${rolePeople.map(person => `
-                            <label style="display: flex; align-items: center; padding: 0.5rem; background: var(--bg); border-radius: 4px; cursor: pointer;">
-                                <input type="checkbox" class="person-checkbox" value="${person.id}" style="margin-right: 0.75rem;">
-                                <strong>${person.name}</strong>
-                            </label>
-                        `).join('')}
-                    </div>
-                </div>
-            `).join('')}
-        </div>
-    `;
-}
-
-// ─── HANDLERS ────────────────────────────────────────────────────────────────
-
-function attachContractHandlers() {
-    document.getElementById('contract-form').addEventListener('submit', handleContractSubmit);
-
-    setTimeout(() => {
-        document.querySelectorAll('.person-checkbox').forEach(cb => {
-            cb.addEventListener('change', updateFormValidationWarnings);
-        });
-    }, 100);
-
-    window.openContractModal     = openContractModal;
-    window.closeContractModal    = closeContractModal;
-    window.editContract          = editContract;
-    window.deleteContract        = deleteContract;
-    window.addDeliverable        = addDeliverable;
-    window.removeDeliverable     = removeDeliverable;
-    window.exportContracts       = exportContracts;
+function attachContractHandlers(squads) {
+    window.openContractModal  = () => openContractModal(squads);
+    window.closeContractModal = closeContractModal;
+    window.editContract       = (id) => editContract(id, squads);
+    window.deleteContract     = deleteContract;
+    window.duplicateContractPrompt = duplicateContractPrompt;
+    window.exportContracts    = exportContracts;
+    window.filterContracts    = filterContracts;
+    window.sortContractsBy    = sortContractsBy;
     window.showContractBreakdown = showContractBreakdown;
-    window.closeBreakdownModal   = closeBreakdownModal;
-    window.showContractDetails   = showContractDetails;
-    window.closeDetailsModal     = closeDetailsModal;
-    window.showDebug             = showDebug;
-    window.closeDebugModal       = closeDebugModal;
-    window.filterContracts       = filterContracts;
-    window.sortContractsBy       = sortContractsBy;
+    window.closeBreakdownModal = closeBreakdownModal;
+    window.saveContract       = saveContract;
+
+    window.setAllocationMode = (personId, mode) => {
+        const alloc = draftAllocations.find(a => a.personId === personId);
+        if (alloc) {
+            alloc.mode = mode;
+            if (mode === 'rateado') alloc.fixedValue = 0;
+            const row = document.querySelector(`.allocation-row[data-person-id="${personId}"] .allocation-fixed-value`);
+            if (row) row.style.visibility = mode === 'fixo' ? 'visible' : 'hidden';
+        }
+    };
+
+    window.setFixedValue = (personId, value) => {
+        const alloc = draftAllocations.find(a => a.personId === personId);
+        if (alloc) alloc.fixedValue = parseFloat(value) || 0;
+    };
+
+    window.removeAllocation = (personId) => {
+        draftAllocations = draftAllocations.filter(a => a.personId !== personId);
+        document.getElementById('allocations-list').innerHTML = renderAllocationsList(personService.getAllPeople());
+    };
 }
 
-function openContractModal() {
+function openContractModal(squads) {
     currentEditId = null;
-    deliverables = {};
-    document.getElementById('contract-modal').classList.add('active');
+    draftAllocations = [];
     document.getElementById('modal-title').textContent = 'Novo Contrato';
-    document.getElementById('contract-form').reset();
+    document.getElementById('contract-form-body').innerHTML = renderContractForm(null, squads, storage.getCurrentPeriod());
+    document.getElementById('contract-modal').classList.add('active');
+    attachPersonSearch();
+    setTimeout(() => attachClientAutocomplete(document.getElementById('client')), 50);
+}
 
-    document.getElementById('duration').value    = 12;
-    document.getElementById('startPeriod').value = storage.getCurrentPeriod();
-
-    renderDeliverables();
-
-    // ← Autocomplete de cliente
+function editContract(id, squads) {
+    currentEditId = id;
+    const contract = contractService.getContract(id);
+    document.getElementById('modal-title').textContent = 'Editar Contrato';
+    document.getElementById('contract-form-body').innerHTML = renderContractForm(contract, squads, storage.getCurrentPeriod());
+    document.getElementById('contract-modal').classList.add('active');
+    attachPersonSearch();
     setTimeout(() => attachClientAutocomplete(document.getElementById('client')), 50);
 }
 
 function closeContractModal() {
     document.getElementById('contract-modal').classList.remove('active');
     currentEditId = null;
-    deliverables = {};
+    draftAllocations = [];
 }
 
-function editContract(id) {
-    currentEditId = id;
-    const contract = contractService.getContract(id);
+function attachPersonSearch() {
+    const input = document.getElementById('person-search');
+    const results = document.getElementById('person-search-results');
+    if (!input) return;
 
-    document.getElementById('client').value      = contract.client;
-    document.getElementById('value').value       = contract.value;
-    document.getElementById('notes').value       = contract.notes || '';
-    document.getElementById('duration').value    = contract.duration || 12;
-    document.getElementById('startPeriod').value = contract.startPeriod || storage.getCurrentPeriod();
+    input.addEventListener('input', () => {
+        const q = input.value.trim().toLowerCase();
+        results.innerHTML = '';
+        if (q.length < 1) { results.style.display = 'none'; return; }
 
-    deliverables = { ...(contract.deliverables || contract.baseDeliverables || {}) };
-    renderDeliverables();
+        const allPeople = personService.getAllPeople();
+        const already = new Set(draftAllocations.map(a => a.personId));
+        const matches = allPeople.filter(p =>
+            !already.has(p.id) && p.name.toLowerCase().includes(q)
+        ).slice(0, 8);
 
-    if (contract.squadTag) {
-        document.getElementById('squad-tag').value = contract.squadTag;
-    }
+        if (matches.length === 0) { results.style.display = 'none'; return; }
 
-    if (contract.assignedPeople && contract.assignedPeople.length > 0) {
-        setTimeout(() => {
-            contract.assignedPeople.forEach(personId => {
-                const checkbox = document.querySelector(`.person-checkbox[value="${personId}"]`);
-                if (checkbox) checkbox.checked = true;
+        results.style.display = 'block';
+        results.innerHTML = matches.map(p => `
+            <div class="person-search-item" data-id="${p.id}">
+                <strong>${p.name}</strong> <span style="color:var(--text-secondary); font-size:0.85rem;">${p.role}</span>
+            </div>
+        `).join('');
+
+        results.querySelectorAll('.person-search-item').forEach(item => {
+            item.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                const personId = item.dataset.id;
+                draftAllocations.push({ personId, mode: 'rateado', fixedValue: 0 });
+                document.getElementById('allocations-list').innerHTML = renderAllocationsList(personService.getAllPeople());
+                input.value = '';
+                results.style.display = 'none';
             });
-            updateFormValidationWarnings();
-        }, 100);
-    }
+        });
+    });
 
-    document.getElementById('modal-title').textContent = 'Editar Contrato';
-    document.getElementById('contract-modal').classList.add('active');
-
-    // ← Autocomplete de cliente
-    setTimeout(() => attachClientAutocomplete(document.getElementById('client')), 50);
-}
-
-function sortContractsBy(column) {
-    if (sortColumn === column) {
-        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-    } else {
-        sortColumn = column;
-        sortDirection = 'asc';
-    }
-    renderContractsPage();
-}
-
-function filterContracts() {
-    const searchTerm = document.getElementById('contract-search').value.toLowerCase();
-    document.querySelectorAll('#contracts-list tbody tr').forEach(row => {
-        row.style.display = row.textContent.toLowerCase().includes(searchTerm) ? '' : 'none';
+    input.addEventListener('blur', () => {
+        setTimeout(() => { results.style.display = 'none'; }, 150);
     });
 }
 
-function exportContracts() {
-    const contracts = contractService.getAllContracts();
-    const dataBlob = new Blob([JSON.stringify(contracts, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `contratos_${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-}
-
-// ─── SUBMIT ───────────────────────────────────────────────────────────────────
-
-function handleContractSubmit(e) {
-    e.preventDefault();
-
-    const assignedPeople = Array.from(
-        document.querySelectorAll('.person-checkbox:checked')
-    ).map(cb => cb.value);
-
-    const squadTagValue = document.getElementById('squad-tag').value;
-    const baseValue     = parseFloat(document.getElementById('value').value);
-    const duration      = parseInt(document.getElementById('duration').value) || 12;
-    const startPeriod   = document.getElementById('startPeriod').value || storage.getCurrentPeriod();
-
-    const formData = {
-        client:           document.getElementById('client').value,
-        value:            baseValue,
-        baseValue:        baseValue,
-        deliverables:     { ...deliverables },
-        baseDeliverables: { ...deliverables },
-        duration:         duration,
-        startPeriod:      startPeriod,
-        status:           'active',
-        notes:            document.getElementById('notes').value,
-        assignedPeople:   assignedPeople,
-        squadTag:         squadTagValue || null
-    };
-
+function saveContract() {
     try {
+        const client      = document.getElementById('client').value.trim();
+        const value       = parseFloat(document.getElementById('value').value);
+        const duration    = parseInt(document.getElementById('duration').value) || 12;
+        const startPeriod = document.getElementById('startPeriod').value || storage.getCurrentPeriod();
+        const squadTag    = document.getElementById('squad-tag').value || null;
+        const videoCount  = parseInt(document.getElementById('video-count').value) || 0;
+        const staticCount = parseInt(document.getElementById('static-count').value) || 0;
+
+        const formData = {
+            client, value, duration, startPeriod, squadTag,
+            videoCount, staticCount,
+            peopleAllocations: draftAllocations.map(a => ({ ...a })),
+            status: 'active',
+        };
+
         if (currentEditId) {
             contractService.updateContract(currentEditId, formData);
-            if (typeof storage.generateContractProjections === 'function') {
-                storage.generateContractProjections(currentEditId);
-            }
         } else {
-            const newContract = contractService.createContract(formData);
-            if (newContract && typeof storage.generateContractProjections === 'function') {
-                storage.generateContractProjections(newContract.id);
-            }
+            contractService.createContract(formData);
         }
 
         closeContractModal();
@@ -746,8 +499,6 @@ function handleContractSubmit(e) {
     }
 }
 
-// ─── EXCLUIR ──────────────────────────────────────────────────────────────────
-
 function deleteContract(id) {
     if (confirm('Excluir este contrato?')) {
         contractService.deleteContract(id);
@@ -755,130 +506,103 @@ function deleteContract(id) {
     }
 }
 
-// ─── ENTREGÁVEIS ─────────────────────────────────────────────────────────────
-
-function addDeliverable() {
-    const typeSelect = document.getElementById('deliverable-type-select');
-    const typeId = typeSelect?.value;
-    const qty = parseInt(document.getElementById('deliverable-qty').value);
-
-    if (!typeId) { alert('Selecione um tipo'); return; }
-    if (!qty || qty < 1) { alert('Quantidade inválida'); return; }
-
-    deliverables[typeId] = qty;
-
-    if (typeSelect) typeSelect.value = '';
-    document.getElementById('deliverable-qty').value = '';
-    renderDeliverables();
-    updateFormValidationWarnings();
-}
-
-function removeDeliverable(typeId) {
-    delete deliverables[typeId];
-    renderDeliverables();
-    updateFormValidationWarnings();
-}
-
-function renderDeliverables() {
-    const container = document.getElementById('deliverables-container');
-    if (!container) return;
-
-    if (Object.keys(deliverables).length === 0) {
-        container.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.9rem;">Nenhum entregável</p>';
-        return;
-    }
-
-    container.innerHTML = `
-        <div class="tag-container">
-            ${Object.entries(deliverables).map(([typeId, qty]) => {
-                const type = deliverableTypeService.getDeliverableType(typeId);
-                return `
-                    <div class="tag tag-large">
-                        <div style="flex: 1;">
-                            <strong>${type ? type.name : 'Desconhecido'}</strong>
-                            <span style="font-size: 0.85rem; color: var(--text-secondary);">
-                                ${qty}x | ${type ? type.roles.join(', ') : ''}
-                            </span>
-                        </div>
-                        <button
-                            type="button"
-                            onclick="window.removeDeliverable('${typeId}')"
-                            style="background: none; border: none; color: var(--error); cursor: pointer; font-size: 1.2rem;"
-                        >×</button>
-                    </div>
-                `;
-            }).join('')}
-        </div>
-    `;
-}
-
-// ─── VALIDAÇÃO ────────────────────────────────────────────────────────────────
-
-function updateFormValidationWarnings() {
-    const warningsContainer = document.getElementById('form-validation-warnings');
-    if (!warningsContainer) return;
-
-    const selectedPeople = Array.from(
-        document.querySelectorAll('.person-checkbox:checked')
-    ).map(cb => cb.value);
-
-    if (selectedPeople.length === 0 || Object.keys(deliverables).length === 0) {
-        warningsContainer.innerHTML = '';
-        return;
-    }
-
-    const warnings = validateContractConsistency({ assignedPeople: selectedPeople, deliverables });
-
-    if (warnings.length > 0) {
-        warningsContainer.innerHTML = `
-            <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 1rem; margin-top: 1rem;">
-                <strong style="color: #856404;">⚠️ Avisos:</strong>
-                <ul style="margin: 0.5rem 0 0 1.5rem; color: #856404;">
-                    ${warnings.map(w => `<li>${w.message}</li>`).join('')}
-                </ul>
-            </div>
-        `;
-    } else {
-        warningsContainer.innerHTML = '';
+function duplicateContractPrompt(id) {
+    const original = contractService.getContract(id);
+    const newClient = prompt(`Duplicar contrato de "${original.client}".\n\nNome do novo cliente:`, original.client);
+    if (newClient === null) return;
+    try {
+        contractService.duplicateContract(id, { client: newClient.trim() || original.client });
+        renderContractsPage();
+    } catch (error) {
+        alert(error.message);
     }
 }
 
-function validateContractConsistency(contract) {
-    const warnings = [];
-    const deliverableTypes = deliverableTypeService.getActiveDeliverableTypes();
+function sortContractsBy(column) {
+    if (sortColumn === column) sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+    else { sortColumn = column; sortDirection = 'asc'; }
+    renderContractsPage();
+}
 
-    const rolesNeeded = new Set();
-    if (contract.deliverables) {
-        Object.keys(contract.deliverables).forEach(typeId => {
-            const type = deliverableTypes.find(dt => dt.id === typeId);
-            if (type && type.roles) {
-                type.roles.forEach(role => rolesNeeded.add(role));
-            }
-        });
-    }
-
-    const rolesAssigned = new Set();
-    if (contract.assignedPeople) {
-        contract.assignedPeople.forEach(personId => {
-            const person = personService.getPerson(personId);
-            if (person) rolesAssigned.add(person.role);
-        });
-    }
-
-    rolesNeeded.forEach(role => {
-        if (!rolesAssigned.has(role)) {
-            warnings.push({ type: 'missing_person', role, message: `Falta ${role}` });
-        }
+function filterContracts() {
+    const term = document.getElementById('contract-search').value.toLowerCase();
+    document.querySelectorAll('#contracts-list tbody tr').forEach(row => {
+        row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
     });
-
-    return warnings;
 }
 
-// ─── UTILITÁRIOS ─────────────────────────────────────────────────────────────
+function exportContracts() {
+    const contracts = contractService.getAllContracts();
+    const blob = new Blob([JSON.stringify(contracts, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `contratos_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+}
 
-function formatCurrency(value) {
-    return new Intl.NumberFormat('pt-BR', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }).format(value);
+// ─── ESTILOS ──────────────────────────────────────────────────────────────────
+
+function contractStyles() {
+    return `
+        .form-step {
+            background: var(--bg-darker);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1.25rem;
+        }
+        .form-step-label {
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--fast-green, #7cfc00);
+            margin-bottom: 1rem;
+        }
+        .person-search-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%; left: 0; right: 0;
+            background: var(--bg-card, #1a1a1a);
+            border: 1px solid var(--border);
+            border-radius: 0 0 8px 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 50;
+        }
+        .person-search-item {
+            padding: 0.6rem 0.875rem;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+        }
+        .person-search-item:hover { background: rgba(124,252,0,0.08); }
+
+        .allocation-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem;
+            background: var(--bg-card, #1a1a1a);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+        }
+        .allocation-person { flex: 1; display:flex; flex-direction:column; }
+        .allocation-role { font-size: 0.78rem; color: var(--text-secondary); }
+        .allocation-mode { display: flex; gap: 0.75rem; font-size: 0.85rem; }
+        .mode-toggle { display:flex; align-items:center; gap:0.3rem; cursor:pointer; }
+        .allocation-fixed-value { display:flex; align-items:center; gap:0.3rem; }
+
+        .breakdown-person-card {
+            background: var(--bg-darker);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .breakdown-person-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        .badge-info { background: rgba(33,150,243,0.15); color: #64b5f6; }
+    `;
 }

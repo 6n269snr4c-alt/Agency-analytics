@@ -133,6 +133,82 @@ class AnalyticsService {
         return total;
     }
 
+    /**
+     * Custo por entrega relevante (vídeo/estático, conforme o cargo) —
+     * salário ÷ total de entregas rateáveis. Usado no ranking, na tela de
+     * Pessoas e na comparação por cargo.
+     */
+    getPersonCostPerDeliverable(personId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        const salary = this.getPersonCost(personId, currentPeriod);
+        const totalRateable = this.getPersonTotalRateableDeliverables(personId, currentPeriod);
+        return totalRateable > 0 ? salary / totalRateable : 0;
+    }
+
+    /**
+     * Quebra das entregas rateáveis de uma pessoa por tipo (Vídeo/Estático),
+     * somando apenas contratos em modo 'rateado'. Usado na tela de Pessoas.
+     */
+    getPersonDeliverablesBreakdown(personId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        const person = storage.getPersonById(personId);
+        if (!person) return { byType: {} };
+
+        const contracts = this.getPersonContractsForPeriod(personId, currentPeriod);
+        let video = 0;
+        let estatico = 0;
+
+        contracts.forEach(contract => {
+            const data = this._getProjectionData(contract, currentPeriod);
+            const alloc = data.peopleAllocations.find(a => a.personId === personId);
+            if (!alloc || alloc.mode !== 'rateado') return;
+
+            if (person.role === 'Filmmaker') {
+                video += data.videoCount || 0;
+            } else if (person.role === 'Designer') {
+                estatico += data.staticCount || 0;
+            } else {
+                video    += data.videoCount  || 0;
+                estatico += data.staticCount || 0;
+            }
+        });
+
+        const byType = {};
+        if (video > 0)    byType['Vídeo']    = video;
+        if (estatico > 0) byType['Estático'] = estatico;
+
+        return { byType };
+    }
+
+    /**
+     * Detalhamento da alocação de uma pessoa em UM contrato específico —
+     * usado no modal "Ver Cálculo Detalhado" da tela de Pessoas.
+     */
+    getPersonContractBreakdown(personId, contractId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        const contract = storage.getContractById(contractId);
+        const person = storage.getPersonById(personId);
+        if (!contract || !person) return null;
+
+        const data = this._getProjectionData(contract, currentPeriod);
+        const alloc = data.peopleAllocations.find(a => a.personId === personId);
+        if (!alloc) return null;
+
+        const relevantQuantity = this._relevantQuantity(person.role, data.videoCount, data.staticCount);
+        const cost = this.getPersonCostInContract(personId, contractId, currentPeriod);
+
+        return {
+            contractId,
+            client: contract.client,
+            mode: alloc.mode,
+            fixedValue: alloc.fixedValue || 0,
+            videoCount: data.videoCount || 0,
+            staticCount: data.staticCount || 0,
+            relevantQuantity,
+            cost
+        };
+    }
+
     getSalaryReconciliation(periodId = null) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
         const people = storage.getPeople();
@@ -412,6 +488,19 @@ class AnalyticsService {
         return storage.getSquads().map(sq => this.getSquadDRE(sq.id, periodId));
     }
 
+    getSquadComparison(periodId = null) {
+        return storage.getSquads().map(squad => {
+            const roi = this.getSquadROI(squad.id, periodId);
+            return {
+                id: squad.id,
+                name: squad.name,
+                icon: squad.icon,
+                ...roi,
+                memberCount: squad.members.length
+            };
+        });
+    }
+
     // ========================================
     // ROI GERAL
     // ========================================
@@ -526,6 +615,57 @@ class AnalyticsService {
                 margin: roi.margin
             };
         }).sort((a, b) => b.profit - a.profit);
+    }
+
+    /**
+     * Compara pessoas do mesmo cargo por custo/entrega. Usado pelo
+     * insightsService (disparidade de eficiência) e pela tela de Pessoas.
+     */
+    comparePeopleByRole(role, periodId = null) {
+        return this.getProductivityRanking(periodId).filter(p => p.role === role);
+    }
+
+    // ========================================
+    // EVOLUÇÃO MENSAL
+    // ========================================
+
+    /**
+     * Série dos últimos N meses (mais antigo → mais recente, terminando no
+     * período atual), com receita/custo/lucro/margem de cada mês. Usado
+     * pela página de Evolução.
+     */
+    getMonthlyEvolution(months = 6) {
+        const currentPeriod = storage.getCurrentPeriod();
+        const periodIds = [];
+        let cursor = currentPeriod;
+
+        for (let i = 0; i < months; i++) {
+            periodIds.unshift(cursor);
+            const [year, month] = cursor.split('-').map(Number);
+            const prevMonth = month === 1 ? 12 : month - 1;
+            const prevYear  = month === 1 ? year - 1 : year;
+            cursor = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+        }
+
+        return periodIds.map(periodId => {
+            const roi = this.getOverallROI(periodId);
+            const period = storage.getPeriod(periodId);
+            return {
+                periodId,
+                label: period ? period.label : periodId,
+                revenue: roi.revenue,
+                cost: roi.cost,
+                profit: roi.profit,
+                margin: roi.margin
+            };
+        });
+    }
+
+    /**
+     * Alias de getMonthOverMonthComparison — usado pela página de Evolução.
+     */
+    compareWithPreviousMonth(periodId = null) {
+        return this.getMonthOverMonthComparison(periodId);
     }
 }
 

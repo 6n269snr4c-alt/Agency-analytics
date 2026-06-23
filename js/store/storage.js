@@ -469,6 +469,32 @@ class Storage {
         return salaries.length;
     }
 
+    // Usado por periodService.createPeriodFromPrevious() ao avançar para um
+    // período novo. No modelo v3, contratos já têm projeções próprias
+    // (monthlyProjections/generateContractProjections), então a única coisa
+    // que realmente precisa ser "copiada" entre períodos é o salário.
+    copyPeriodData(fromPeriodId, toPeriodId) {
+        return this.copySalariesToNextPeriod(fromPeriodId, toPeriodId);
+    }
+
+    // ====================
+    // DELIVERABLE TYPES (lista fixa — apenas para o seletor de "entregáveis
+    // padrão" no formulário de Projetos Pontuais. Alinhada ao modelo v3,
+    // que só reconhece Vídeo/Estático. Não há add/update/delete: a lista é
+    // fixa por design, igual ao resto do sistema.)
+    // ====================
+
+    getDeliverableTypes() {
+        return [
+            { id: 'video', name: 'Vídeo' },
+            { id: 'estatico', name: 'Estático' }
+        ];
+    }
+
+    getDeliverableTypeById(id) {
+        return this.getDeliverableTypes().find(t => t.id === id) || null;
+    }
+
     // ====================
     // PROJECTS (PONTUAIS)
     // ====================

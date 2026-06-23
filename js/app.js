@@ -13,10 +13,8 @@ import { renderValidationPage } from './pages/validationPage.js';
 import { renderEvolutionPage } from './pages/evolutionPage.js';
 import { renderProjectsPage } from './pages/projectsPage.js';
 import { renderClientsPage } from './pages/clientsPage.js';
-import { migrateToPeriods } from './migrateToPeriods.js';
 
 function init() {
-    migrateToPeriods();
     renderNavbar();
 
     router.register('/', renderDashboard);

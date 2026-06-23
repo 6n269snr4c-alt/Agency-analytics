@@ -40,15 +40,6 @@ class AnalyticsService {
     // ========================================
 
     _getProjectionData(contract, periodId) {
-        const projection = storage.getContractProjection(contract.id, periodId);
-        if (projection) {
-            return {
-                value: projection.value || 0,
-                videoCount: projection.videoCount || 0,
-                staticCount: projection.staticCount || 0,
-                peopleAllocations: projection.peopleAllocations || contract.peopleAllocations || []
-            };
-        }
         return {
             value: contract.value || 0,
             videoCount: contract.videoCount || 0,

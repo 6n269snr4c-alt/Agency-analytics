@@ -3,7 +3,6 @@
 import { renderPeriodSelector } from '../components/periodSelector.js';
 import personService from '../services/personService.js';
 import analyticsService from '../services/analyticsService.js';
-import deliverableTypeService from '../services/deliverableTypeService.js';
 import storage from '../store/storage.js';
 import ROLES from '../utils/roles.js';
 
@@ -362,15 +361,12 @@ function applyCopyMonth() {
 // ─── BREAKDOWN DETALHADO DA PESSOA ───────────────────────────────────────────
 
 function showPersonBreakdown(personId) {
-    const person              = personService.getPerson(personId);
-    const contracts           = analyticsService.getPersonContracts(personId);
-    const totalWeightedPoints = analyticsService.getPersonTotalWeightedDeliverables(personId);
-    const deliverableTypes    = deliverableTypeService.getActiveDeliverableTypes();
-
+    const person          = personService.getPerson(personId);
     const currentPeriod   = storage.getCurrentPeriod();
-    const periodSalary    = storage.getSalaryForPeriod(person.id, currentPeriod);
-    const effectiveSalary = periodSalary !== null ? periodSalary : person.salary;
-    const costPerPoint    = totalWeightedPoints > 0 ? effectiveSalary / totalWeightedPoints : 0;
+    const contracts       = analyticsService.getPersonContracts(personId);
+    const totalRateable   = analyticsService.getPersonTotalRateableDeliverables(personId, currentPeriod);
+    const effectiveSalary = analyticsService.getPersonCost(personId, currentPeriod);
+    const costPerDeliverable = analyticsService.getPersonCostPerDeliverable(personId, currentPeriod);
 
     document.getElementById('breakdown-title').textContent = `${person.name} - Detalhamento de Custos`;
 
@@ -400,35 +396,35 @@ function showPersonBreakdown(personId) {
             <div style="background: var(--bg-darker); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
                 <h3 style="margin: 0 0 1rem 0; color: var(--fast-green); font-size: 1rem; text-transform: uppercase;">📊 Distribuição por Contrato</h3>
                 ${contracts.map(contract => {
-                    let contractWeightedPoints = 0;
-                    const deliverablesDetail   = [];
+                    const b = analyticsService.getPersonContractBreakdown(personId, contract.id, currentPeriod);
+                    if (!b) return '';
 
-                    if (contract.deliverables) {
-                        Object.entries(contract.deliverables).forEach(([typeId, qty]) => {
-                            const type = deliverableTypes.find(dt => dt.id === typeId);
-                            if (type && type.roles && type.roles.includes(person.role)) {
-                                const weight = analyticsService.getWeightForRole(person.role, typeId);
-                                const points = qty * weight;
-                                contractWeightedPoints += points;
-                                deliverablesDetail.push({ name: type.name, qty, weight, points });
-                            }
-                        });
+                    if (b.mode === 'fixo') {
+                        return `
+                            <div style="background: var(--bg); padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                                    <strong style="color: var(--fast-green);">${b.client}</strong>
+                                    <span style="color: var(--fast-green); font-weight: bold;">R$ ${formatCurrency(b.cost)}</span>
+                                </div>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                                    └─ <strong style="color: var(--text-primary);">Valor fixo travado</strong> — não entra no rateio do salário
+                                </div>
+                            </div>
+                        `;
                     }
 
-                    const contractCost = contractWeightedPoints * costPerPoint;
-                    if (contractWeightedPoints === 0) return '';
+                    if (b.relevantQuantity === 0) return '';
 
                     return `
                         <div style="background: var(--bg); padding: 1rem; border-radius: 6px; margin-bottom: 1rem;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-                                <strong style="color: var(--fast-green);">${contract.client}</strong>
-                                <span style="color: var(--fast-green); font-weight: bold;">R$ ${formatCurrency(contractCost)}</span>
+                                <strong style="color: var(--fast-green);">${b.client}</strong>
+                                <span style="color: var(--fast-green); font-weight: bold;">R$ ${formatCurrency(b.cost)}</span>
                             </div>
                             <div style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">
-                                ${deliverablesDetail.map(d =>
-                                    `├─ ${d.qty} ${d.name} × peso ${d.weight.toFixed(1)} = ${d.points.toFixed(1)} pontos`
-                                ).join('<br>')}
-                                <br>└─ <strong style="color: var(--text-primary);">SUBTOTAL: ${contractWeightedPoints.toFixed(1)} pts × R$ ${formatCurrency(costPerPoint)} = R$ ${formatCurrency(contractCost)}</strong>
+                                ${b.videoCount > 0  ? `├─ ${b.videoCount} vídeo(s)<br>` : ''}
+                                ${b.staticCount > 0 ? `├─ ${b.staticCount} estático(s)<br>` : ''}
+                                └─ <strong style="color: var(--text-primary);">RATEIO: ${b.relevantQuantity} entrega(s) relevante(s) ÷ ${totalRateable} totais × R$ ${formatCurrency(effectiveSalary)} = R$ ${formatCurrency(b.cost)}</strong>
                             </div>
                         </div>
                     `;
@@ -437,25 +433,23 @@ function showPersonBreakdown(personId) {
         `;
     }
 
-    const isValid = Math.abs((totalWeightedPoints * costPerPoint) - effectiveSalary) < 0.01;
+    const reconciliation = analyticsService.getSalaryReconciliation(currentPeriod).find(r => r.personId === personId);
+    const isValid = reconciliation ? reconciliation.isOk : true;
+
     const summaryHtml = `
         <div style="background: var(--bg-darker); padding: 1.5rem; border-radius: 8px; border: 2px solid var(--fast-green);">
             <h3 style="color: var(--fast-green); margin: 0 0 1rem 0; font-size: 1rem; text-transform: uppercase;">✅ Resumo do Cálculo</h3>
             <div style="display: grid; gap: 0.75rem;">
                 <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px;">
-                    <span>📦 Total de Pontos (todos contratos):</span>
-                    <strong>${totalWeightedPoints.toFixed(1)} pontos</strong>
+                    <span>📦 Total de Entregas Rateáveis (todos contratos):</span>
+                    <strong>${totalRateable} entrega(s)</strong>
                 </div>
                 <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px;">
-                    <span>💰 Custo por Ponto:</span>
-                    <strong>R$ ${formatCurrency(effectiveSalary)} ÷ ${totalWeightedPoints.toFixed(1)} = R$ ${formatCurrency(costPerPoint)}/ponto</strong>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg); border-radius: 4px; border: 1px solid var(--fast-green);">
-                    <span style="font-weight: 700;">✅ Validação:</span>
-                    <strong style="color: var(--fast-green);">${totalWeightedPoints.toFixed(1)} × R$ ${formatCurrency(costPerPoint)} = R$ ${formatCurrency(totalWeightedPoints * costPerPoint)}</strong>
+                    <span>💰 Custo por Entrega:</span>
+                    <strong>R$ ${formatCurrency(effectiveSalary)} ÷ ${totalRateable} = R$ ${formatCurrency(costPerDeliverable)}/entrega</strong>
                 </div>
                 <div style="text-align: center; padding: 0.75rem; background: var(${isValid ? '--success' : '--error'}); color: white; border-radius: 4px; font-weight: bold;">
-                    ${isValid ? '✓ Cálculo correto! O total bate com o salário.' : '⚠️ Diferença detectada! Verifique os contratos.'}
+                    ${isValid ? '✓ Cálculo correto! O rateio bate com o salário.' : '⚠️ Diferença detectada! Verifique as alocações deste contrato.'}
                 </div>
             </div>
         </div>

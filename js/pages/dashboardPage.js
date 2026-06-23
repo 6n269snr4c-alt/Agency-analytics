@@ -14,7 +14,6 @@ export function renderDashboard() {
     const squadComparison     = analyticsService.getSquadComparison();
     const productivityRanking = analyticsService.getProductivityRanking();
     const contractRanking     = analyticsService.getContractProfitabilityRanking();
-    const deliverablesBreakdown = analyticsService.getDeliverablesBreakdown();
     const insights            = insightsService.generateAllInsights();
     const opportunities       = insightsService.getTopOpportunities();
 
@@ -34,7 +33,6 @@ export function renderDashboard() {
         ${renderSquadsPerformance(squadComparison)}
         ${renderProductivityRanking(productivityRanking)}
         ${renderContractProfitability(contractRanking)}
-        ${renderDeliverablesBreakdown(deliverablesBreakdown)}
     `;
 }
 
@@ -283,51 +281,6 @@ function renderContractProfitability(contracts) {
                                         </span>
                                     </td>
                                     <td>${safeFixed(contract.margin)}%</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-// ─── Distribuição de Entregáveis ──────────────────────────────────────────────
-
-function renderDeliverablesBreakdown(breakdown) {
-    // breakdown pode ser objeto { typeName: qty } ou array
-    let entries = [];
-
-    if (Array.isArray(breakdown)) {
-        entries = breakdown.map(item => [item.type ?? item.name ?? '?', item.total ?? item.qty ?? 0]);
-    } else if (breakdown && typeof breakdown === 'object') {
-        entries = Object.entries(breakdown);
-    }
-
-    if (entries.length === 0) return '';
-
-    const total = entries.reduce((s, [, qty]) => s + qty, 0);
-
-    return `
-        <div class="widget">
-            <div class="widget-header"><h2 class="widget-title">Distribuição de Entregáveis</h2></div>
-            <div class="widget-body">
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Tipo</th>
-                                <th>Quantidade</th>
-                                <th>% do Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${entries.sort((a, b) => b[1] - a[1]).map(([name, qty]) => `
-                                <tr>
-                                    <td><strong>${name}</strong></td>
-                                    <td>${qty}</td>
-                                    <td>${total > 0 ? ((qty / total) * 100).toFixed(1) : '0.0'}%</td>
                                 </tr>
                             `).join('')}
                         </tbody>

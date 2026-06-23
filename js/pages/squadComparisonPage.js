@@ -75,7 +75,6 @@ export function renderSquadComparisonPage() {
             ${allDRE.map(dre => renderSquadDRE(dre)).join('')}
         </div>
 
-        ${renderSharedPeopleNote(allDRE)}
         <style>${dreStyles()}</style>
     `;
 
@@ -277,94 +276,15 @@ function renderSquadDRE(dre) {
 // ─── linha de membro com rateio ───────────────────────────────────────────────
 
 function renderMemberRow(m) {
-    // Tooltip explicando o rateio
-    let allocTooltip = '';
-    let allocLabel   = '';
-
-    if (!m.isShared) {
-        allocLabel = '100%';
-        allocTooltip = 'Exclusivo deste squad';
-    } else if (m.allocationMethod === 'deliverables') {
-        allocLabel = `${pct(m.allocationPct)}`;
-        allocTooltip = `Rateio por entregáveis: ${m.pointsHere.toFixed(0)} pts aqui / ${m.pointsTotal.toFixed(0)} pts totais`;
-    } else {
-        // fallback igual
-        allocLabel = `${pct(m.allocationPct)}`;
-        allocTooltip = `Divisão igual entre ${m.squadsCount} squads (sem entregáveis mapeados)`;
-    }
-
     return `
-        <div class="dre-row ${m.isShared ? 'dre-row-shared' : ''}">
+        <div class="dre-row">
             <span class="dre-row-label">
                 <span class="dre-dot dre-dot-member"></span>
                 ${m.name}
                 <span class="dre-role-tag">${m.role}</span>
-                ${m.isShared ? `
-                    <span class="dre-tag dre-tag-shared" title="${allocTooltip}">
-                        ${allocLabel} · ${m.squadsCount} squads
-                    </span>
-                ` : ''}
             </span>
             <div class="dre-row-value-group">
-                ${m.isShared ? `<span class="dre-row-full-salary">R$ ${fmt(m.fullSalary)}</span>` : ''}
-                <span class="dre-row-value">R$ ${fmt(m.allocatedCost)}</span>
-            </div>
-        </div>
-    `;
-}
-
-// ─── nota de pessoas compartilhadas ──────────────────────────────────────────
-
-function renderSharedPeopleNote(allDRE) {
-    const sharedPeople = new Map();
-
-    allDRE.forEach(dre => {
-        dre.costs.members.forEach(m => {
-            if (!m.isShared) return;
-            if (!sharedPeople.has(m.personId)) {
-                sharedPeople.set(m.personId, { ...m, squadsData: [] });
-            }
-            sharedPeople.get(m.personId).squadsData.push({
-                name: dre.squadName,
-                allocatedCost: m.allocatedCost,
-                allocationPct: m.allocationPct,
-                pointsHere: m.pointsHere,
-                method: m.allocationMethod
-            });
-        });
-    });
-
-    if (sharedPeople.size === 0) return '';
-
-    return `
-        <div class="dre-shared-note">
-            <div class="dre-shared-note-title">🔀 Pessoas alocadas em múltiplos squads — detalhamento do rateio</div>
-            <div class="dre-rows">
-                ${[...sharedPeople.values()].map(p => `
-                    <div class="dre-row">
-                        <span class="dre-row-label" style="flex-direction:column;align-items:flex-start;gap:0.25rem">
-                            <span style="display:flex;align-items:center;gap:0.4rem">
-                                ${p.name}
-                                <span class="dre-role-tag">${p.role}</span>
-                                <span style="color:var(--text-secondary,#888);font-size:0.75rem">
-                                    Salário total: R$ ${fmt(p.fullSalary)}
-                                </span>
-                            </span>
-                            <span style="display:flex;gap:0.75rem;flex-wrap:wrap">
-                                ${p.squadsData.map(s => `
-                                    <span class="dre-squad-alloc-chip"
-                                          title="${s.method === 'deliverables' ? `${s.pointsHere.toFixed(0)} pts neste squad` : 'Divisão igual (sem entregáveis mapeados)'}">
-                                        ${s.name}: <strong>${pct(s.allocationPct)}</strong> = R$ ${fmt(s.allocatedCost)}
-                                        ${s.method === 'equal' ? ' ⚠️' : ''}
-                                    </span>
-                                `).join('')}
-                            </span>
-                        </span>
-                    </div>
-                `).join('')}
-            </div>
-            <div class="dre-shared-note-footer">
-                ⚠️ indica rateio por divisão igual (pessoa não tem entregáveis atribuídos nos contratos daquele squad).
+                <span class="dre-row-value">R$ ${fmt(m.cost)}</span>
             </div>
         </div>
     `;

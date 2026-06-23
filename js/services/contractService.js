@@ -9,6 +9,14 @@ class ContractService {
         return storage.getActiveContractsForPeriod(currentPeriod);
     }
 
+    getContractsForPeriod(periodId) {
+        return storage.getActiveContractsForPeriod(periodId);
+    }
+
+    getAllContractsEver() {
+        return storage.getContracts();
+    }
+
     getContractById(id) {
         return storage.getContractById(id);
     }
@@ -27,52 +35,73 @@ class ContractService {
         const contract = {
             client:             contractData.client,
             value:              parseFloat(contractData.value),
-            baseValue:          parseFloat(contractData.baseValue || contractData.value),
             videoCount:         parseInt(contractData.videoCount) || 0,
             staticCount:        parseInt(contractData.staticCount) || 0,
+            trafficManagement:  !!contractData.trafficManagement,
             peopleAllocations:  contractData.peopleAllocations || [],
-            duration:           contractData.duration || 12,
-            startPeriod:        contractData.startPeriod || currentPeriod,
-            status:             contractData.status || 'active',
             squadTag:           contractData.squadTag || null,
             notes:              contractData.notes || '',
+            confirmedPeriods:   [],
         };
 
         const saved = storage.addContract(contract);
-        storage.generateContractProjections(saved.id);
-        return saved;
+        storage.confirmContractPeriod(saved.id, contractData.confirmPeriod || currentPeriod);
+        return storage.getContractById(saved.id);
     }
 
     updateContract(id, updates) {
         const contract = storage.getContractById(id);
         if (!contract) throw new Error('Contrato não encontrado');
 
-        if (updates.value !== undefined) {
-            updates.value     = parseFloat(updates.value);
-            updates.baseValue = parseFloat(updates.baseValue || updates.value);
-        }
-        if (updates.videoCount !== undefined)  updates.videoCount  = parseInt(updates.videoCount)  || 0;
-        if (updates.staticCount !== undefined) updates.staticCount = parseInt(updates.staticCount) || 0;
-        if (!updates.status) updates.status = contract.status || 'active';
+        if (updates.value !== undefined)        updates.value        = parseFloat(updates.value) || 0;
+        if (updates.videoCount !== undefined)   updates.videoCount   = parseInt(updates.videoCount)  || 0;
+        if (updates.staticCount !== undefined)  updates.staticCount  = parseInt(updates.staticCount) || 0;
+        if (updates.trafficManagement !== undefined) updates.trafficManagement = !!updates.trafficManagement;
 
-        const updated = storage.updateContract(id, updates);
-
-        const needsRegen = ['value', 'baseValue', 'videoCount', 'staticCount', 'peopleAllocations', 'duration', 'startPeriod']
-            .some(k => updates[k] !== undefined);
-
-        if (needsRegen) {
-            storage.generateContractProjections(id);
-        }
-
-        return updated;
+        return storage.updateContract(id, updates);
     }
 
     deleteContract(id) {
         return storage.deleteContract(id);
     }
 
+    // ─── Confirmação mensal ────────────────────────────────────────────────
+
+    confirmPeriod(contractId, periodId) {
+        return storage.confirmContractPeriod(contractId, periodId);
+    }
+
+    unconfirmPeriod(contractId, periodId) {
+        return storage.unconfirmContractPeriod(contractId, periodId);
+    }
+
+    getConfirmedPeriods(contractId) {
+        const contract = storage.getContractById(contractId);
+        return contract ? [...(contract.confirmedPeriods || [])].sort() : [];
+    }
+
+    getLastConfirmedPeriod(contractId) {
+        const periods = this.getConfirmedPeriods(contractId);
+        return periods.length > 0 ? periods[periods.length - 1] : null;
+    }
+
     /**
-     * Duplica um contrato: copia cliente, squad, pessoas/modos e quantidades.
+     * Um contrato fica travado para edição direta (valor, entregáveis, squad,
+     * equipe, tráfego) quando já tem algum mês confirmado além do mês atual —
+     * ou seja, já tem histórico real que seria corrompido por uma edição
+     * retroativa. Cliente e busca/duplicar não entram nessa regra.
+     */
+    isLockedByHistory(contractId, referencePeriodId = null) {
+        const currentPeriod = referencePeriodId || storage.getCurrentPeriod();
+        const periods = this.getConfirmedPeriods(contractId);
+        return periods.some(p => p !== currentPeriod);
+    }
+
+    /**
+     * "Lançar novo contrato a partir deste": fecha o contrato original no mês
+     * atual (deixa de confirmar daqui pra frente) e cria um contrato novo, com
+     * histórico zerado, já confirmado no mês atual — preservando o histórico
+     * anterior intacto no contrato antigo.
      */
     duplicateContract(id, overrides = {}) {
         const original = storage.getContractById(id);
@@ -81,18 +110,19 @@ class ContractService {
         const currentPeriod = storage.getCurrentPeriod();
 
         const newContractData = {
-            client:            overrides.client ?? original.client,
-            value:             overrides.value ?? original.value,
-            videoCount:        overrides.videoCount ?? original.videoCount ?? 0,
-            staticCount:       overrides.staticCount ?? original.staticCount ?? 0,
-            peopleAllocations: (original.peopleAllocations || []).map(a => ({ ...a })),
-            duration:          overrides.duration ?? original.duration ?? 12,
-            startPeriod:       overrides.startPeriod ?? currentPeriod,
-            squadTag:          original.squadTag ?? null,
-            notes:             original.notes ?? '',
+            client:             overrides.client ?? original.client,
+            value:              overrides.value ?? original.value,
+            videoCount:         overrides.videoCount ?? original.videoCount ?? 0,
+            staticCount:        overrides.staticCount ?? original.staticCount ?? 0,
+            trafficManagement:  overrides.trafficManagement ?? original.trafficManagement ?? false,
+            peopleAllocations:  (overrides.peopleAllocations ?? original.peopleAllocations ?? []).map(a => ({ ...a })),
+            squadTag:           overrides.squadTag ?? original.squadTag ?? null,
+            notes:              original.notes ?? '',
         };
 
-        return this.createContract(newContractData);
+        const created = this.createContract(newContractData);
+        storage.unconfirmContractPeriod(original.id, currentPeriod);
+        return created;
     }
 
     searchContracts(query) {

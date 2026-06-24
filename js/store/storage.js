@@ -97,28 +97,37 @@ class Storage {
     _migrateToConfirmedPeriods() {
         try {
             const contracts = this.getContracts();
+            const currentPeriod = this.getCurrentPeriod();
             let changed = false;
 
             contracts.forEach(contract => {
-                if (contract.confirmedPeriods) return;
+                if (!contract.confirmedPeriods) {
+                    const wasActive = !contract.status || contract.status === 'active';
+                    const oldPeriods = Array.isArray(contract.monthlyProjections)
+                        ? contract.monthlyProjections.map(p => p.periodId)
+                        : [];
+                    contract.confirmedPeriods = wasActive ? Array.from(new Set(oldPeriods)).sort() : [];
+                    changed = true;
+                }
 
-                const wasActive = !contract.status || contract.status === 'active';
-                const oldPeriods = Array.isArray(contract.monthlyProjections)
-                    ? contract.monthlyProjections.map(p => p.periodId)
-                    : [];
+                // Idempotente: remove meses futuros de confirmedPeriods, sejam de uma
+                // migração anterior (bug já corrigido) ou de qualquer outra inconsistência.
+                // Meses futuros nunca foram de fato confirmados — não existiam como ação manual.
+                const cleaned = contract.confirmedPeriods.filter(p => p <= currentPeriod);
+                if (cleaned.length !== contract.confirmedPeriods.length) {
+                    contract.confirmedPeriods = cleaned;
+                    changed = true;
+                }
 
-                contract.confirmedPeriods = wasActive
-                    ? Array.from(new Set(oldPeriods)).sort()
-                    : [];
-
-                if (contract.trafficManagement === undefined) contract.trafficManagement = false;
-
-                changed = true;
+                if (contract.trafficManagement === undefined) {
+                    contract.trafficManagement = false;
+                    changed = true;
+                }
             });
 
             if (changed) {
                 this.saveContracts(contracts);
-                console.log('✅ storage: contratos migrados para confirmedPeriods (a partir de monthlyProjections)');
+                console.log('✅ storage: confirmedPeriods migrados/limpos (sem meses futuros indevidos)');
             }
         } catch (e) {
             console.error('Erro na migração para confirmedPeriods:', e);

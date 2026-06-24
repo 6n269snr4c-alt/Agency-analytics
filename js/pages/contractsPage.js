@@ -325,7 +325,7 @@ function renderContractForm(prefill, squads) {
                     <div class="form-group" style="margin:0;">
                         <label class="form-label">Valor Mensal (R$) *</label>
                         <input type="number" class="form-input" id="value" step="0.01" required
-                               value="${prefill?.value || ''}">
+                               value="${prefill?.value ?? ''}">
                     </div>
                 </div>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">

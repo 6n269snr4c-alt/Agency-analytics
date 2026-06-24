@@ -123,11 +123,24 @@ class AnalyticsService {
 
     getPersonTotalAllocated(personId, periodId = null) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
-        const contracts = this.getPersonContractsForPeriod(personId, currentPeriod);
+        const activeContracts = storage.getActiveContractsForPeriod(currentPeriod);
         let total = 0;
-        contracts.forEach(contract => {
+
+        // Custo automático de Head (não está em peopleAllocations — soma aqui
+        // pra Conferência Salarial não acusar divergência indevida).
+        storage.getSquads()
+            .filter(squad => squad.headId === personId)
+            .forEach(squad => {
+                activeContracts
+                    .filter(c => c.squadTag === squad.id)
+                    .forEach(c => { total += this.getHeadCostForContract(c.id, currentPeriod); });
+            });
+
+        // Alocações manuais (rateado/fixo) normais.
+        this.getPersonContractsForPeriod(personId, currentPeriod).forEach(contract => {
             total += this.getPersonCostInContract(personId, contract.id, currentPeriod);
         });
+
         return total;
     }
 
@@ -210,11 +223,13 @@ class AnalyticsService {
     getSalaryReconciliation(periodId = null) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
         const people = storage.getPeople();
+        const headSquadIds = new Set(storage.getSquads().filter(s => s.headId).map(s => s.headId));
 
         return people.map(person => {
             const salary    = this.getPersonCost(person.id, currentPeriod);
             const allocated = this.getPersonTotalAllocated(person.id, currentPeriod);
-            const hasFixedOnly = this._hasOnlyFixedAllocations(person.id, currentPeriod);
+            const isHead = headSquadIds.has(person.id);
+            const hasFixedOnly = !isHead && this._hasOnlyFixedAllocations(person.id, currentPeriod);
             const diff = salary - allocated;
 
             return {
@@ -224,6 +239,7 @@ class AnalyticsService {
                 salary,
                 allocated,
                 diff,
+                isHead,
                 isFixedOnly: hasFixedOnly,
                 isOk: Math.abs(diff) < 0.01 || hasFixedOnly
             };

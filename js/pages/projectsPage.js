@@ -2,6 +2,7 @@
 
 import { renderPeriodSelector } from '../components/periodSelector.js';
 import projectService from '../services/projectService.js';
+import analyticsService from '../services/analyticsService.js';
 import squadService from '../services/squadService.js';
 import storage from '../store/storage.js';
 import { attachClientAutocomplete } from '../components/clientAutocomplete.js'; // ← NOVO
@@ -162,9 +163,10 @@ function renderProjectsList(projects, squads) {
 
 function renderProjectCard(p, squads) {
     const squad     = squads.find(s => s.id === p.squadId);
-    const profit    = (p.value || 0) - (p.externalCost || 0);
-    const margin    = (p.value || 0) > 0 ? (profit / p.value) * 100 : 0;
+    const roi       = analyticsService.getProjectROI(p.id, p.billingPeriod);
+    const margin    = roi.margin;
     const extCost   = p.externalCost || 0;
+    const headCostItem = roi.costBreakdown.find(c => c.isHead);
 
     const deliverableTypes   = storage.getDeliverableTypes();
     const deliverableEntries = Object.entries(p.deliverables || {});
@@ -198,6 +200,13 @@ function renderProjectCard(p, squads) {
                     <span class="project-metric-label">💸 Custo Externo</span>
                     <span class="project-metric-value" style="color:var(--error,#f44336)">R$ ${fmt(extCost)}</span>
                     ${p.externalCostNote ? `<span style="font-size:0.75rem;color:var(--text-secondary);">${p.externalCostNote}</span>` : ''}
+                </div>
+                ` : ''}
+                ${headCostItem ? `
+                <div class="project-metric">
+                    <span class="project-metric-label">👑 Rateio do Head</span>
+                    <span class="project-metric-value" style="color:var(--error,#f44336)">R$ ${fmt(headCostItem.totalCost)}</span>
+                    <span style="font-size:0.75rem;color:var(--text-secondary);">${headCostItem.name}</span>
                 </div>
                 ` : ''}
                 <div class="project-metric">

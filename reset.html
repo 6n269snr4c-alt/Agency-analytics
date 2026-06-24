@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fast Analytics — Reset do Sistema</title>
+<link rel="stylesheet" href="css/main.css">
+<style>
+    body { display:flex; justify-content:center; padding: 3rem 1.5rem; }
+    .reset-box {
+        max-width: 640px; width: 100%;
+        background: var(--bg-card, #0f0f0f);
+        border: 1px solid var(--bg-tertiary, #1a1a1a);
+        border-radius: 14px;
+        padding: 2rem;
+    }
+    .reset-box h1 { font-size: 1.4rem; margin: 0 0 0.4rem; }
+    .reset-box .subtitle { color: #999; font-size: 0.9rem; margin-bottom: 1.75rem; }
+    .summary-grid {
+        display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.6rem;
+        background: var(--bg-primary, #0a0a0a); border-radius: 10px; padding: 1rem;
+        margin-bottom: 1.75rem;
+    }
+    .summary-item { display:flex; justify-content:space-between; font-size: 0.88rem; padding: 0.3rem 0.5rem; }
+    .summary-item strong { color: var(--fast-green, #00ff9f); }
+    .check-row {
+        display:flex; align-items:center; gap:0.6rem;
+        padding: 0.6rem 0.2rem; border-bottom: 1px solid var(--bg-tertiary, #1a1a1a);
+        font-size: 0.92rem;
+    }
+    .check-row input { width:16px; height:16px; }
+    .check-row .count { margin-left:auto; color:#888; font-size:0.82rem; }
+    .actions { margin-top: 1.75rem; display:flex; flex-direction:column; gap:0.75rem; }
+    .btn {
+        border:none; border-radius:8px; padding:0.75rem 1rem; font-size:0.92rem;
+        cursor:pointer; font-weight:600; font-family: inherit;
+    }
+    .btn-backup { background: var(--bg-tertiary, #1a1a1a); color:#fff; }
+    .btn-backup:hover { background:#252525; }
+    .btn-danger { background: #c0392b; color:#fff; }
+    .btn-danger:disabled { background:#3a2a28; color:#777; cursor:not-allowed; }
+    .confirm-input {
+        width:100%; padding:0.7rem 0.8rem; border-radius:8px; margin-top:0.5rem;
+        border:1px solid var(--bg-tertiary,#1a1a1a); background:var(--bg-primary,#0a0a0a);
+        color:#fff; font-size:0.9rem; box-sizing:border-box;
+    }
+    .confirm-label { font-size:0.82rem; color:#999; }
+    .result-box {
+        margin-top:1.5rem; padding:1rem; border-radius:8px; font-size:0.9rem;
+        display:none;
+    }
+    .result-box.ok { background: rgba(0,255,159,0.08); border:1px solid var(--fast-green,#00ff9f); color: var(--fast-green,#00ff9f); }
+    .back-link { display:inline-block; margin-top:0.75rem; color: var(--fast-green,#00ff9f); text-decoration:none; font-size:0.88rem; }
+</style>
+</head>
+<body>
+
+<div class="reset-box">
+    <h1>⚡ Reset do Sistema</h1>
+    <p class="subtitle">Apaga os dados salvos neste navegador. Baixe o backup antes — depois de apagar, não tem como desfazer por aqui.</p>
+
+    <div class="summary-grid" id="summary"></div>
+
+    <div id="checklist"></div>
+
+    <div class="actions">
+        <button class="btn btn-backup" onclick="downloadBackup()">⬇️ Baixar backup completo (.json)</button>
+
+        <div>
+            <label class="confirm-label">Pra liberar o reset, digite <strong>RESETAR</strong> abaixo:</label>
+            <input type="text" id="confirm-text" class="confirm-input" oninput="checkConfirm()" placeholder="RESETAR">
+        </div>
+
+        <button class="btn btn-danger" id="reset-btn" disabled onclick="doReset()">🗑️ Resetar selecionado</button>
+    </div>
+
+    <div class="result-box" id="result"></div>
+</div>
+
+<script>
+const CATEGORIES = [
+    { key: 'agency_contracts',      label: 'Contratos' },
+    { key: 'agency_people',         label: 'Pessoas' },
+    { key: 'agency_squads',         label: 'Squads' },
+    { key: 'agency_salary_history', label: 'Histórico de salários' },
+    { key: 'agency_projects',       label: 'Projetos pontuais' },
+    { key: 'agency_periods',        label: 'Períodos (e mês atual do sistema)' },
+];
+const EXTRA_CLEANUP_KEYS = ['migration_monthly_system_done', 'migration_monthly_system_date'];
+
+function countItems(key) {
+    try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return 0;
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.length : (parsed ? 1 : 0);
+    } catch (e) { return 0; }
+}
+
+function renderSummaryAndChecklist() {
+    const summary = document.getElementById('summary');
+    const checklist = document.getElementById('checklist');
+    summary.innerHTML = '';
+    checklist.innerHTML = '';
+
+    CATEGORIES.forEach(cat => {
+        const count = countItems(cat.key);
+
+        const summaryItem = document.createElement('div');
+        summaryItem.className = 'summary-item';
+        summaryItem.innerHTML = `<span>${cat.label}</span><strong>${count}</strong>`;
+        summary.appendChild(summaryItem);
+
+        const row = document.createElement('label');
+        row.className = 'check-row';
+        row.innerHTML = `
+            <input type="checkbox" value="${cat.key}" checked>
+            <span>${cat.label}</span>
+            <span class="count">${count} registro${count === 1 ? '' : 's'}</span>
+        `;
+        checklist.appendChild(row);
+    });
+
+    const currentPeriod = localStorage.getItem('agency_current_period') || '—';
+    const cpItem = document.createElement('div');
+    cpItem.className = 'summary-item';
+    cpItem.innerHTML = `<span>Mês atual do sistema</span><strong>${currentPeriod}</strong>`;
+    summary.appendChild(cpItem);
+}
+
+function downloadBackup() {
+    const backup = {};
+    CATEGORIES.forEach(cat => {
+        const raw = localStorage.getItem(cat.key);
+        backup[cat.key] = raw ? JSON.parse(raw) : null;
+    });
+    backup['agency_current_period'] = localStorage.getItem('agency_current_period') || null;
+
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    a.href = url;
+    a.download = `fast-analytics-backup-${stamp}.json`;
+    a.click();
+}
+
+function checkConfirm() {
+    const value = document.getElementById('confirm-text').value.trim().toUpperCase();
+    document.getElementById('reset-btn').disabled = (value !== 'RESETAR');
+}
+
+function doReset() {
+    const checked = Array.from(document.querySelectorAll('.check-row input:checked')).map(i => i.value);
+    if (checked.length === 0) return;
+
+    const finalConfirm = confirm(
+        `Tem certeza? Isso vai apagar permanentemente:\n\n${checked.map(k => '• ' + CATEGORIES.find(c => c.key === k).label).join('\n')}\n\nSe não baixou o backup ainda, cancela e baixa primeiro.`
+    );
+    if (!finalConfirm) return;
+
+    checked.forEach(key => localStorage.removeItem(key));
+
+    const wipingPeriods = checked.includes('agency_periods');
+    if (wipingPeriods) {
+        localStorage.removeItem('agency_current_period');
+    }
+
+    EXTRA_CLEANUP_KEYS.forEach(k => localStorage.removeItem(k));
+
+    const result = document.getElementById('result');
+    result.className = 'result-box ok';
+    result.style.display = 'block';
+    result.innerHTML = `
+        ✅ Reset concluído. Os dados apagados foram recriados vazios — pode lançar tudo de novo a partir de agora.
+        <br><a class="back-link" href="index.html">→ Ir para o Fast Analytics</a>
+    `;
+
+    document.querySelector('.actions').style.display = 'none';
+    renderSummaryAndChecklist();
+}
+
+renderSummaryAndChecklist();
+</script>
+
+</body>
+</html>

@@ -16,9 +16,10 @@
 //     - Copywriter e outros  → conta videoCount + staticCount
 //
 //   Head do squad: NÃO está em peopleAllocations. Custo automático,
-//   rateado pela RECEITA de cada cliente dentro do squad — sem lançamento
-//   manual. (Não é por volume de vídeo/estático: clientes só de tráfego
-//   não têm esses contadores, mas pagam e são geridos pelo Head também.)
+//   rateado IGUALMENTE entre os clientes do squad — sem lançamento manual.
+//   (Não é por volume nem por receita: qualquer métrica do cliente que possa
+//   ser zero deixaria ele fora do rateio. Dividir por cliente nunca tem esse
+//   problema.)
 
 import storage from '../store/storage.js';
 
@@ -28,11 +29,15 @@ class AnalyticsService {
     // REGRA: QUAL ENTREGÁVEL CONTA PARA CADA FUNÇÃO
     // ========================================
 
-    _relevantQuantity(role, videoCount, staticCount) {
-        const v = videoCount || 0;
-        const s = staticCount || 0;
+    _relevantQuantity(role, data) {
+        const v = data.videoCount || 0;
+        const s = data.staticCount || 0;
         if (role === 'Filmmaker') return v;
         if (role === 'Designer')  return s;
+        // Gestor de Tráfego não produz vídeo/estático — o que conta é o
+        // contrato ter gestão de tráfego ou não. Rateio fica igual entre os
+        // contratos de tráfego em que essa pessoa está alocada.
+        if (role === 'Gestor de Tráfego') return data.trafficManagement ? 1 : 0;
         return v + s;
     }
 
@@ -45,6 +50,7 @@ class AnalyticsService {
             value: contract.value || 0,
             videoCount: contract.videoCount || 0,
             staticCount: contract.staticCount || 0,
+            trafficManagement: !!contract.trafficManagement,
             peopleAllocations: contract.peopleAllocations || []
         };
     }
@@ -85,7 +91,7 @@ class AnalyticsService {
             const data = this._getProjectionData(contract, currentPeriod);
             const alloc = data.peopleAllocations.find(a => a.personId === personId);
             if (!alloc || alloc.mode !== 'rateado') return;
-            total += this._relevantQuantity(person.role, data.videoCount, data.staticCount);
+            total += this._relevantQuantity(person.role, data);
         });
 
         return total;
@@ -105,7 +111,7 @@ class AnalyticsService {
             return alloc.fixedValue || 0;
         }
 
-        const relevantHere = this._relevantQuantity(person.role, data.videoCount, data.staticCount);
+        const relevantHere = this._relevantQuantity(person.role, data);
         if (relevantHere === 0) return 0;
 
         const totalRateable = this.getPersonTotalRateableDeliverables(personId, currentPeriod);
@@ -186,7 +192,7 @@ class AnalyticsService {
         const alloc = data.peopleAllocations.find(a => a.personId === personId);
         if (!alloc) return null;
 
-        const relevantQuantity = this._relevantQuantity(person.role, data.videoCount, data.staticCount);
+        const relevantQuantity = this._relevantQuantity(person.role, data);
         const cost = this.getPersonCostInContract(personId, contractId, currentPeriod);
 
         return {
@@ -244,25 +250,14 @@ class AnalyticsService {
     // Antes disso era por volume, e um cliente sem entregável "sumia" do rateio,
     // empurrando o custo inteiro do Head pros clientes que tinham vídeo/estático.
 
-    _clientRevenueInSquad(squadId, clientName, periodId) {
-        const activeContracts = storage.getActiveContractsForPeriod(periodId);
-        const squadClientContracts = activeContracts.filter(c =>
-            c.squadTag === squadId && c.client === clientName
-        );
-        return squadClientContracts.reduce((sum, c) => {
-            const data = this._getProjectionData(c, periodId);
-            return sum + (data.value || 0);
-        }, 0);
-    }
-
-    _totalRevenueInSquad(squadId, periodId) {
-        const activeContracts = storage.getActiveContractsForPeriod(periodId);
-        const squadContracts = activeContracts.filter(c => c.squadTag === squadId);
-        return squadContracts.reduce((sum, c) => {
-            const data = this._getProjectionData(c, periodId);
-            return sum + (data.value || 0);
-        }, 0);
-    }
+    // Rateio do Head: igual entre os CLIENTES do squad — não por volume nem por
+    // receita. Os dois já se mostraram falhos: qualquer métrica do cliente que
+    // possa ser zero (tráfego sem vídeo/estático, parceria sem receita) deixa
+    // esse cliente fora do rateio e empurra o custo inteiro pros outros.
+    // Dividir por cliente nunca tem esse problema — todo cliente ativo conta 1.
+    // Receita só entra como critério secundário, pra dividir entre contratos
+    // de um MESMO cliente quando ele tem mais de um — com fallback pra divisão
+    // igual também aí, se a receita desses contratos específicos for zero.
 
     getHeadCostForContract(contractId, periodId = null) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
@@ -275,25 +270,25 @@ class AnalyticsService {
         const headSalary = this.getPersonCost(squad.headId, currentPeriod);
         if (headSalary === 0) return 0;
 
-        const totalRevenue = this._totalRevenueInSquad(squad.id, currentPeriod);
-        if (totalRevenue === 0) return 0;
-
-        const clientRevenue = this._clientRevenueInSquad(squad.id, contract.client, currentPeriod);
-        if (clientRevenue === 0) return 0;
-
-        const headCostForClient = headSalary * (clientRevenue / totalRevenue);
-
         const activeContracts = storage.getActiveContractsForPeriod(currentPeriod);
-        const clientContracts = activeContracts.filter(c =>
-            c.squadTag === squad.id && c.client === contract.client
-        );
-        if (clientContracts.length <= 1) return headCostForClient;
+        const squadContracts  = activeContracts.filter(c => c.squadTag === squad.id);
+        const distinctClients = Array.from(new Set(squadContracts.map(c => c.client)));
+        if (distinctClients.length === 0) return 0;
 
-        const data = this._getProjectionData(contract, currentPeriod);
-        const thisContractRevenue = data.value || 0;
-        if (thisContractRevenue === 0) return 0;
+        const headCostPerClient = headSalary / distinctClients.length;
 
-        return headCostForClient * (thisContractRevenue / clientRevenue);
+        const clientContracts = squadContracts.filter(c => c.client === contract.client);
+        if (clientContracts.length <= 1) return headCostPerClient;
+
+        const clientRevenue = clientContracts.reduce((sum, c) => {
+            return sum + (this._getProjectionData(c, currentPeriod).value || 0);
+        }, 0);
+        if (clientRevenue === 0) {
+            return headCostPerClient / clientContracts.length;
+        }
+
+        const thisContractRevenue = this._getProjectionData(contract, currentPeriod).value || 0;
+        return headCostPerClient * (thisContractRevenue / clientRevenue);
     }
 
     // ========================================
@@ -331,7 +326,7 @@ class AnalyticsService {
                     totalCost: personCost
                 });
             } else {
-                const relevantHere = this._relevantQuantity(person.role, data.videoCount, data.staticCount);
+                const relevantHere = this._relevantQuantity(person.role, data);
                 const totalRateable = this.getPersonTotalRateableDeliverables(person.id, currentPeriod);
                 costBreakdown.push({
                     personId: person.id,

@@ -26,8 +26,8 @@ class ContractService {
     }
 
     createContract(contractData) {
-        if (!contractData.client || !contractData.value) {
-            throw new Error('Cliente e valor são obrigatórios');
+        if (!contractData.client || contractData.value === undefined || contractData.value === null || contractData.value === '' || isNaN(parseFloat(contractData.value))) {
+            throw new Error('Cliente e valor são obrigatórios (valor pode ser 0, para parcerias)');
         }
 
         const currentPeriod = storage.getCurrentPeriod();

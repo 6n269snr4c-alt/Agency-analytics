@@ -14,17 +14,6 @@ export function renderPeoplePage() {
     const people = personService.getAllPeople();
     const currentPeriod = storage.getCurrentPeriod();
 
-    // Calcular período anterior
-    const [year, month] = currentPeriod.split('-').map(Number);
-    const prevMonth = month === 1 ? 12 : month - 1;
-    const prevYear  = month === 1 ? year - 1 : year;
-    const previousPeriod = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
-
-    const currentSalaries   = storage.getSalariesForPeriod(currentPeriod);
-    const previousSalaries  = storage.getSalariesForPeriod(previousPeriod);
-    const hasPreviousSalaries = previousSalaries.length > 0;
-    const hasCurrentSalaries  = currentSalaries.length > 0;
-
     contentEl.innerHTML = `
         <div class="page-header">
             <h1 class="page-title">Pessoas</h1>
@@ -38,21 +27,12 @@ export function renderPeoplePage() {
                 <button class="btn btn-primary" onclick="window.openPersonModal()">
                     + Nova Pessoa
                 </button>
-                <button
-                    class="btn btn-secondary"
-                    onclick="window.openCopyMonthModal()"
-                    ${!hasPreviousSalaries ? 'disabled title="Sem dados no mês anterior"' : ''}
-                    style="${!hasPreviousSalaries ? 'opacity: 0.5; cursor: not-allowed;' : ''}"
-                >
-                    📅 Copiar Mês Anterior
+                <button class="btn btn-secondary" onclick="window.openReajusteModal()">
+                    🔁 Lançar Reajuste
                 </button>
             </div>
             <div class="action-bar-right" style="font-size: 0.85rem; color: var(--text-secondary);">
                 Período atual: <strong>${currentPeriod}</strong>
-                ${hasCurrentSalaries
-                    ? `<span style="color: var(--success); margin-left: 0.5rem;">● ${currentSalaries.length} salários carregados</span>`
-                    : `<span style="color: var(--warning); margin-left: 0.5rem;">⚠ Sem salários neste período</span>`
-                }
             </div>
         </div>
 
@@ -91,27 +71,47 @@ export function renderPeoplePage() {
             </div>
         </div>
 
-        <!-- ── MODAL: COPIAR MÊS ANTERIOR ── -->
-        <div id="copy-month-modal" class="modal">
-            <div class="modal-content" style="max-width: 720px;">
+        <!-- ── MODAL: LANÇAR REAJUSTE ── -->
+        <div id="reajuste-modal" class="modal">
+            <div class="modal-content" style="max-width: 520px;">
                 <div class="modal-header">
-                    <h2 class="modal-title">📅 Copiar Salários — ${previousPeriod} → ${currentPeriod}</h2>
-                    <button class="modal-close" onclick="window.closeCopyMonthModal()">&times;</button>
+                    <h2 class="modal-title">🔁 Lançar Reajuste</h2>
+                    <button class="modal-close" onclick="window.closeReajusteModal()">&times;</button>
                 </div>
                 <div style="padding: 1.5rem;">
-                    <p style="color: var(--text-secondary); margin: 0 0 1.5rem 0; font-size: 0.9rem;">
-                        Salários de <strong>${previousPeriod}</strong> carregados abaixo.
-                        Ajuste valores, marque demissões ou deixe como está e clique em <strong>Aplicar</strong>.
-                    </p>
-
-                    <div id="copy-month-list" style="display: grid; gap: 0.75rem; max-height: 420px; overflow-y: auto; padding-right: 0.5rem;">
-                        ${renderCopyMonthList(people, previousPeriod)}
+                    <div class="form-group">
+                        <label class="form-label">Pessoa *</label>
+                        <select class="form-select" id="reajuste-person" onchange="window.onReajustePersonChange()">
+                            <option value="">Selecione...</option>
+                            ${people.map(p => `<option value="${p.id}">${p.name} — ${p.role}</option>`).join('')}
+                        </select>
                     </div>
 
-                    <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 1rem; align-items: center;">
-                        <span id="copy-month-summary" style="color: var(--text-secondary); font-size: 0.85rem;"></span>
-                        <button class="btn btn-secondary" onclick="window.closeCopyMonthModal()">Cancelar</button>
-                        <button class="btn btn-primary" onclick="window.applyCopyMonth()">✅ Aplicar ao Período Atual</button>
+                    <p id="reajuste-current-info" style="font-size: 0.85rem; color: var(--text-secondary); margin: 0.75rem 0;"></p>
+
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0.75rem 0;">
+                        <input type="checkbox" id="reajuste-inativo" onchange="window.onReajusteInativoChange()">
+                        Marcar como inativo a partir deste mês (custo zerado)
+                    </label>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group" style="margin: 0;">
+                            <label class="form-label">Novo salário (R$) *</label>
+                            <input type="number" class="form-input" id="reajuste-salary" step="0.01" min="0">
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label class="form-label">A partir de *</label>
+                            <input type="month" class="form-input" id="reajuste-period" value="${currentPeriod}">
+                        </div>
+                    </div>
+
+                    <p style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.75rem;">
+                        Esse valor passa a valer a partir do mês escolhido — meses seguintes continuam com ele automaticamente, até o próximo reajuste.
+                    </p>
+
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" onclick="window.closeReajusteModal()">Cancelar</button>
+                        <button class="btn btn-primary" onclick="window.saveReajuste()">💾 Salvar Reajuste</button>
                     </div>
                 </div>
             </div>
@@ -183,16 +183,12 @@ function renderPeopleList(people) {
 
                         const currentPeriod = storage.getCurrentPeriod();
                         const periodSalary  = storage.getSalaryForPeriod(person.id, currentPeriod);
-                        const displaySalary = periodSalary !== null ? periodSalary : person.salary;
 
                         return `
                             <div style="display: grid; grid-template-columns: 2fr 1.2fr 0.8fr 0.8fr 2fr 1.2fr 1.3fr auto; gap: 1rem; padding: 1rem; border-bottom: 1px solid var(--border); align-items: center;">
                                 <div style="font-weight: 500;">${person.name}</div>
                                 <div>
-                                    R$ ${formatCurrency(displaySalary)}
-                                    ${periodSalary === null
-                                        ? '<span title="Salário base — sem histórico neste período" style="color:var(--warning); font-size:0.75rem;"> ⚠</span>'
-                                        : ''}
+                                    R$ ${formatCurrency(periodSalary)}
                                 </div>
                                 <div>${contracts.length}</div>
                                 <div>${totalDeliverables}</div>
@@ -213,6 +209,7 @@ function renderPeopleList(people) {
                                 </div>
                                 <div style="display: flex; gap: 0.5rem;">
                                     <button class="btn btn-small btn-primary" onclick="window.showPersonBreakdown('${person.id}')" title="Ver Cálculo Detalhado">🔍</button>
+                                    <button class="btn btn-small btn-secondary" onclick="window.openReajusteModal('${person.id}')" title="Lançar Reajuste">🔁</button>
                                     <button class="btn btn-small btn-secondary" onclick="window.editPerson('${person.id}')" title="Editar">✏️</button>
                                     <button class="btn btn-small btn-danger" onclick="window.deletePerson('${person.id}')" title="Excluir">🗑️</button>
                                 </div>
@@ -225,135 +222,65 @@ function renderPeopleList(people) {
     }).join('');
 }
 
-// ─── LISTA DO MODAL "COPIAR MÊS" ─────────────────────────────────────────────
+// ─── MODAL: LANÇAR REAJUSTE ──────────────────────────────────────────────────
 
-function renderCopyMonthList(people, previousPeriod) {
-    if (people.length === 0) {
-        return '<p style="color: var(--text-secondary);">Nenhuma pessoa cadastrada.</p>';
+function openReajusteModal(personId = null) {
+    document.getElementById('reajuste-modal').classList.add('active');
+    document.getElementById('reajuste-person').value = personId || '';
+    document.getElementById('reajuste-period').value = storage.getCurrentPeriod();
+    document.getElementById('reajuste-inativo').checked = false;
+    document.getElementById('reajuste-salary').disabled = false;
+    onReajustePersonChange();
+}
+
+function closeReajusteModal() {
+    document.getElementById('reajuste-modal').classList.remove('active');
+}
+
+function onReajustePersonChange() {
+    const personId = document.getElementById('reajuste-person').value;
+    const infoEl   = document.getElementById('reajuste-current-info');
+    const salaryInput = document.getElementById('reajuste-salary');
+
+    if (!personId) {
+        infoEl.textContent = '';
+        salaryInput.value = '';
+        return;
     }
 
-    return people.map(person => {
-        const prevSalary    = storage.getSalaryForPeriod(person.id, previousPeriod);
-        const salary        = prevSalary !== null ? prevSalary : person.salary;
-
-        return `
-            <div class="copy-month-row" data-person-id="${person.id}"
-                style="background: var(--bg-darker); border: 1px solid var(--border); border-radius: 6px; padding: 1rem;
-                       display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 1rem; align-items: center;">
-
-                <div>
-                    <strong>${person.name}</strong>
-                    <div style="font-size: 0.8rem; color: var(--text-secondary);">${person.role}</div>
-                </div>
-
-                <div style="font-size: 0.85rem; color: var(--text-secondary);">
-                    Anterior:<br>
-                    <strong>R$ ${formatCurrency(salary)}</strong>
-                </div>
-
-                <div>
-                    <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 0.25rem;">Novo salário</label>
-                    <input
-                        type="number"
-                        class="form-input copy-salary-input"
-                        data-person-id="${person.id}"
-                        value="${salary}"
-                        step="0.01"
-                        min="0"
-                        style="font-size: 0.9rem; padding: 0.4rem 0.6rem;"
-                        oninput="window.updateCopyMonthSummary()"
-                    >
-                </div>
-
-                <div style="text-align: center;">
-                    <label style="font-size: 0.75rem; color: var(--text-secondary); display: block; margin-bottom: 0.5rem;">Demitido</label>
-                    <input
-                        type="checkbox"
-                        class="copy-dismissed-input"
-                        data-person-id="${person.id}"
-                        style="width: 18px; height: 18px; cursor: pointer;"
-                        onchange="window.toggleDismissed('${person.id}', this.checked)"
-                    >
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-// ─── MODAL: COPIAR MÊS ───────────────────────────────────────────────────────
-
-function openCopyMonthModal() {
-    document.getElementById('copy-month-modal').classList.add('active');
-    updateCopyMonthSummary();
-}
-
-function closeCopyMonthModal() {
-    document.getElementById('copy-month-modal').classList.remove('active');
-}
-
-function toggleDismissed(personId, isDismissed) {
-    const row   = document.querySelector(`.copy-month-row[data-person-id="${personId}"]`);
-    const input = row.querySelector('.copy-salary-input');
-
-    if (isDismissed) {
-        input.value    = 0;
-        input.disabled = true;
-        row.style.opacity = '0.45';
-    } else {
-        input.disabled = false;
-        row.style.opacity = '1';
-    }
-    updateCopyMonthSummary();
-}
-
-function updateCopyMonthSummary() {
-    const summaryEl = document.getElementById('copy-month-summary');
-    if (!summaryEl) return;
-
-    const inputs    = document.querySelectorAll('.copy-salary-input:not(:disabled)');
-    const dismissed = document.querySelectorAll('.copy-dismissed-input:checked');
-
-    let total = 0;
-    inputs.forEach(input => { total += parseFloat(input.value) || 0; });
-
-    summaryEl.textContent =
-        `${inputs.length} ativos · ${dismissed.length} demitidos · Folha: R$ ${formatCurrency(total)}`;
-}
-
-function applyCopyMonth() {
     const currentPeriod = storage.getCurrentPeriod();
-    const rows = document.querySelectorAll('.copy-month-row');
+    const current = storage.getSalaryForPeriod(personId, currentPeriod);
+    infoEl.textContent = `Salário vigente hoje: R$ ${formatCurrency(current)}`;
+    salaryInput.value = current;
+}
 
-    let applied   = 0;
-    let dismissed = 0;
+function onReajusteInativoChange() {
+    const inativo = document.getElementById('reajuste-inativo').checked;
+    const salaryInput = document.getElementById('reajuste-salary');
+    salaryInput.disabled = inativo;
+    if (inativo) salaryInput.value = 0;
+}
 
-    rows.forEach(row => {
-        const personId       = row.dataset.personId;
-        const salaryInput    = row.querySelector('.copy-salary-input');
-        const dismissedInput = row.querySelector('.copy-dismissed-input');
+function saveReajuste() {
+    const personId  = document.getElementById('reajuste-person').value;
+    const period     = document.getElementById('reajuste-period').value;
+    const inativo    = document.getElementById('reajuste-inativo').checked;
+    const salary     = inativo ? 0 : parseFloat(document.getElementById('reajuste-salary').value);
 
-        const isDismissed = dismissedInput.checked;
-        const salary      = parseFloat(salaryInput.value) || 0;
+    if (!personId) { alert('Selecione uma pessoa.'); return; }
+    if (!period)   { alert('Selecione o mês de vigência.'); return; }
+    if (!inativo && (isNaN(salary) || salary < 0)) { alert('Informe um salário válido.'); return; }
 
-        if (isDismissed) {
-            storage.setSalaryForPeriod(personId, currentPeriod, 0, 'inactive');
-            dismissed++;
-        } else {
-            storage.setSalaryForPeriod(personId, currentPeriod, salary, 'active');
-            applied++;
-        }
-    });
+    storage.setSalaryForPeriod(personId, period, salary, inativo ? 'inactive' : 'active');
+    closeReajusteModal();
 
-    closeCopyMonthModal();
+    const person = personService.getPerson(personId);
+    const msg = inativo
+        ? `✅ ${person.name} marcado como inativo a partir de ${period}`
+        : `✅ Novo salário de ${person.name} (R$ ${formatCurrency(salary)}) vigente a partir de ${period}`;
 
-    const msg = `✅ ${applied} salários aplicados em ${currentPeriod}` +
-        (dismissed > 0 ? ` · ${dismissed} marcados como demitidos` : '');
-
-    if (typeof window.showToast === 'function') {
-        window.showToast(msg);
-    } else {
-        alert(msg);
-    }
+    if (typeof window.showToast === 'function') window.showToast(msg);
+    else alert(msg);
 
     renderPeoplePage();
 }
@@ -474,11 +401,11 @@ function attachPeopleHandlers() {
     window.deletePerson              = deletePerson;
     window.showPersonBreakdown       = showPersonBreakdown;
     window.closePersonBreakdownModal = closePersonBreakdownModal;
-    window.openCopyMonthModal        = openCopyMonthModal;
-    window.closeCopyMonthModal       = closeCopyMonthModal;
-    window.applyCopyMonth            = applyCopyMonth;
-    window.toggleDismissed           = toggleDismissed;
-    window.updateCopyMonthSummary    = updateCopyMonthSummary;
+    window.openReajusteModal         = openReajusteModal;
+    window.closeReajusteModal        = closeReajusteModal;
+    window.onReajustePersonChange    = onReajustePersonChange;
+    window.onReajusteInativoChange   = onReajusteInativoChange;
+    window.saveReajuste              = saveReajuste;
 }
 
 function openPersonModal() {

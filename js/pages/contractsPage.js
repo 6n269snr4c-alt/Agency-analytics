@@ -12,7 +12,7 @@ import periodService from '../services/periodService.js';
 import storage from '../store/storage.js';
 import { attachClientAutocomplete } from '../components/clientAutocomplete.js';
 
-const TEAM_ROLES = ['Designer', 'Filmmaker', 'Gestor de Tráfego'];
+const TEAM_ROLES = ['Designer', 'Filmmaker', 'Copywriter', 'Gestor de Tráfego'];
 const MONTHS_VISIBLE = 6;
 
 let selectedMonth   = null;
@@ -206,6 +206,7 @@ function renderContractsTable(contracts, squads, allPeople) {
                         <th>Head</th>
                         <th>Designer</th>
                         <th>Filmmaker</th>
+                        <th>Copywriter</th>
                         <th>Gestor Tráfego</th>
                         <th>Receita</th>
                         <th>Custo</th>

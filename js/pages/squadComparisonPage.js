@@ -28,6 +28,10 @@ function marginLabel(margin) {
     return '🔴 Crítico';
 }
 
+// ─── estado ──────────────────────────────────────────────────────────────────
+
+let includeProjects = true;
+
 // ─── entry point ─────────────────────────────────────────────────────────────
 
 export function renderSquadComparisonPage() {
@@ -51,7 +55,7 @@ export function renderSquadComparisonPage() {
         return;
     }
 
-    const allDRE = analyticsService.getAllSquadsDRE();
+    const allDRE = analyticsService.getAllSquadsDRE(null, includeProjects);
 
     const consolidated = {
         revenue: allDRE.reduce((s, d) => s + d.revenue.total, 0),
@@ -69,6 +73,12 @@ export function renderSquadComparisonPage() {
         </div>
 
         ${renderPeriodSelector()}
+
+        <label class="dre-projects-toggle">
+            <input type="checkbox" id="include-projects-toggle" ${includeProjects ? 'checked' : ''} onchange="window.toggleIncludeProjects(this.checked)">
+            🚀 Incluir Projetos Pontuais na receita e nos custos
+        </label>
+
         ${renderConsolidatedHeader(consolidated, allDRE.length)}
 
         <div class="dre-squads-grid">
@@ -80,6 +90,10 @@ export function renderSquadComparisonPage() {
 
     // Bind toggle events after render
     bindToggleEvents();
+    window.toggleIncludeProjects = (checked) => {
+        includeProjects = checked;
+        renderSquadComparisonPage();
+    };
 }
 
 // ─── toggle handlers ─────────────────────────────────────────────────────────
@@ -142,10 +156,15 @@ function renderSquadDRE(dre) {
     const revenueBodyId = uid('rev');
     const costBodyId    = uid('cost');
 
-    const revenueCount  = dre.revenue.perContract.length;
+    const revenueItems = [
+        ...dre.revenue.perContract.map(c => ({ ...c, isProject: false })),
+        ...(dre.revenue.perProject || [])
+    ];
+    const revenueCount  = revenueItems.length;
     const membersCount  = dre.costs.members.length;
     const hasHead       = !!dre.costs.head;
-    const costLinesCount = membersCount + (hasHead ? 1 : 0);
+    const externalProjectsList = dre.costs.externalProjectsList || [];
+    const costLinesCount = membersCount + (hasHead ? 1 : 0) + externalProjectsList.length;
 
     return `
         <div class="dre-card">
@@ -167,7 +186,7 @@ function renderSquadDRE(dre) {
                      title="Clique para ${revenueCount > 0 ? 'ver/ocultar contratos' : 'expandir'}">
                     <span>
                         📈 Receita Bruta
-                        <span class="dre-count-badge">${revenueCount} contrato${revenueCount !== 1 ? 's' : ''}</span>
+                        <span class="dre-count-badge">${revenueCount} item${revenueCount !== 1 ? 's' : ''}</span>
                     </span>
                     <span style="display:flex;align-items:center;gap:0.75rem">
                         <span>R$ ${fmt(dre.revenue.total)}</span>
@@ -177,11 +196,12 @@ function renderSquadDRE(dre) {
                 <div id="${revenueBodyId}" class="dre-collapsible-body">
                     ${revenueCount > 0 ? `
                         <div class="dre-rows">
-                            ${dre.revenue.perContract.map(c => `
+                            ${revenueItems.map(c => `
                                 <div class="dre-row">
                                     <span class="dre-row-label">
                                         <span class="dre-dot dre-dot-revenue"></span>
                                         ${c.client}
+                                        ${c.isProject ? '<span class="dre-tag dre-tag-project">🚀 PONTUAL</span>' : ''}
                                     </span>
                                     <span class="dre-row-value">R$ ${fmt(c.value)}</span>
                                 </div>
@@ -198,7 +218,7 @@ function renderSquadDRE(dre) {
                      title="Clique para ver/ocultar membros">
                     <span>
                         💸 Custos do Squad
-                        <span class="dre-count-badge">${costLinesCount} pessoa${costLinesCount !== 1 ? 's' : ''}</span>
+                        <span class="dre-count-badge">${costLinesCount} item${costLinesCount !== 1 ? 's' : ''}</span>
                     </span>
                     <span style="display:flex;align-items:center;gap:0.75rem">
                         <span>R$ ${fmt(dre.costs.total)}</span>
@@ -237,6 +257,26 @@ function renderSquadDRE(dre) {
                             ${dre.costs.members.map(m => renderMemberRow(m)).join('')}
                         </div>
                     ` : `<div class="dre-empty-row">Sem membros além do Head</div>`}
+
+                    <!-- Custo externo de projetos pontuais -->
+                    ${externalProjectsList.length > 0 ? `
+                        <div class="dre-subsection-label">
+                            <span>Custo Externo (Projetos Pontuais)</span>
+                            <span>R$ ${fmt(dre.costs.totalExternalProjects)}</span>
+                        </div>
+                        <div class="dre-rows">
+                            ${externalProjectsList.map(p => `
+                                <div class="dre-row">
+                                    <span class="dre-row-label">
+                                        <span class="dre-dot dre-dot-revenue"></span>
+                                        ${p.client}
+                                        <span class="dre-tag dre-tag-project">🚀 PONTUAL</span>
+                                    </span>
+                                    <span class="dre-row-value">R$ ${fmt(p.cost)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
                 </div>
             </div>
 
@@ -264,7 +304,7 @@ function renderSquadDRE(dre) {
                     </span>
                 </div>
                 <div class="dre-result-row dre-result-sub">
-                    <span>${dre.contractCount} contrato${dre.contractCount !== 1 ? 's' : ''}</span>
+                    <span>${dre.contractCount} contrato${dre.contractCount !== 1 ? 's' : ''}${dre.projectCount ? ` + ${dre.projectCount} projeto${dre.projectCount !== 1 ? 's' : ''}` : ''}</span>
                     <span>${dre.memberCount} pessoa${dre.memberCount !== 1 ? 's' : ''} (incl. head)</span>
                 </div>
             </div>
@@ -518,6 +558,19 @@ function dreStyles() {
             cursor: help;
         }
         .dre-tag-head   { background: rgba(78,168,222,0.2);   color: #4ea8de; }
+        .dre-tag-project { background: rgba(124,252,0,0.15); color: var(--fast-green,#7cfc00); }
+
+        .dre-projects-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            margin: 0.75rem 0 1.25rem;
+            width: fit-content;
+        }
+        .dre-projects-toggle input { width: 16px; height: 16px; cursor: pointer; }
         .dre-tag-shared { background: rgba(255,190,50,0.2);   color: #ffbe32; }
 
         /* ── Result block ── */

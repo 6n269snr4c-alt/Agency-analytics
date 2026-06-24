@@ -47,18 +47,10 @@ class PeriodService {
         return !!storage.getPeriod(periodId);
     }
 
-    // Create new period by copying from previous
+    // Cria o registro do novo período. Salário não precisa ser copiado: sem
+    // reajuste lançado, getSalaryForPeriod() já cai pro último valor conhecido.
     createPeriodFromPrevious(newPeriodId) {
-        const prevPeriodId = this.getPreviousPeriod(newPeriodId);
-        
-        // Set as current period (this creates it)
         storage.setCurrentPeriod(newPeriodId);
-        
-        // Copy data if previous period exists
-        if (this.periodExists(prevPeriodId)) {
-            storage.copyPeriodData(prevPeriodId, newPeriodId);
-        }
-        
         return storage.getPeriod(newPeriodId);
     }
 

@@ -5,10 +5,12 @@
 // o mês atual do antigo e abre um novo já confirmado, preservando o histórico.
 
 import contractService from '../services/contractService.js';
+import projectService from '../services/projectService.js';
 import squadService from '../services/squadService.js';
 import personService from '../services/personService.js';
 import analyticsService from '../services/analyticsService.js';
 import periodService from '../services/periodService.js';
+import router from '../router.js';
 import storage from '../store/storage.js';
 import { attachClientAutocomplete } from '../components/clientAutocomplete.js';
 
@@ -80,10 +82,20 @@ export function renderContractsPage() {
         ? contractService.getAllContractsEver()
         : contractService.getContractsForPeriod(selectedMonth);
 
+    let projects = showInactive
+        ? projectService.getAllProjects()
+        : projectService.getProjectsForPeriod(selectedMonth);
+
     if (searchTerm) {
         const term = searchTerm.toLowerCase();
         contracts = contracts.filter(c => c.client.toLowerCase().includes(term));
+        projects = projects.filter(p => (p.client || p.name).toLowerCase().includes(term));
     }
+
+    const recurringRevenue = contractService.getContractsForPeriod(selectedMonth)
+        .reduce((sum, c) => sum + analyticsService.getContractROI(c.id, selectedMonth).revenue, 0);
+    const oneOffRevenue = projectService.getProjectsForPeriod(selectedMonth)
+        .reduce((sum, p) => sum + analyticsService.getProjectROI(p.id, selectedMonth).revenue, 0);
 
     contentEl.innerHTML = `
         <div class="page-header">
@@ -119,8 +131,23 @@ export function renderContractsPage() {
             </div>
         </div>
 
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin-bottom:1.5rem;">
+            <div class="stat-card">
+                <div class="stat-value">R$ ${fmt(recurringRevenue)}</div>
+                <div class="stat-label">Receita Recorrência (${monthShortLabel(selectedMonth)}/${selectedMonth.split('-')[0].slice(2)})</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">R$ ${fmt(oneOffRevenue)}</div>
+                <div class="stat-label">Receita Projetos Pontuais (${monthShortLabel(selectedMonth)}/${selectedMonth.split('-')[0].slice(2)})</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" style="color:var(--fast-green,#7cfc00);">R$ ${fmt(recurringRevenue + oneOffRevenue)}</div>
+                <div class="stat-label">Total do Mês</div>
+            </div>
+        </div>
+
         <div id="contracts-list">
-            ${renderContractsTable(contracts, squads, allPeople)}
+            ${renderContractsTable(contracts, projects, squads, allPeople)}
         </div>
 
         <!-- MODAL: NOVO / LANÇAR NOVO CONTRATO -->
@@ -165,12 +192,12 @@ export function renderContractsPage() {
 
 // ─── TABELA ───────────────────────────────────────────────────────────────────
 
-function renderContractsTable(contracts, squads, allPeople) {
-    if (contracts.length === 0) {
+function renderContractsTable(contracts, projects, squads, allPeople) {
+    if (contracts.length === 0 && projects.length === 0) {
         return `
             <div class="empty-state">
                 <div class="empty-state-icon">📋</div>
-                <h3>Nenhum contrato${showInactive ? '' : ' ativo neste mês'}</h3>
+                <h3>Nenhum contrato ou projeto${showInactive ? '' : ' ativo neste mês'}</h3>
                 <p>${showInactive ? 'Comece criando seu primeiro contrato' : 'Marque "Mostrar inativos" para ver todos, ou crie um novo contrato'}</p>
             </div>
         `;
@@ -179,7 +206,7 @@ function renderContractsTable(contracts, squads, allPeople) {
     const months = getMonthOptions();
     const currentPeriod = storage.getCurrentPeriod();
 
-    const rows = contracts.map(contract => {
+    const contractRows = contracts.map(contract => {
         const roi   = analyticsService.getContractROI(contract.id, selectedMonth);
         const squad = contract.squadTag ? squadService.getSquad(contract.squadTag) : null;
         const locked = contractService.isLockedByHistory(contract.id, currentPeriod);
@@ -188,10 +215,20 @@ function renderContractsTable(contracts, squads, allPeople) {
         const team = groupTeamByRole(contract, allPeople);
         const head = squad && squad.headId ? allPeople.find(p => p.id === squad.headId) : null;
         const headCost = roi.costBreakdown.find(c => c.isHead);
-        return { contract, roi, squad, locked, confirmedThisMonth, lastConfirmed, team, head, headCost };
+        return { type: 'contract', clientKey: contract.client, contract, roi, squad, locked, confirmedThisMonth, lastConfirmed, team, head, headCost };
     });
 
-    rows.sort((a, b) => a.contract.client.toLowerCase().localeCompare(b.contract.client.toLowerCase()));
+    const projectRows = projects.map(project => {
+        const roi   = analyticsService.getProjectROI(project.id, selectedMonth);
+        const squad = project.squadId ? squadService.getSquad(project.squadId) : null;
+        const head  = squad && squad.headId ? allPeople.find(p => p.id === squad.headId) : null;
+        const headCost = roi.costBreakdown.find(c => c.isHead);
+        const clientKey = project.client || project.name;
+        return { type: 'project', clientKey, project, roi, squad, head, headCost };
+    });
+
+    const rows = [...contractRows, ...projectRows]
+        .sort((a, b) => a.clientKey.toLowerCase().localeCompare(b.clientKey.toLowerCase()));
 
     return `
         <div class="table-container" style="overflow-x:auto;">
@@ -217,7 +254,7 @@ function renderContractsTable(contracts, squads, allPeople) {
                     </tr>
                 </thead>
                 <tbody>
-                    ${rows.map(r => renderRow(r, squads, months)).join('')}
+                    ${rows.map(r => r.type === 'contract' ? renderRow(r, squads, months) : renderProjectRow(r)).join('')}
                 </tbody>
             </table>
         </div>
@@ -289,6 +326,45 @@ function renderRow({ contract, roi, squad, locked, confirmedThisMonth, lastConfi
                                 ? `<button class="btn btn-small btn-error" ${viewLocked ? 'disabled' : ''} onclick="window.deleteContract('${contract.id}')" title="Excluir rascunho">🗑️</button>`
                                 : ''}
                         `}
+                </div>
+            </td>
+        </tr>
+    `;
+}
+
+function renderProjectRow({ project, roi, squad, head, headCost }) {
+    const rowMuted = project.billingPeriod !== selectedMonth;
+    const periodLabel = project.billingPeriod
+        ? monthShortLabel(project.billingPeriod) + '/' + project.billingPeriod.split('-')[0].slice(2)
+        : '—';
+
+    return `
+        <tr class="${rowMuted ? 'row-inactive' : ''}">
+            <td style="position:sticky; left:0; background:${rowMuted ? 'var(--bg-darker,#15151a)' : 'var(--bg,#0f0f12)'};">
+                <span class="project-badge" title="Projeto pontual — lançado/editado na tela de Projetos">🚀</span>
+                ${project.client || project.name}
+                ${project.client ? `<div style="font-size:0.7rem; color:var(--text-secondary);">${project.name}</div>` : ''}
+            </td>
+            <td>${squad ? `${squad.icon || ''} ${squad.name}` : '<span class="text-muted">—</span>'}</td>
+            <td style="text-align:center;" class="text-muted">—</td>
+            <td style="text-align:center;" class="text-muted">—</td>
+            <td style="text-align:center;" class="text-muted">—</td>
+            <td>${head ? `<span class="role-chip"><span class="role-chip-avatar">${head.name[0]}</span>${head.name}<span class="role-chip-badge auto">auto</span></span>` : '<span class="text-muted">—</span>'}
+                ${headCost ? `<div class="role-chip-cost">R$ ${fmt(headCost.totalCost)}</div>` : ''}
+            </td>
+            <td class="text-muted" style="text-align:center;">—</td>
+            <td class="text-muted" style="text-align:center;">—</td>
+            <td class="text-muted" style="text-align:center;">—</td>
+            <td class="text-muted" style="text-align:center;">—</td>
+            <td style="text-align:right;">R$ ${fmt(roi.revenue)}</td>
+            <td style="text-align:right; color:var(--text-secondary);">R$ ${fmt(roi.cost)}</td>
+            <td style="text-align:center;"><span class="badge ${marginBadgeClass(roi.margin)}">${roi.margin.toFixed(0)}%</span></td>
+            <td style="text-align:center; font-size:0.8rem; color:var(--text-secondary);">${periodLabel}</td>
+            <td style="text-align:center;"><span class="project-pill">🚀 Pontual</span></td>
+            <td style="white-space:nowrap;">
+                <div style="display:flex; gap:0.3rem; justify-content:center;">
+                    <button class="btn btn-small btn-primary" onclick="window.showProjectBreakdown('${project.id}')" title="Ver cálculo">🔍</button>
+                    <button class="btn btn-small btn-secondary" onclick="window.goToProject('${project.id}')" title="Editar na tela de Projetos">✏️</button>
                 </div>
             </td>
         </tr>
@@ -600,6 +676,58 @@ function saveTeam() {
 
 // ─── BREAKDOWN ────────────────────────────────────────────────────────────────
 
+function renderBreakdownItem(item) {
+    if (item.mode === 'externo') {
+        return `
+            <div class="breakdown-person-card">
+                <div class="breakdown-person-header">
+                    <strong>${item.name}</strong>
+                    <span class="badge" style="background:rgba(244,67,54,0.15); color:#f44336;">Custo Externo</span>
+                </div>
+                <div style="font-size:0.85rem; color:var(--text-secondary);">Informado no lançamento do projeto</div>
+                <div style="margin-top:0.5rem; font-size:1.1rem; font-weight:700; color:var(--fast-green,#7cfc00);">R$ ${fmt(item.totalCost)}</div>
+            </div>
+        `;
+    }
+    if (item.mode === 'fixo') {
+        return `
+            <div class="breakdown-person-card">
+                <div class="breakdown-person-header">
+                    <strong>${item.name}</strong>
+                    <span class="badge" style="background:rgba(255,160,0,0.15); color:#ff9800;">Fixo</span>
+                </div>
+                <div style="font-size:0.85rem; color:var(--text-secondary);">Valor travado neste contrato</div>
+                <div style="margin-top:0.5rem; font-size:1.1rem; font-weight:700; color:var(--fast-green,#7cfc00);">R$ ${fmt(item.totalCost)}</div>
+            </div>
+        `;
+    }
+    if (item.mode === 'head') {
+        return `
+            <div class="breakdown-person-card">
+                <div class="breakdown-person-header">
+                    <strong>${item.name}</strong>
+                    <span class="badge badge-success">Automático</span>
+                </div>
+                <div style="font-size:0.85rem; color:var(--text-secondary);">Rateado igualmente entre os clientes do squad (contratos + projetos)</div>
+                <div style="margin-top:0.5rem; font-size:1.1rem; font-weight:700; color:var(--fast-green,#7cfc00);">R$ ${fmt(item.totalCost)}</div>
+            </div>
+        `;
+    }
+    return `
+        <div class="breakdown-person-card">
+            <div class="breakdown-person-header">
+                <strong>${item.name}</strong>
+                <span class="badge badge-info">Rateado</span>
+            </div>
+            <div style="font-size:0.85rem; color:var(--text-secondary); line-height:1.6;">
+                Salário: R$ ${fmt(item.salary)}<br>
+                Entregas aqui: ${item.relevantHere} de ${item.totalRateable} totais (${item.totalRateable > 0 ? ((item.relevantHere/item.totalRateable)*100).toFixed(1) : 0}%)
+            </div>
+            <div style="margin-top:0.5rem; font-size:1.1rem; font-weight:700; color:var(--fast-green,#7cfc00);">R$ ${fmt(item.totalCost)}</div>
+        </div>
+    `;
+}
+
 function showContractBreakdown(contractId) {
     const contract = contractService.getContract(contractId);
     const roi = analyticsService.getContractROI(contractId, selectedMonth);
@@ -613,45 +741,7 @@ function showContractBreakdown(contractId) {
         </div>
     `;
 
-    const peopleHtml = roi.costBreakdown.map(item => {
-        if (item.mode === 'fixo') {
-            return `
-                <div class="breakdown-person-card">
-                    <div class="breakdown-person-header">
-                        <strong>${item.name}</strong>
-                        <span class="badge" style="background:rgba(255,160,0,0.15); color:#ff9800;">Fixo</span>
-                    </div>
-                    <div style="font-size:0.85rem; color:var(--text-secondary);">Valor travado neste contrato</div>
-                    <div style="margin-top:0.5rem; font-size:1.1rem; font-weight:700; color:var(--fast-green,#7cfc00);">R$ ${fmt(item.totalCost)}</div>
-                </div>
-            `;
-        }
-        if (item.mode === 'head') {
-            return `
-                <div class="breakdown-person-card">
-                    <div class="breakdown-person-header">
-                        <strong>${item.name}</strong>
-                        <span class="badge badge-success">Automático</span>
-                    </div>
-                    <div style="font-size:0.85rem; color:var(--text-secondary);">Rateado por volume (vídeo+estático) dos clientes do squad</div>
-                    <div style="margin-top:0.5rem; font-size:1.1rem; font-weight:700; color:var(--fast-green,#7cfc00);">R$ ${fmt(item.totalCost)}</div>
-                </div>
-            `;
-        }
-        return `
-            <div class="breakdown-person-card">
-                <div class="breakdown-person-header">
-                    <strong>${item.name}</strong>
-                    <span class="badge badge-info">Rateado</span>
-                </div>
-                <div style="font-size:0.85rem; color:var(--text-secondary); line-height:1.6;">
-                    Salário: R$ ${fmt(item.salary)}<br>
-                    Entregas aqui: ${item.relevantHere} de ${item.totalRateable} totais (${item.totalRateable > 0 ? ((item.relevantHere/item.totalRateable)*100).toFixed(1) : 0}%)
-                </div>
-                <div style="margin-top:0.5rem; font-size:1.1rem; font-weight:700; color:var(--fast-green,#7cfc00);">R$ ${fmt(item.totalCost)}</div>
-            </div>
-        `;
-    }).join('');
+    const peopleHtml = roi.costBreakdown.map(renderBreakdownItem).join('');
 
     const summaryHtml = `
         <div style="background:var(--bg-darker); padding:1.25rem; border-radius:8px; border:2px solid ${roi.profit > 0 ? 'var(--fast-green,#7cfc00)' : 'var(--error,#f44336)'}; margin-top:1.5rem;">
@@ -670,8 +760,41 @@ function showContractBreakdown(contractId) {
     document.getElementById('breakdown-modal').classList.add('active');
 }
 
+function showProjectBreakdown(projectId) {
+    const project = projectService.getProjectById(projectId);
+    const roi = analyticsService.getProjectROI(projectId, selectedMonth);
+
+    document.getElementById('breakdown-title').textContent = `Detalhamento: ${project.name} (projeto pontual${project.client ? ' — ' + project.client : ''})`;
+
+    const peopleHtml = roi.costBreakdown.map(renderBreakdownItem).join('');
+    const hasCostItems = roi.costBreakdown.length > 0;
+
+    const summaryHtml = `
+        <div style="background:var(--bg-darker); padding:1.25rem; border-radius:8px; border:2px solid ${roi.profit > 0 ? 'var(--fast-green,#7cfc00)' : 'var(--error,#f44336)'}; margin-top:${hasCostItems ? '1.5rem' : '0'};">
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;"><span>Receita</span><strong>R$ ${fmt(roi.revenue)}</strong></div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;"><span>Custo Total</span><strong style="color:var(--error,#f44336)">R$ ${fmt(roi.cost)}</strong></div>
+            <div style="display:flex; justify-content:space-between; padding-top:0.5rem; border-top:1px solid var(--border);">
+                <span style="font-weight:700;">Lucro</span>
+                <strong style="color:${roi.profit > 0 ? 'var(--fast-green,#7cfc00)' : 'var(--error,#f44336)'}; font-size:1.2rem;">R$ ${fmt(roi.profit)} (${roi.margin.toFixed(1)}%)</strong>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('breakdown-content').innerHTML =
+        (hasCostItems ? `<div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:1rem;">${peopleHtml}</div>` : '') +
+        summaryHtml;
+    document.getElementById('breakdown-modal').classList.add('active');
+}
+
 function closeBreakdownModal() {
     document.getElementById('breakdown-modal').classList.remove('active');
+}
+
+function goToProject(projectId) {
+    router.navigate('/projects');
+    setTimeout(() => {
+        if (typeof window.editProject === 'function') window.editProject(projectId);
+    }, 80);
 }
 
 // ─── HANDLERS ─────────────────────────────────────────────────────────────────
@@ -704,6 +827,8 @@ function attachContractHandlers() {
     };
 
     window.showContractBreakdown = showContractBreakdown;
+    window.showProjectBreakdown  = showProjectBreakdown;
+    window.goToProject           = goToProject;
     window.closeBreakdownModal   = closeBreakdownModal;
 
     window.selectMonth = (periodId) => { selectedMonth = periodId; renderContractsPage(); };
@@ -909,5 +1034,20 @@ function contractStyles() {
         }
         .month-sq.checked { background: rgba(124,252,0,0.15); border-color: var(--fast-green, #7cfc00); }
         .month-sq.ref { border-color: #64b5f6; }
+
+        .project-badge {
+            display: inline-block;
+            font-size: 0.85rem;
+            margin-right: 0.25rem;
+        }
+        .project-pill {
+            font-size: 0.68rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 10px;
+            background: rgba(124,252,0,0.1);
+            border: 1px solid rgba(124,252,0,0.3);
+            color: var(--fast-green, #7cfc00);
+            white-space: nowrap;
+        }
     `;
 }

@@ -61,9 +61,11 @@ function renderPersonRow(r) {
     const statusLabel = r.isFixedOnly
         ? '✓ Só valores fixos (não precisa bater)'
         : r.isOk
-            ? '✓ Bate com o salário'
+            ? (r.isHead ? '✓ Bate (rateio automático de Head)' : '✓ Bate com o salário')
             : (r.diff > 0
-                ? `⚠️ Faltam R$ ${fmt(r.diff)} sem contrato`
+                ? (r.isHead
+                    ? `⚠️ Faltam R$ ${fmt(r.diff)} — squad sem contrato confirmado neste mês`
+                    : `⚠️ Faltam R$ ${fmt(r.diff)} sem contrato`)
                 : `⚠️ R$ ${fmt(Math.abs(r.diff))} acima do salário`);
 
     return `

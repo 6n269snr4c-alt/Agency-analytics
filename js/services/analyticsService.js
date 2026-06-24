@@ -22,6 +22,7 @@
 //   problema.)
 
 import storage from '../store/storage.js';
+import projectService from './projectService.js';
 
 class AnalyticsService {
 
@@ -127,13 +128,17 @@ class AnalyticsService {
         let total = 0;
 
         // Custo automático de Head (não está em peopleAllocations — soma aqui
-        // pra Conferência Salarial não acusar divergência indevida).
+        // pra Conferência Salarial não acusar divergência indevida). Inclui
+        // tanto contratos recorrentes quanto projetos pontuais do squad.
         storage.getSquads()
             .filter(squad => squad.headId === personId)
             .forEach(squad => {
                 activeContracts
                     .filter(c => c.squadTag === squad.id)
                     .forEach(c => { total += this.getHeadCostForContract(c.id, currentPeriod); });
+                projectService.getProjectsForPeriod(currentPeriod)
+                    .filter(p => p.squadId === squad.id)
+                    .forEach(p => { total += this.getHeadCostForProject(p.id, currentPeriod); });
             });
 
         // Alocações manuais (rateado/fixo) normais.
@@ -275,6 +280,32 @@ class AnalyticsService {
     // de um MESMO cliente quando ele tem mais de um — com fallback pra divisão
     // igual também aí, se a receita desses contratos específicos for zero.
 
+    // Universo de clientes de um squad num período — conta contratos recorrentes
+    // E projetos pontuais. Heads atuam nos dois, então o rateio igual-por-cliente
+    // precisa considerar ambos, senão um cliente só-de-projeto fica de fora.
+    _squadClientsInPeriod(squadId, periodId) {
+        const contractClients = storage.getActiveContractsForPeriod(periodId)
+            .filter(c => c.squadTag === squadId)
+            .map(c => c.client);
+        const projectClients = projectService.getProjectsForPeriod(periodId)
+            .filter(p => p.squadId === squadId)
+            .map(p => p.client || p.name);
+        return Array.from(new Set([...contractClients, ...projectClients]));
+    }
+
+    // Receita de um cliente dentro do squad/período, somando contratos E projetos
+    // pontuais — usado só pra dividir entre múltiplos contratos/projetos do MESMO
+    // cliente, depois que a parte igual-por-cliente já foi definida.
+    _clientRevenueAcrossSquad(squadId, clientName, periodId) {
+        const contractsRevenue = storage.getActiveContractsForPeriod(periodId)
+            .filter(c => c.squadTag === squadId && c.client === clientName)
+            .reduce((sum, c) => sum + (this._getProjectionData(c, periodId).value || 0), 0);
+        const projectsRevenue = projectService.getProjectsForPeriod(periodId)
+            .filter(p => p.squadId === squadId && (p.client || p.name) === clientName)
+            .reduce((sum, p) => sum + (p.value || 0), 0);
+        return contractsRevenue + projectsRevenue;
+    }
+
     getHeadCostForContract(contractId, periodId = null) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
         const contract = storage.getContractById(contractId);
@@ -286,25 +317,106 @@ class AnalyticsService {
         const headSalary = this.getPersonCost(squad.headId, currentPeriod);
         if (headSalary === 0) return 0;
 
-        const activeContracts = storage.getActiveContractsForPeriod(currentPeriod);
-        const squadContracts  = activeContracts.filter(c => c.squadTag === squad.id);
-        const distinctClients = Array.from(new Set(squadContracts.map(c => c.client)));
+        const distinctClients = this._squadClientsInPeriod(squad.id, currentPeriod);
         if (distinctClients.length === 0) return 0;
 
         const headCostPerClient = headSalary / distinctClients.length;
 
-        const clientContracts = squadContracts.filter(c => c.client === contract.client);
-        if (clientContracts.length <= 1) return headCostPerClient;
-
-        const clientRevenue = clientContracts.reduce((sum, c) => {
-            return sum + (this._getProjectionData(c, currentPeriod).value || 0);
-        }, 0);
+        const clientRevenue = this._clientRevenueAcrossSquad(squad.id, contract.client, currentPeriod);
         if (clientRevenue === 0) {
-            return headCostPerClient / clientContracts.length;
+            const activeContracts = storage.getActiveContractsForPeriod(currentPeriod);
+            const clientContracts = activeContracts.filter(c => c.squadTag === squad.id && c.client === contract.client);
+            const clientProjects  = projectService.getProjectsForPeriod(currentPeriod).filter(p => p.squadId === squad.id && (p.client || p.name) === contract.client);
+            const sharedCount = clientContracts.length + clientProjects.length;
+            return sharedCount <= 1 ? headCostPerClient : headCostPerClient / sharedCount;
         }
 
         const thisContractRevenue = this._getProjectionData(contract, currentPeriod).value || 0;
         return headCostPerClient * (thisContractRevenue / clientRevenue);
+    }
+
+    // Mesma lógica do Head, agora para um projeto pontual — usa o MESMO universo
+    // de clientes do squad+período (contratos + projetos), então a parte de
+    // cada um soma certinho ao salário do Head.
+    getHeadCostForProject(projectId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        const project = projectService.getProjectById(projectId);
+        if (!project || !project.squadId) return 0;
+
+        const squad = storage.getSquadById(project.squadId);
+        if (!squad || !squad.headId) return 0;
+
+        const headSalary = this.getPersonCost(squad.headId, currentPeriod);
+        if (headSalary === 0) return 0;
+
+        const distinctClients = this._squadClientsInPeriod(squad.id, currentPeriod);
+        if (distinctClients.length === 0) return 0;
+
+        const headCostPerClient = headSalary / distinctClients.length;
+        const clientKey = project.client || project.name;
+
+        const clientRevenue = this._clientRevenueAcrossSquad(squad.id, clientKey, currentPeriod);
+        if (clientRevenue === 0) {
+            const activeContracts = storage.getActiveContractsForPeriod(currentPeriod);
+            const clientContracts = activeContracts.filter(c => c.squadTag === squad.id && c.client === clientKey);
+            const clientProjects  = projectService.getProjectsForPeriod(currentPeriod).filter(p => p.squadId === squad.id && (p.client || p.name) === clientKey);
+            const sharedCount = clientContracts.length + clientProjects.length;
+            return sharedCount <= 1 ? headCostPerClient : headCostPerClient / sharedCount;
+        }
+
+        const thisProjectRevenue = project.value || 0;
+        return headCostPerClient * (thisProjectRevenue / clientRevenue);
+    }
+
+    /**
+     * ROI de um projeto pontual: receita (valor do projeto) menos custo
+     * externo (informado no lançamento) e rateio automático do Head.
+     */
+    getProjectROI(projectId, periodId = null) {
+        const project = projectService.getProjectById(projectId);
+        if (!project) return { revenue: 0, cost: 0, profit: 0, margin: 0, costBreakdown: [] };
+
+        const currentPeriod = periodId || project.billingPeriod || storage.getCurrentPeriod();
+        const revenue = project.value || 0;
+        const costBreakdown = [];
+        let cost = 0;
+
+        const externalCost = project.externalCost || 0;
+        if (externalCost > 0) {
+            cost += externalCost;
+            costBreakdown.push({
+                name: project.externalCostNote || 'Custo externo',
+                mode: 'externo',
+                totalCost: externalCost
+            });
+        }
+
+        const headCost = this.getHeadCostForProject(project.id, currentPeriod);
+        if (headCost > 0) {
+            cost += headCost;
+            const squad = storage.getSquadById(project.squadId);
+            if (squad && squad.headId) {
+                const head = storage.getPersonById(squad.headId);
+                if (head) {
+                    costBreakdown.push({
+                        personId: head.id,
+                        name: head.name + ' (Head)',
+                        role: head.role,
+                        mode: 'head',
+                        totalCost: headCost,
+                        isHead: true
+                    });
+                }
+            }
+        }
+
+        return {
+            revenue,
+            cost,
+            profit: revenue - cost,
+            margin: revenue > 0 ? ((revenue - cost) / revenue) * 100 : 0,
+            costBreakdown
+        };
     }
 
     // ========================================
@@ -397,9 +509,15 @@ class AnalyticsService {
         return activeContracts.filter(contract => contract.squadTag === squadId);
     }
 
+    getSquadProjects(squadId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        return projectService.getProjectsForPeriod(currentPeriod).filter(p => p.squadId === squadId);
+    }
+
     getSquadROI(squadId, periodId = null) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
         const contracts = this.getSquadContracts(squadId, currentPeriod);
+        const projects  = this.getSquadProjects(squadId, currentPeriod);
         const squad = storage.getSquadById(squadId);
 
         if (!squad) {
@@ -415,12 +533,19 @@ class AnalyticsService {
             totalCost += roi.cost;
         });
 
+        projects.forEach(project => {
+            const roi = this.getProjectROI(project.id, currentPeriod);
+            totalRevenue += roi.revenue;
+            totalCost += roi.cost;
+        });
+
         return {
             revenue: totalRevenue,
             cost: totalCost,
             profit: totalRevenue - totalCost,
             margin: totalRevenue > 0 ? ((totalRevenue - totalCost) / totalRevenue) * 100 : 0,
-            contractCount: contracts.length
+            contractCount: contracts.length,
+            projectCount: projects.length
         };
     }
 
@@ -434,12 +559,18 @@ class AnalyticsService {
         if (!squad) return null;
 
         const contracts = this.getSquadContracts(squadId, currentPeriod);
+        const projects  = this.getSquadProjects(squadId, currentPeriod);
 
         const revenuePerContract = contracts.map(contract => {
             const roi = this.getContractROI(contract.id, currentPeriod);
             return { contractId: contract.id, client: contract.client, value: roi.revenue };
         });
-        const totalRevenue = revenuePerContract.reduce((s, c) => s + c.value, 0);
+        const revenuePerProject = projects.map(project => {
+            const roi = this.getProjectROI(project.id, currentPeriod);
+            return { projectId: project.id, client: project.client || project.name, value: roi.revenue, isProject: true };
+        });
+        const totalRevenue = revenuePerContract.reduce((s, c) => s + c.value, 0)
+                            + revenuePerProject.reduce((s, p) => s + p.value, 0);
 
         const memberCostMap = {};
         contracts.forEach(contract => {
@@ -457,6 +588,8 @@ class AnalyticsService {
         }));
         const totalMembersCost = memberCosts.reduce((s, m) => s + m.cost, 0);
 
+        const totalExternalProjectCost = projects.reduce((s, p) => s + (p.externalCost || 0), 0);
+
         let totalHeadCost = 0;
         let headData = null;
         if (squad.headId) {
@@ -464,12 +597,15 @@ class AnalyticsService {
             contracts.forEach(contract => {
                 totalHeadCost += this.getHeadCostForContract(contract.id, currentPeriod);
             });
+            projects.forEach(project => {
+                totalHeadCost += this.getHeadCostForProject(project.id, currentPeriod);
+            });
             if (head) {
                 headData = { personId: head.id, name: head.name, role: head.role, salary: head.salary, cost: totalHeadCost };
             }
         }
 
-        const totalCost = totalMembersCost + totalHeadCost;
+        const totalCost = totalMembersCost + totalHeadCost + totalExternalProjectCost;
         const grossProfit = totalRevenue - totalCost;
         const margin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
@@ -478,17 +614,19 @@ class AnalyticsService {
             squadName: squad.name,
             squadIcon: squad.icon || null,
             squadDescription: squad.description || '',
-            revenue: { total: totalRevenue, perContract: revenuePerContract },
+            revenue: { total: totalRevenue, perContract: revenuePerContract, perProject: revenuePerProject },
             costs: {
                 total: totalCost,
                 members: memberCosts,
                 totalMembers: totalMembersCost,
                 head: headData,
-                totalHead: totalHeadCost
+                totalHead: totalHeadCost,
+                totalExternalProjects: totalExternalProjectCost
             },
             grossProfit,
             margin,
             contractCount: contracts.length,
+            projectCount: projects.length,
             memberCount: squad.members.length
         };
     }
@@ -517,12 +655,19 @@ class AnalyticsService {
     getOverallROI(periodId = null) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
         const activeContracts = storage.getActiveContractsForPeriod(currentPeriod);
+        const activeProjects  = projectService.getProjectsForPeriod(currentPeriod);
 
         let totalRevenue = 0;
         let totalCost = 0;
 
         activeContracts.forEach(contract => {
             const roi = this.getContractROI(contract.id, currentPeriod);
+            totalRevenue += roi.revenue;
+            totalCost += roi.cost;
+        });
+
+        activeProjects.forEach(project => {
+            const roi = this.getProjectROI(project.id, currentPeriod);
             totalRevenue += roi.revenue;
             totalCost += roi.cost;
         });

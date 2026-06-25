@@ -162,6 +162,67 @@ function renderPeopleList(people) {
 
     return sortedRoles.map(role => {
         const peopleInRole = peopleByRole[role];
+        const currentPeriod = storage.getCurrentPeriod();
+        const cols = '2fr 1.2fr 0.8fr 2.2fr 1.2fr 1.3fr auto';
+        const headStyle = 'padding:1rem; background:var(--bg); border-bottom:2px solid var(--border); font-weight:bold; font-size:0.85rem; color:var(--text-secondary); text-transform:uppercase;';
+        const cellStyle = 'padding:1rem; border-bottom:1px solid var(--border);';
+
+        const headerCells = `
+            <div style="${headStyle}">Nome</div>
+            <div style="${headStyle}">Salário</div>
+            <div style="${headStyle}">Contr.</div>
+            <div style="${headStyle}">Tipo de Entrega</div>
+            <div style="${headStyle}">Custo/Ent</div>
+            <div style="${headStyle}">Ticket Médio</div>
+            <div style="${headStyle}">Ações</div>
+        `;
+
+        const rowCells = peopleInRole.map(person => {
+            const profile            = analyticsService.getPersonDeliveryProfile(person.id);
+            const costPerDeliverable = analyticsService.getPersonCostPerDeliverable(person.id);
+            const avgTicket          = analyticsService.getPersonAverageTicket(person.id);
+            const periodSalary       = storage.getSalaryForPeriod(person.id, currentPeriod);
+
+            let deliveryHtml;
+            if (profile.kind === 'head') {
+                deliveryHtml = `<strong>${profile.total}</strong> cliente${profile.total !== 1 ? 's' : ''} no squad`;
+            } else if (profile.kind === 'traffic') {
+                deliveryHtml = `<strong>${profile.total}</strong> contrato${profile.total !== 1 ? 's' : ''} de tráfego`;
+            } else if (profile.total > 0 || profile.founderBrandClients > 0) {
+                const parts = [];
+                if (profile.video > 0)    parts.push(`Vídeo: <strong>${profile.video}</strong>`);
+                if (profile.static > 0)   parts.push(`Estático: <strong>${profile.static}</strong>`);
+                deliveryHtml = parts.length > 0
+                    ? `${parts.join(' · ')} <span style="color:var(--text-secondary);">(${profile.total})</span>`
+                    : '';
+                if (profile.founderBrandClients > 0) {
+                    deliveryHtml += `${deliveryHtml ? '<br>' : ''}🎤 <strong>${profile.founderBrandClients}</strong> Founder Brand`;
+                }
+            } else {
+                deliveryHtml = '<span class="text-muted" style="color:var(--text-secondary);">-</span>';
+            }
+
+            const contractCountDisplay = (profile.kind === 'head') ? profile.total : profile.contractCount;
+
+            return `
+                <div style="${cellStyle} font-weight: 500;">${person.name}</div>
+                <div style="${cellStyle}">R$ ${formatCurrency(periodSalary)}</div>
+                <div style="${cellStyle}">${contractCountDisplay}</div>
+                <div style="${cellStyle} font-size: 0.85rem; line-height: 1.5;">${deliveryHtml}</div>
+                <div style="${cellStyle} color: var(--primary); font-weight: bold;">
+                    ${costPerDeliverable > 0 ? `R$ ${formatCurrency(costPerDeliverable)}` : '-'}
+                </div>
+                <div style="${cellStyle} color: var(--success); font-weight: bold;">
+                    ${avgTicket > 0 ? `R$ ${formatCurrency(avgTicket)}` : '-'}
+                </div>
+                <div style="${cellStyle} display: flex; gap: 0.5rem; align-items:center;">
+                    <button class="btn btn-small btn-primary" onclick="window.showPersonBreakdown('${person.id}')" title="Ver Cálculo Detalhado">🔍</button>
+                    <button class="btn btn-small btn-secondary" onclick="window.openReajusteModal('${person.id}')" title="Lançar Reajuste">🔁</button>
+                    <button class="btn btn-small btn-secondary" onclick="window.editPerson('${person.id}')" title="Editar">✏️</button>
+                    <button class="btn btn-small btn-danger" onclick="window.deletePerson('${person.id}')" title="Excluir">🗑️</button>
+                </div>
+            `;
+        }).join('');
 
         return `
             <div style="margin-bottom: 3rem;">
@@ -169,60 +230,9 @@ function renderPeopleList(people) {
                     ${role}
                 </h3>
 
-                <div style="background: var(--bg-darker); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
-                    <div style="display: grid; grid-template-columns: 2fr 1.2fr 0.8fr 0.8fr 2fr 1.2fr 1.3fr auto; gap: 1rem; padding: 1rem; background: var(--bg); border-bottom: 2px solid var(--border); font-weight: bold; font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase;">
-                        <div>Nome</div>
-                        <div>Salário</div>
-                        <div>Contr.</div>
-                        <div>Entreg.</div>
-                        <div>Tipo de Entrega</div>
-                        <div>Custo/Ent</div>
-                        <div>Ticket Médio</div>
-                        <div>Ações</div>
-                    </div>
-
-                    ${peopleInRole.map(person => {
-                        const contracts          = analyticsService.getPersonContracts(person.id);
-                        const totalDeliverables  = analyticsService.getPersonTotalDeliverables(person.id);
-                        const costPerDeliverable = analyticsService.getPersonCostPerDeliverable(person.id);
-                        const avgTicket          = analyticsService.getPersonAverageTicket(person.id);
-                        const breakdown          = analyticsService.getPersonDeliverablesBreakdown(person.id);
-
-                        const currentPeriod = storage.getCurrentPeriod();
-                        const periodSalary  = storage.getSalaryForPeriod(person.id, currentPeriod);
-
-                        return `
-                            <div style="display: grid; grid-template-columns: 2fr 1.2fr 0.8fr 0.8fr 2fr 1.2fr 1.3fr auto; gap: 1rem; padding: 1rem; border-bottom: 1px solid var(--border); align-items: center;">
-                                <div style="font-weight: 500;">${person.name}</div>
-                                <div>
-                                    R$ ${formatCurrency(periodSalary)}
-                                </div>
-                                <div>${contracts.length}</div>
-                                <div>${totalDeliverables}</div>
-                                <div style="font-size: 0.85rem; line-height: 1.4;">
-                                    ${Object.keys(breakdown.byType).length > 0
-                                        ? Object.entries(breakdown.byType)
-                                            .sort((a, b) => b[1] - a[1])
-                                            .map(([type, qty]) => `<div>${type}: <strong>${qty}</strong></div>`)
-                                            .join('')
-                                        : '<span style="color: var(--text-secondary);">-</span>'
-                                    }
-                                </div>
-                                <div style="color: var(--primary); font-weight: bold;">
-                                    ${costPerDeliverable > 0 ? `R$ ${formatCurrency(costPerDeliverable)}` : '-'}
-                                </div>
-                                <div style="color: var(--success); font-weight: bold;">
-                                    ${avgTicket > 0 ? `R$ ${formatCurrency(avgTicket)}` : '-'}
-                                </div>
-                                <div style="display: flex; gap: 0.5rem;">
-                                    <button class="btn btn-small btn-primary" onclick="window.showPersonBreakdown('${person.id}')" title="Ver Cálculo Detalhado">🔍</button>
-                                    <button class="btn btn-small btn-secondary" onclick="window.openReajusteModal('${person.id}')" title="Lançar Reajuste">🔁</button>
-                                    <button class="btn btn-small btn-secondary" onclick="window.editPerson('${person.id}')" title="Editar">✏️</button>
-                                    <button class="btn btn-small btn-danger" onclick="window.deletePerson('${person.id}')" title="Excluir">🗑️</button>
-                                </div>
-                            </div>
-                        `;
-                    }).join('')}
+                <div style="display: grid; grid-template-columns: ${cols}; column-gap: 1rem; align-items: center; background: var(--bg-darker); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+                    ${headerCells}
+                    ${rowCells}
                 </div>
             </div>
         `;

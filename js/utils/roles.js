@@ -7,6 +7,7 @@ export const ROLES = [
     'Gestor de Tráfego',
     'Head Executivo',
     'Head Criativo',
+    'Head Master',
     'Filmmaker',
     'Fotógrafo',
     'Motion Designer',

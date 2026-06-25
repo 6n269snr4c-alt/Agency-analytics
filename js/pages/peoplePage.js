@@ -163,9 +163,10 @@ function renderPeopleList(people) {
     return sortedRoles.map(role => {
         const peopleInRole = peopleByRole[role];
         const currentPeriod = storage.getCurrentPeriod();
-        const cols = '2fr 1.2fr 0.8fr 2.2fr 1.2fr 1.3fr auto';
-        const headStyle = 'padding:1rem; background:var(--bg); border-bottom:2px solid var(--border); font-weight:bold; font-size:0.85rem; color:var(--text-secondary); text-transform:uppercase;';
-        const cellStyle = 'padding:1rem; border-bottom:1px solid var(--border);';
+        const cols = '1.5fr 1.4fr 0.6fr 2.4fr 1.4fr 1.5fr auto';
+        const headStyle = 'padding:1rem; background:var(--bg); border-bottom:2px solid var(--border); font-weight:bold; font-size:0.85rem; color:var(--text-secondary); text-transform:uppercase; white-space:nowrap;';
+        const cellStyle = 'padding:1rem; border-bottom:1px solid var(--border); white-space:nowrap;';
+        const wrapCellStyle = 'padding:1rem; border-bottom:1px solid var(--border);'; // Nome e Tipo de Entrega podem quebrar linha de propósito
 
         const headerCells = `
             <div style="${headStyle}">Nome</div>
@@ -188,7 +189,10 @@ function renderPeopleList(people) {
                 deliveryHtml = `<strong>${profile.total}</strong> cliente${profile.total !== 1 ? 's' : ''} no squad`;
             } else if (profile.kind === 'traffic') {
                 deliveryHtml = `<strong>${profile.total}</strong> contrato${profile.total !== 1 ? 's' : ''} de tráfego`;
-            } else if (profile.total > 0 || profile.founderBrandClients > 0) {
+                if (profile.fixedCount > 0) {
+                    deliveryHtml += `<br>💰 <strong>${profile.fixedCount}</strong> fixo${profile.fixedCount !== 1 ? 's' : ''} · R$ ${formatCurrency(profile.fixedTotal / profile.fixedCount)} cada`;
+                }
+            } else if (profile.total > 0 || profile.founderBrandClients > 0 || profile.fixedCount > 0) {
                 const parts = [];
                 if (profile.video > 0)    parts.push(`Vídeo: <strong>${profile.video}</strong>`);
                 if (profile.static > 0)   parts.push(`Estático: <strong>${profile.static}</strong>`);
@@ -198,6 +202,9 @@ function renderPeopleList(people) {
                 if (profile.founderBrandClients > 0) {
                     deliveryHtml += `${deliveryHtml ? '<br>' : ''}🎤 <strong>${profile.founderBrandClients}</strong> Founder Brand`;
                 }
+                if (profile.fixedCount > 0) {
+                    deliveryHtml += `${deliveryHtml ? '<br>' : ''}💰 <strong>${profile.fixedCount}</strong> fixo${profile.fixedCount !== 1 ? 's' : ''} · R$ ${formatCurrency(profile.fixedTotal / profile.fixedCount)} cada`;
+                }
             } else {
                 deliveryHtml = '<span class="text-muted" style="color:var(--text-secondary);">-</span>';
             }
@@ -205,10 +212,10 @@ function renderPeopleList(people) {
             const contractCountDisplay = (profile.kind === 'head') ? profile.total : profile.contractCount;
 
             return `
-                <div style="${cellStyle} font-weight: 500;">${person.name}</div>
+                <div style="${wrapCellStyle} font-weight: 500;">${person.name}</div>
                 <div style="${cellStyle}">R$ ${formatCurrency(periodSalary)}</div>
                 <div style="${cellStyle}">${contractCountDisplay}</div>
-                <div style="${cellStyle} font-size: 0.85rem; line-height: 1.5;">${deliveryHtml}</div>
+                <div style="${wrapCellStyle} font-size: 0.85rem; line-height: 1.5;">${deliveryHtml}</div>
                 <div style="${cellStyle} color: var(--primary); font-weight: bold;">
                     ${costPerDeliverable > 0 ? `R$ ${formatCurrency(costPerDeliverable)}` : '-'}
                 </div>

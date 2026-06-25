@@ -80,12 +80,9 @@ class InsightsService {
         const insights = [];
         const people = personService.getAllPeople();
 
+        // "Sem contratos" — não depende de comparação entre cargos, fica igual.
         people.forEach(person => {
             const profile = analyticsService.getPersonDeliveryProfile(person.id);
-
-            // "Sem contratos" agora usa contractCount do perfil — que pra Head já
-            // significa "clientes do squad dela", não a alocação manual (que ela
-            // nunca tem). Antes, toda Head aparecia aqui por engano.
             if (profile.contractCount === 0) {
                 insights.push({
                     type: 'warning',
@@ -93,30 +90,50 @@ class InsightsService {
                     message: `${person.role} não está atribuído(a) a nenhum contrato${profile.kind === 'head' ? ' (squad sem clientes neste mês)' : ''}`,
                     action: 'Alocar em projetos ou revisar necessidade da posição'
                 });
-                return;
             }
+        });
 
-            // Carga de trabalho — agora baseada só no que é relevante pro cargo
-            // dessa pessoa (vídeo pra Filmmaker, estático pra Designer, clientes
-            // pra Head, contratos de tráfego pro Gestor de Tráfego).
-            const total = profile.total;
-            const unitLabel = profile.kind === 'head' ? 'clientes' : profile.kind === 'traffic' ? 'contratos de tráfego' : 'entregas mensais';
+        // Carga de trabalho — comparada só ENTRE PARES DO MESMO CARGO. A
+        // unidade de "entrega" muda de cargo pra cargo (Copywriter conta
+        // vídeo+estático juntos, Filmmaker só vídeo, Designer só estático),
+        // então um limite absoluto igual pra todos sempre acusava quem conta
+        // mais coisas — não quem está, de fato, mais carregado que os pares.
+        const roles = personService.getAllRoles();
+        roles.forEach(role => {
+            const profiles = personService.getPeopleByRole(role)
+                .map(person => ({ person, profile: analyticsService.getPersonDeliveryProfile(person.id) }))
+                .filter(x => x.profile.total > 0);
 
-            if (total > 100) {
-                insights.push({
-                    type: 'critical',
-                    title: `${person.name} pode estar sobrecarregado(a)`,
-                    message: `${total} ${unitLabel} é uma carga muito alta`,
-                    action: 'Redistribuir trabalho ou contratar suporte'
-                });
-            } else if (total > 60) {
-                insights.push({
-                    type: 'warning',
-                    title: `${person.name} com carga alta`,
-                    message: `${total} ${unitLabel} — monitorar qualidade`,
-                    action: 'Avaliar possibilidade de redistribuição'
-                });
-            }
+            if (profiles.length < 2) return; // sem par do mesmo cargo, não dá pra comparar
+
+            profiles.forEach(({ person, profile }) => {
+                // Média dos OUTROS pares do mesmo cargo — não do grupo todo
+                // incluindo a própria pessoa, que amorteceria a diferença
+                // (com só 2 pessoas no cargo, isso quase nunca disparava).
+                const others = profiles.filter(x => x.person.id !== person.id);
+                const othersAvg = others.reduce((s, x) => s + x.profile.total, 0) / others.length;
+                if (othersAvg === 0) return;
+
+                const ratio = profile.total / othersAvg;
+                const unitLabel = profile.kind === 'head' ? 'clientes' : profile.kind === 'traffic' ? 'contratos de tráfego' : 'entregas mensais';
+                const pctAbove = Math.round((ratio - 1) * 100);
+
+                if (ratio >= 2) {
+                    insights.push({
+                        type: 'critical',
+                        title: `${person.name} pode estar sobrecarregado(a)`,
+                        message: `${profile.total} ${unitLabel} — ${pctAbove}% acima da média dos demais ${role} (${othersAvg.toFixed(0)})`,
+                        action: 'Redistribuir trabalho entre os pares de cargo ou contratar suporte'
+                    });
+                } else if (ratio >= 1.5) {
+                    insights.push({
+                        type: 'warning',
+                        title: `${person.name} com carga acima da média do cargo`,
+                        message: `${profile.total} ${unitLabel} — ${pctAbove}% acima da média dos demais ${role} (${othersAvg.toFixed(0)})`,
+                        action: 'Avaliar redistribuição entre os pares de cargo'
+                    });
+                }
+            });
         });
 
         return insights;
@@ -224,20 +241,25 @@ class InsightsService {
             });
         }
         
-        // Most efficient people
-        const ranking = analyticsService.getProductivityRanking();
-        const topPerformers = ranking
-            .filter(p => p.totalDeliverables > 0 && p.costPerDeliverable > 0)
-            .sort((a, b) => a.costPerDeliverable - b.costPerDeliverable)
-            .slice(0, 3);
-        
-        if (topPerformers.length > 0) {
-            const unitLabel = (p) => p.deliveryKind === 'head' ? 'clientes' : p.deliveryKind === 'traffic' ? 'contratos de tráfego' : 'entregas';
+        // Most efficient person — escolhido DENTRO de cada cargo, nunca entre
+        // cargos diferentes (custo/entrega de Copy e de Filmmaker não são a
+        // mesma unidade, então comparar os dois lado a lado não tem sentido).
+        const roles = personService.getAllRoles();
+        const bestPerRole = [];
+        roles.forEach(role => {
+            const comparison = analyticsService.comparePeopleByRole(role).filter(p => p.costPerDeliverable > 0);
+            if (comparison.length < 2) return; // só vale "melhor" se teve com quem comparar
+            const best = [...comparison].sort((a, b) => a.costPerDeliverable - b.costPerDeliverable)[0];
+            bestPerRole.push(best);
+        });
+
+        if (bestPerRole.length > 0) {
+            const unitLabel = (p) => p.deliveryKind === 'head' ? 'cliente' : p.deliveryKind === 'traffic' ? 'contrato de tráfego' : 'entrega';
             opportunities.push({
                 type: 'success',
-                title: 'Top performers',
-                message: 'Profissionais mais eficientes',
-                items: topPerformers.map(p => `${p.name} (${p.role}): ${p.totalDeliverables} ${unitLabel(p)}`),
+                title: 'Top performers (dentro do próprio cargo)',
+                message: 'Profissional mais eficiente em cada função, comparado só com os pares dela',
+                items: bestPerRole.map(p => `${p.name} (${p.role}): R$ ${p.costPerDeliverable.toFixed(2)}/${unitLabel(p)}`),
                 action: 'Reconhecer e usar como benchmarks'
             });
         }

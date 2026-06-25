@@ -263,17 +263,21 @@ function renderContractsTable(contracts, projects, squads, allPeople) {
         const lastConfirmed = contractService.getLastConfirmedPeriod(contract.id);
         const team = groupTeamByRole(contract, allPeople);
         const head = squad && squad.headId ? allPeople.find(p => p.id === squad.headId) : null;
-        const headCost = roi.costBreakdown.find(c => c.isHead);
-        return { type: 'contract', clientKey: contract.client, contract, roi, squad, locked, confirmedThisMonth, lastConfirmed, team, head, headCost };
+        const headCost = roi.costBreakdown.find(c => c.mode === 'head');
+        const headMaster = analyticsService.getHeadMaster();
+        const headMasterCost = roi.costBreakdown.find(c => c.mode === 'head_master');
+        return { type: 'contract', clientKey: contract.client, contract, roi, squad, locked, confirmedThisMonth, lastConfirmed, team, head, headCost, headMaster, headMasterCost };
     });
 
     const projectRows = projects.map(project => {
         const roi   = analyticsService.getProjectROI(project.id, selectedMonth);
         const squad = project.squadId ? squadService.getSquad(project.squadId) : null;
         const head  = squad && squad.headId ? allPeople.find(p => p.id === squad.headId) : null;
-        const headCost = roi.costBreakdown.find(c => c.isHead);
+        const headCost = roi.costBreakdown.find(c => c.mode === 'head');
+        const headMaster = analyticsService.getHeadMaster();
+        const headMasterCost = roi.costBreakdown.find(c => c.mode === 'head_master');
         const clientKey = project.client || project.name;
-        return { type: 'project', clientKey, project, roi, squad, head, headCost };
+        return { type: 'project', clientKey, project, roi, squad, head, headCost, headMaster, headMasterCost };
     });
 
     const rows = [...contractRows, ...projectRows]
@@ -310,7 +314,7 @@ function renderContractsTable(contracts, projects, squads, allPeople) {
     `;
 }
 
-function renderRow({ contract, roi, squad, locked, confirmedThisMonth, lastConfirmed, team, head, headCost }, squads, months) {
+function renderRow({ contract, roi, squad, locked, confirmedThisMonth, lastConfirmed, team, head, headCost, headMaster, headMasterCost }, squads, months) {
     const disabled = viewLocked || locked;
     const fieldDisabled = viewLocked; // campos sempre travados? não — abaixo cada campo decide
     const rowMuted = !confirmedThisMonth;
@@ -348,6 +352,8 @@ function renderRow({ contract, roi, squad, locked, confirmedThisMonth, lastConfi
             </td>
             <td>${head ? `<span class="role-chip"><span class="role-chip-avatar">${head.name[0]}</span>${head.name}<span class="role-chip-badge auto">auto</span></span>` : '<span class="text-muted">—</span>'}
                 ${headCost ? `<div class="role-chip-cost">R$ ${fmt(headCost.totalCost)}</div>` : ''}
+                ${headMaster ? `<span class="role-chip" style="margin-top:0.2rem;"><span class="role-chip-avatar">${headMaster.name[0]}</span>${headMaster.name}<span class="role-chip-badge auto">master</span></span>` : ''}
+                ${headMasterCost ? `<div class="role-chip-cost">R$ ${fmt(headMasterCost.totalCost)}</div>` : ''}
             </td>
             ${TEAM_ROLES.map(role => renderTeamCell(contract, team[role], role, locked || viewLocked)).join('')}
             <td style="text-align:right;">
@@ -380,7 +386,7 @@ function renderRow({ contract, roi, squad, locked, confirmedThisMonth, lastConfi
     `;
 }
 
-function renderProjectRow({ project, roi, squad, head, headCost }) {
+function renderProjectRow({ project, roi, squad, head, headCost, headMaster, headMasterCost }) {
     const rowMuted = project.billingPeriod !== selectedMonth;
     const periodLabel = project.billingPeriod
         ? monthShortLabel(project.billingPeriod) + '/' + project.billingPeriod.split('-')[0].slice(2)
@@ -399,6 +405,8 @@ function renderProjectRow({ project, roi, squad, head, headCost }) {
             <td style="text-align:center;" class="text-muted">—</td>
             <td>${head ? `<span class="role-chip"><span class="role-chip-avatar">${head.name[0]}</span>${head.name}<span class="role-chip-badge auto">auto</span></span>` : '<span class="text-muted">—</span>'}
                 ${headCost ? `<div class="role-chip-cost">R$ ${fmt(headCost.totalCost)}</div>` : ''}
+                ${headMaster ? `<span class="role-chip" style="margin-top:0.2rem;"><span class="role-chip-avatar">${headMaster.name[0]}</span>${headMaster.name}<span class="role-chip-badge auto">master</span></span>` : ''}
+                ${headMasterCost ? `<div class="role-chip-cost">R$ ${fmt(headMasterCost.totalCost)}</div>` : ''}
             </td>
             <td class="text-muted" style="text-align:center;">—</td>
             <td class="text-muted" style="text-align:center;">—</td>
@@ -819,6 +827,18 @@ function renderBreakdownItem(item) {
                     <span class="badge badge-success">Automático</span>
                 </div>
                 <div style="font-size:0.85rem; color:var(--text-secondary);">Rateado igualmente entre os clientes do squad (contratos + projetos)</div>
+                <div style="margin-top:0.5rem; font-size:1.1rem; font-weight:700; color:var(--fast-green,#7cfc00);">R$ ${fmt(item.totalCost)}</div>
+            </div>
+        `;
+    }
+    if (item.mode === 'head_master') {
+        return `
+            <div class="breakdown-person-card">
+                <div class="breakdown-person-header">
+                    <strong>${item.name}</strong>
+                    <span class="badge" style="background:rgba(124,252,0,0.1); color:var(--fast-green,#7cfc00);">Automático · agência</span>
+                </div>
+                <div style="font-size:0.85rem; color:var(--text-secondary);">Rateado igualmente entre todos os clientes da agência (qualquer squad)</div>
                 <div style="margin-top:0.5rem; font-size:1.1rem; font-weight:700; color:var(--fast-green,#7cfc00);">R$ ${fmt(item.totalCost)}</div>
             </div>
         `;

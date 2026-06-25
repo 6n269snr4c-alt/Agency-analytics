@@ -180,6 +180,14 @@ class AnalyticsService {
                     .forEach(p => { total += this.getHeadCostForProject(p.id, currentPeriod); });
             });
 
+        // Custo automático de Head Master — mesma ideia, mas agência toda.
+        const headMaster = this.getHeadMaster();
+        if (headMaster && headMaster.id === personId) {
+            activeContracts.forEach(c => { total += this.getHeadMasterCostForContract(c.id, currentPeriod); });
+            projectService.getProjectsForPeriod(currentPeriod)
+                .forEach(p => { total += this.getHeadMasterCostForProject(p.id, currentPeriod); });
+        }
+
         // Alocações manuais (rateado/fixo) normais.
         this.getPersonContractsForPeriod(personId, currentPeriod).forEach(contract => {
             total += this.getPersonCostInContract(personId, contract.id, currentPeriod);
@@ -198,7 +206,7 @@ class AnalyticsService {
         const salary = this.getPersonCost(personId, currentPeriod);
 
         const profile = this.getPersonDeliveryProfile(personId, currentPeriod);
-        if (profile.kind === 'head') {
+        if (profile.kind === 'head' || profile.kind === 'head_master') {
             return profile.contractCount > 0 ? salary / profile.contractCount : 0;
         }
 
@@ -288,11 +296,12 @@ class AnalyticsService {
         const currentPeriod = periodId || storage.getCurrentPeriod();
         const people = storage.getPeople();
         const headSquadIds = new Set(storage.getSquads().filter(s => s.headId).map(s => s.headId));
+        const headMaster = this.getHeadMaster();
 
         return people.map(person => {
             const salary    = this.getPersonCost(person.id, currentPeriod);
             const allocated = this.getPersonTotalAllocated(person.id, currentPeriod);
-            const isHead = headSquadIds.has(person.id);
+            const isHead = headSquadIds.has(person.id) || (headMaster && headMaster.id === person.id);
             const hasFixedOnly = !isHead && this._hasOnlyFixedAllocations(person.id, currentPeriod);
             const diff = salary - allocated;
 
@@ -403,6 +412,94 @@ class AnalyticsService {
     // Mesma lógica do Head, agora para um projeto pontual — usa o MESMO universo
     // de clientes do squad+período (contratos + projetos), então a parte de
     // cada um soma certinho ao salário do Head.
+    // ====================
+    // HEAD MASTER — rateio igual por cliente, AGÊNCIA TODA (sem fronteira
+    // de squad). Mesma lógica do Head normal, só que o "squad" dela é a
+    // empresa inteira. Só pode existir uma pessoa com esse cargo por vez;
+    // se houver mais de uma, a primeira encontrada é considerada.
+    // ====================
+
+    getHeadMaster() {
+        return storage.getPeople().find(p => p.role === 'Head Master') || null;
+    }
+
+    _allClientsInPeriod(periodId, includeProjects = true) {
+        const contractClients = storage.getActiveContractsForPeriod(periodId).map(c => c.client);
+        if (!includeProjects) return Array.from(new Set(contractClients));
+        const projectClients = projectService.getProjectsForPeriod(periodId).map(p => p.client || p.name);
+        return Array.from(new Set([...contractClients, ...projectClients]));
+    }
+
+    _clientRevenueAgencyWide(clientName, periodId, includeProjects = true) {
+        const contractsRevenue = storage.getActiveContractsForPeriod(periodId)
+            .filter(c => c.client === clientName)
+            .reduce((sum, c) => sum + (this._getProjectionData(c, periodId).value || 0), 0);
+        if (!includeProjects) return contractsRevenue;
+        const projectsRevenue = projectService.getProjectsForPeriod(periodId)
+            .filter(p => (p.client || p.name) === clientName)
+            .reduce((sum, p) => sum + (p.value || 0), 0);
+        return contractsRevenue + projectsRevenue;
+    }
+
+    getHeadMasterCostForContract(contractId, periodId = null, includeProjects = true) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        const headMaster = this.getHeadMaster();
+        if (!headMaster) return 0;
+
+        const contract = storage.getContractById(contractId);
+        if (!contract) return 0;
+
+        const salary = this.getPersonCost(headMaster.id, currentPeriod);
+        if (salary === 0) return 0;
+
+        const distinctClients = this._allClientsInPeriod(currentPeriod, includeProjects);
+        if (distinctClients.length === 0) return 0;
+
+        const perClient = salary / distinctClients.length;
+
+        const clientRevenue = this._clientRevenueAgencyWide(contract.client, currentPeriod, includeProjects);
+        if (clientRevenue === 0) {
+            const clientContracts = storage.getActiveContractsForPeriod(currentPeriod).filter(c => c.client === contract.client);
+            const clientProjects  = includeProjects
+                ? projectService.getProjectsForPeriod(currentPeriod).filter(p => (p.client || p.name) === contract.client)
+                : [];
+            const sharedCount = clientContracts.length + clientProjects.length;
+            return sharedCount <= 1 ? perClient : perClient / sharedCount;
+        }
+
+        const thisRevenue = this._getProjectionData(contract, currentPeriod).value || 0;
+        return perClient * (thisRevenue / clientRevenue);
+    }
+
+    getHeadMasterCostForProject(projectId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        const headMaster = this.getHeadMaster();
+        if (!headMaster) return 0;
+
+        const project = projectService.getProjectById(projectId);
+        if (!project) return 0;
+
+        const salary = this.getPersonCost(headMaster.id, currentPeriod);
+        if (salary === 0) return 0;
+
+        const distinctClients = this._allClientsInPeriod(currentPeriod, true);
+        if (distinctClients.length === 0) return 0;
+
+        const perClient = salary / distinctClients.length;
+        const clientKey = project.client || project.name;
+
+        const clientRevenue = this._clientRevenueAgencyWide(clientKey, currentPeriod, true);
+        if (clientRevenue === 0) {
+            const clientContracts = storage.getActiveContractsForPeriod(currentPeriod).filter(c => c.client === clientKey);
+            const clientProjects  = projectService.getProjectsForPeriod(currentPeriod).filter(p => (p.client || p.name) === clientKey);
+            const sharedCount = clientContracts.length + clientProjects.length;
+            return sharedCount <= 1 ? perClient : perClient / sharedCount;
+        }
+
+        const thisRevenue = project.value || 0;
+        return perClient * (thisRevenue / clientRevenue);
+    }
+
     getHeadCostForProject(projectId, periodId = null) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
         const project = projectService.getProjectById(projectId);
@@ -472,6 +569,22 @@ class AnalyticsService {
                         isHead: true
                     });
                 }
+            }
+        }
+
+        const headMasterCost = this.getHeadMasterCostForProject(project.id, currentPeriod);
+        if (headMasterCost > 0) {
+            cost += headMasterCost;
+            const headMaster = this.getHeadMaster();
+            if (headMaster) {
+                costBreakdown.push({
+                    personId: headMaster.id,
+                    name: headMaster.name + ' (Head Master)',
+                    role: headMaster.role,
+                    mode: 'head_master',
+                    totalCost: headMasterCost,
+                    isHead: true
+                });
             }
         }
 
@@ -561,6 +674,22 @@ class AnalyticsService {
                         isHead: true
                     });
                 }
+            }
+        }
+
+        const headMasterCost = this.getHeadMasterCostForContract(contractId, currentPeriod, includeProjects);
+        if (headMasterCost > 0) {
+            cost += headMasterCost;
+            const headMaster = this.getHeadMaster();
+            if (headMaster) {
+                costBreakdown.push({
+                    personId: headMaster.id,
+                    name: headMaster.name + ' (Head Master)',
+                    role: headMaster.role,
+                    mode: 'head_master',
+                    totalCost: headMasterCost,
+                    isHead: true
+                });
             }
         }
 
@@ -684,7 +813,22 @@ class AnalyticsService {
             }
         }
 
-        const totalCost = totalMembersCost + totalHeadCost + totalExternalProjectCost;
+        let totalHeadMasterCost = 0;
+        let headMasterData = null;
+        const headMaster = this.getHeadMaster();
+        if (headMaster) {
+            contracts.forEach(contract => {
+                totalHeadMasterCost += this.getHeadMasterCostForContract(contract.id, currentPeriod, includeProjects);
+            });
+            projects.forEach(project => {
+                totalHeadMasterCost += this.getHeadMasterCostForProject(project.id, currentPeriod);
+            });
+            if (totalHeadMasterCost > 0) {
+                headMasterData = { personId: headMaster.id, name: headMaster.name, role: headMaster.role, salary: headMaster.salary, cost: totalHeadMasterCost };
+            }
+        }
+
+        const totalCost = totalMembersCost + totalHeadCost + totalHeadMasterCost + totalExternalProjectCost;
         const grossProfit = totalRevenue - totalCost;
         const margin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
@@ -700,6 +844,8 @@ class AnalyticsService {
                 totalMembers: totalMembersCost,
                 head: headData,
                 totalHead: totalHeadCost,
+                headMaster: headMasterData,
+                totalHeadMaster: totalHeadMasterCost,
                 totalExternalProjects: totalExternalProjectCost,
                 externalProjectsList
             },
@@ -829,6 +975,11 @@ class AnalyticsService {
             return { kind: 'head', contractCount: clientCount, video: 0, static: 0, total: clientCount, founderBrandClients: 0, fixedCount: 0, fixedTotal: 0 };
         }
 
+        if (person.role === 'Head Master') {
+            const clientCount = this._allClientsInPeriod(currentPeriod).length;
+            return { kind: 'head_master', contractCount: clientCount, video: 0, static: 0, total: clientCount, founderBrandClients: 0, fixedCount: 0, fixedTotal: 0 };
+        }
+
         const contracts = this.getPersonContractsForPeriod(personId, currentPeriod);
         const contractCount = contracts.length;
 
@@ -914,6 +1065,21 @@ class AnalyticsService {
                     totalValue += project.value || 0;
                     count++;
                 });
+            });
+            return count > 0 ? totalValue / count : 0;
+        }
+
+        const headMaster = this.getHeadMaster();
+        if (headMaster && headMaster.id === personId) {
+            let totalValue = 0;
+            let count = 0;
+            storage.getActiveContractsForPeriod(currentPeriod).forEach(contract => {
+                totalValue += this._getProjectionData(contract, currentPeriod).value || 0;
+                count++;
+            });
+            projectService.getProjectsForPeriod(currentPeriod).forEach(project => {
+                totalValue += project.value || 0;
+                count++;
             });
             return count > 0 ? totalValue / count : 0;
         }

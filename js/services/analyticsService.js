@@ -782,6 +782,83 @@ class AnalyticsService {
         return total;
     }
 
+    /**
+     * Perfil de entregas de uma pessoa, já adaptado ao cargo — fonte única
+     * pra tela de Pessoas (resolve a divergência entre "Entreg." e "Tipo de
+     * Entrega" que existia antes, já que cada um vinha de um cálculo diferente).
+     *
+     * - Head: não tem peopleAllocations (custo automático) — "contrato" aqui
+     *   é o número de clientes (contratos + projetos) do(s) squad(s) que lidera.
+     * - Gestor de Tráfego: a unidade dele é "1 por contrato de tráfego", não
+     *   vídeo/estático — mostra quantos contratos de tráfego.
+     * - Filmmaker/Designer: só o que é deles (vídeo ou estático).
+     * - Copywriter e demais: vídeo + estático juntos.
+     * - Qualquer cargo: se tiver alocação 'founder_brand', mostra também
+     *   quantos clientes Founder Brand, separado do resto.
+     */
+    getPersonDeliveryProfile(personId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        const person = storage.getPersonById(personId);
+        if (!person) {
+            return { kind: 'generic', contractCount: 0, video: 0, static: 0, total: 0, founderBrandClients: 0 };
+        }
+
+        const headSquads = storage.getSquads().filter(s => s.headId === personId);
+        if (headSquads.length > 0) {
+            let clientCount = 0;
+            headSquads.forEach(squad => {
+                clientCount += this._squadClientsInPeriod(squad.id, currentPeriod).length;
+            });
+            return { kind: 'head', contractCount: clientCount, video: 0, static: 0, total: clientCount, founderBrandClients: 0 };
+        }
+
+        const contracts = this.getPersonContractsForPeriod(personId, currentPeriod);
+        const contractCount = contracts.length;
+
+        if (person.role === 'Gestor de Tráfego') {
+            const trafficCount = contracts.filter(contract => {
+                const data = this._getProjectionData(contract, currentPeriod);
+                const alloc = data.peopleAllocations.find(a => a.personId === personId);
+                return alloc && alloc.mode === 'rateado' && data.trafficManagement;
+            }).length;
+            return { kind: 'traffic', contractCount, video: 0, static: 0, total: trafficCount, founderBrandClients: 0 };
+        }
+
+        let video = 0;
+        let estatico = 0;
+        let founderBrandClients = 0;
+
+        contracts.forEach(contract => {
+            const data = this._getProjectionData(contract, currentPeriod);
+            const alloc = data.peopleAllocations.find(a => a.personId === personId);
+            if (!alloc) return;
+
+            if (alloc.mode === 'founder_brand') {
+                founderBrandClients++;
+                return;
+            }
+            if (alloc.mode !== 'rateado') return;
+
+            if (person.role === 'Filmmaker') {
+                video += data.videoCount || 0;
+            } else if (person.role === 'Designer') {
+                estatico += data.staticCount || 0;
+            } else {
+                video    += data.videoCount  || 0;
+                estatico += data.staticCount || 0;
+            }
+        });
+
+        return {
+            kind: 'content',
+            contractCount,
+            video,
+            static: estatico,
+            total: video + estatico,
+            founderBrandClients
+        };
+    }
+
     getPersonAverageTicket(personId, periodId = null) {
         const contracts = this.getPersonContractsForPeriod(personId, periodId);
         if (contracts.length === 0) return 0;

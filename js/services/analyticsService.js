@@ -196,6 +196,12 @@ class AnalyticsService {
     getPersonCostPerDeliverable(personId, periodId = null) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
         const salary = this.getPersonCost(personId, currentPeriod);
+
+        const profile = this.getPersonDeliveryProfile(personId, currentPeriod);
+        if (profile.kind === 'head') {
+            return profile.contractCount > 0 ? salary / profile.contractCount : 0;
+        }
+
         const totalRateable = this.getPersonTotalRateableDeliverables(personId, currentPeriod);
         if (totalRateable > 0) return salary / totalRateable;
 
@@ -204,7 +210,6 @@ class AnalyticsService {
         // (vídeo/estático, ou contratos de tráfego) — e só cai na média por
         // contrato como último recurso, se não houver nenhum criativo lançado
         // (ex.: um retainer fixo sem vídeo/estático informado).
-        const profile = this.getPersonDeliveryProfile(personId, currentPeriod);
         if (profile.fixedTotal > 0) {
             if (profile.total > 0) return profile.fixedTotal / profile.total;
             if (profile.fixedCount > 0) return profile.fixedTotal / profile.fixedCount;
@@ -928,45 +933,62 @@ class AnalyticsService {
         const people = storage.getPeople();
 
         return people.map(person => {
-            const salary = this.getPersonCost(person.id, currentPeriod);
-            const totalRateable = this.getPersonTotalRateableDeliverables(person.id, currentPeriod);
-            const costPerDeliverable = totalRateable > 0 ? salary / totalRateable : 0;
-            const contracts = this.getPersonContractsForPeriod(person.id, currentPeriod);
+            const salary  = this.getPersonCost(person.id, currentPeriod);
+            const profile = this.getPersonDeliveryProfile(person.id, currentPeriod);
 
             return {
                 id: person.id,
                 name: person.name,
                 role: person.role,
                 salary,
-                totalDeliverables: this.getPersonTotalDeliverables(person.id, currentPeriod),
-                costPerDeliverable,
-                contractCount: contracts.length,
+                totalDeliverables: profile.total,
+                deliveryKind: profile.kind, // 'head' | 'traffic' | 'content'
+                costPerDeliverable: this.getPersonCostPerDeliverable(person.id, currentPeriod),
+                contractCount: profile.contractCount,
                 averageTicket: this.getPersonAverageTicket(person.id, currentPeriod)
             };
         });
     }
 
-    getContractProfitabilityRanking(periodId = null) {
+    /**
+     * Ranking unificado de lucratividade — contratos recorrentes E projetos
+     * pontuais juntos, cada um marcado com seu tipo. Substitui o ranking
+     * antigo que ignorava projetos por completo.
+     */
+    getEngagementProfitabilityRanking(periodId = null) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
-        const contracts = storage.getActiveContractsForPeriod(currentPeriod);
 
-        return contracts.map(contract => {
-            const roi = this.getContractROI(contract.id, currentPeriod);
-            return {
-                id: contract.id,
-                client: contract.client,
-                revenue: roi.revenue,
-                cost: roi.cost,
-                profit: roi.profit,
-                margin: roi.margin
-            };
-        }).sort((a, b) => b.profit - a.profit);
+        const contracts = storage.getActiveContractsForPeriod(currentPeriod).map(c => {
+            const roi = this.getContractROI(c.id, currentPeriod);
+            return { id: c.id, client: c.client, type: 'recorrente', revenue: roi.revenue, cost: roi.cost, profit: roi.profit, margin: roi.margin };
+        });
+
+        const projects = projectService.getProjectsForPeriod(currentPeriod).map(p => {
+            const roi = this.getProjectROI(p.id, currentPeriod);
+            return { id: p.id, client: p.client || p.name, type: 'pontual', revenue: roi.revenue, cost: roi.cost, profit: roi.profit, margin: roi.margin };
+        });
+
+        return [...contracts, ...projects].sort((a, b) => b.profit - a.profit);
     }
 
     /**
-     * Compara pessoas do mesmo cargo por custo/entrega. Usado pelo
-     * insightsService (disparidade de eficiência) e pela tela de Pessoas.
+     * Resumo de Founder Brand pra um painel rápido no Dashboard: quantos
+     * clientes, receita deles, e quanto do salário da equipe está reservado.
      */
+    getFounderBrandSummary(periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        const fbContracts = storage.getActiveContractsForPeriod(currentPeriod).filter(c => c.founderBrand);
+        const clients = new Set(fbContracts.map(c => c.client));
+        const revenue = fbContracts.reduce((s, c) => s + (this._getProjectionData(c, currentPeriod).value || 0), 0);
+
+        let reserveTotal = 0;
+        storage.getPeople()
+            .filter(p => (p.founderBrandPercent || 0) > 0)
+            .forEach(p => { reserveTotal += this._personFounderBrandReserve(p.id, currentPeriod).reserveTotal; });
+
+        return { clientCount: clients.size, revenue, reserveTotal };
+    }
+
     comparePeopleByRole(role, periodId = null) {
         return this.getProductivityRanking(periodId).filter(p => p.role === role);
     }

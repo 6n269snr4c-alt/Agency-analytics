@@ -79,16 +79,21 @@ class ClientService {
 
         let projectRevenue  = 0;
         let projectExtCost  = 0;
+        let projectTotalCost = 0;
 
         const projectDetails = periodProjects.map(p => {
-            projectRevenue += (p.value || 0);
-            projectExtCost += (p.externalCost || 0);
+            const roi = analyticsService.getProjectROI(p.id, periodId);
+            projectRevenue   += roi.revenue;
+            projectExtCost   += (p.externalCost || 0);
+            projectTotalCost += roi.cost;
             return {
                 id:           p.id,
                 name:         p.name,
                 squad:        p.squadId ? storage.getSquadById(p.squadId) : null,
-                revenue:      p.value || 0,
+                revenue:      roi.revenue,
                 externalCost: p.externalCost || 0,
+                cost:         roi.cost,
+                profit:       roi.profit,
                 status:       p.status,
             };
         });
@@ -99,7 +104,7 @@ class ClientService {
 
         // ── Consolidado ──
         const totalRevenue = recurringRevenue + projectRevenue;
-        const totalCost    = recurringCost    + projectExtCost;
+        const totalCost    = recurringCost    + projectTotalCost;
         const profit       = totalRevenue - totalCost;
         const margin       = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
 
@@ -118,7 +123,7 @@ class ClientService {
             // Pontual
             projectRevenue,
             projectExtCost,
-            projectProfit:    projectRevenue - projectExtCost,
+            projectProfit:    projectRevenue - projectTotalCost,
             projectDetails,
             allProjects,
             // Consolidado
@@ -142,11 +147,9 @@ class ClientService {
         let ltv = 0;
 
         storage.getContracts()
-            .filter(c => this._key(c.client) === key && c.status !== 'inactive')
+            .filter(c => this._key(c.client) === key)
             .forEach(c => {
-                (c.monthlyProjections || []).forEach(p => {
-                    ltv += (p.value || 0);
-                });
+                ltv += (c.value || 0) * (c.confirmedPeriods || []).length;
             });
 
         storage.getProjects()

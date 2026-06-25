@@ -24,6 +24,7 @@ let searchTerm      = '';
 
 let currentEditId   = null;   // contrato sendo editado (modal de equipe)
 let relaunchFromId  = null;   // contrato de origem ao "lançar novo a partir de"
+let editingId       = null;   // contrato sendo editado via formulário completo (ainda sem histórico)
 let draftAllocations = [];
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -322,10 +323,8 @@ function renderRow({ contract, roi, squad, locked, confirmedThisMonth, lastConfi
                     ${locked
                         ? `<button class="btn btn-small btn-secondary" ${viewLocked ? 'disabled' : ''} onclick="window.openRelaunchModal('${contract.id}')" title="Algo mudou — lançar novo contrato">🔁</button>`
                         : `
-                            <button class="btn btn-small btn-secondary" ${viewLocked ? 'disabled' : ''} onclick="window.openTeamModal('${contract.id}')" title="Editar equipe">👥</button>
-                            ${(contract.confirmedPeriods || []).length === 0
-                                ? `<button class="btn btn-small btn-error" ${viewLocked ? 'disabled' : ''} onclick="window.deleteContract('${contract.id}')" title="Excluir rascunho">🗑️</button>`
-                                : ''}
+                            <button class="btn btn-small btn-secondary" ${viewLocked ? 'disabled' : ''} onclick="window.openEditModal('${contract.id}')" title="Editar contrato">✏️</button>
+                            <button class="btn btn-small btn-error" ${viewLocked ? 'disabled' : ''} onclick="window.deleteContract('${contract.id}')" title="Excluir contrato">🗑️</button>
                         `}
                 </div>
             </td>
@@ -565,6 +564,7 @@ function attachPersonSearch() {
 function openContractModal() {
     currentEditId = null;
     relaunchFromId = null;
+    editingId = null;
     document.getElementById('modal-title').textContent = 'Novo Contrato';
     document.getElementById('contract-form-body').innerHTML = renderContractForm(null, squadService.getAllSquads());
     document.getElementById('contract-modal').classList.add('active');
@@ -576,8 +576,21 @@ function openRelaunchModal(id) {
     const original = contractService.getContract(id);
     relaunchFromId = id;
     currentEditId = null;
+    editingId = null;
     document.getElementById('modal-title').textContent = `Lançar novo contrato — ${original.client}`;
     document.getElementById('contract-form-body').innerHTML = renderContractForm(original, squadService.getAllSquads());
+    document.getElementById('contract-modal').classList.add('active');
+    attachPersonSearch();
+    setTimeout(() => attachClientAutocomplete(document.getElementById('client')), 50);
+}
+
+function openEditModal(id) {
+    const contract = contractService.getContract(id);
+    editingId = id;
+    relaunchFromId = null;
+    currentEditId = null;
+    document.getElementById('modal-title').textContent = `Editar contrato — ${contract.client}`;
+    document.getElementById('contract-form-body').innerHTML = renderContractForm(contract, squadService.getAllSquads());
     document.getElementById('contract-modal').classList.add('active');
     attachPersonSearch();
     setTimeout(() => attachClientAutocomplete(document.getElementById('client')), 50);
@@ -587,6 +600,7 @@ function closeContractModal() {
     document.getElementById('contract-modal').classList.remove('active');
     currentEditId = null;
     relaunchFromId = null;
+    editingId = null;
     draftAllocations = [];
 }
 
@@ -607,6 +621,8 @@ function saveContract() {
 
         if (relaunchFromId) {
             contractService.duplicateContract(relaunchFromId, formData);
+        } else if (editingId) {
+            contractService.updateContract(editingId, formData);
         } else {
             contractService.createContract(formData);
         }
@@ -844,6 +860,7 @@ function goToProject(projectId) {
 function attachContractHandlers() {
     window.openContractModal  = openContractModal;
     window.openRelaunchModal  = openRelaunchModal;
+    window.openEditModal      = openEditModal;
     window.closeContractModal = closeContractModal;
     window.saveContract       = saveContract;
 
@@ -852,7 +869,12 @@ function attachContractHandlers() {
     window.saveTeam       = saveTeam;
 
     window.deleteContract     = (id) => {
-        if (confirm('Excluir este rascunho de contrato? Ele nunca foi confirmado em nenhum mês.')) {
+        const contract = contractService.getContract(id);
+        const hasHistory = (contract.confirmedPeriods || []).length > 0;
+        const msg = hasHistory
+            ? `Excluir o contrato de ${contract.client}? Isso remove o mês confirmado atual também. Não afeta nenhum outro contrato.`
+            : `Excluir o contrato de ${contract.client}? Ele ainda não tem nenhum mês confirmado.`;
+        if (confirm(msg)) {
             contractService.deleteContract(id);
             renderContractsPage();
         }

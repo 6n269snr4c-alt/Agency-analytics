@@ -375,12 +375,16 @@ function renderTeamCell(contract, entries, role, locked) {
     if (!entries || entries.length === 0) {
         return `<td>${locked ? '<span class="text-muted">—</span>' : `<button class="role-chip-add" onclick="window.openTeamModal('${contract.id}')">+ adicionar</button>`}</td>`;
     }
-    return `<td>${entries.map(({ person, alloc }) => `
+    return `<td>${entries.map(({ person, alloc }) => {
+        const badgeClass = alloc.mode === 'fixo' ? 'fixo' : alloc.mode === 'founder_brand' ? 'fb' : 'rateado';
+        const badgeLabel = alloc.mode === 'fixo' ? 'fixo' : alloc.mode === 'founder_brand' ? 'FB' : 'rateado';
+        return `
         <span class="role-chip" ${locked ? '' : `onclick="window.openTeamModal('${contract.id}')" style="cursor:pointer;"`}>
             <span class="role-chip-avatar">${person.name[0]}</span>${person.name}
-            <span class="role-chip-badge ${alloc.mode === 'fixo' ? 'fixo' : 'rateado'}">${alloc.mode === 'fixo' ? 'fixo' : 'rateado'}</span>
+            <span class="role-chip-badge ${badgeClass}">${badgeLabel}</span>
         </span>
-    `).join('')}</td>`;
+    `;
+    }).join('')}</td>`;
 }
 
 // ─── MODAL: NOVO / LANÇAR NOVO CONTRATO ───────────────────────────────────────
@@ -464,6 +468,7 @@ function renderAllocationsList(allPeople) {
     return draftAllocations.map(alloc => {
         const person = allPeople.find(p => p.id === alloc.personId);
         if (!person) return '';
+        const hasFounderBrand = (person.founderBrandPercent || 0) > 0;
         return `
             <div class="allocation-row" data-person-id="${person.id}">
                 <div class="allocation-person">
@@ -483,6 +488,14 @@ function renderAllocationsList(allPeople) {
                                onchange="window.setAllocationMode('${person.id}', 'fixo')">
                         Fixo
                     </label>
+                    ${hasFounderBrand ? `
+                    <label class="mode-toggle" title="Divide a % reservada de ${person.name} entre os clientes Founder Brand">
+                        <input type="radio" name="mode-${person.id}" value="founder_brand"
+                               ${alloc.mode === 'founder_brand' ? 'checked' : ''}
+                               onchange="window.setAllocationMode('${person.id}', 'founder_brand')">
+                        Founder Brand (${person.founderBrandPercent}%)
+                    </label>
+                    ` : ''}
                 </div>
                 <div class="allocation-fixed-value" style="${alloc.mode === 'fixo' ? '' : 'visibility:hidden;'}">
                     <span style="font-size:0.85rem; color:var(--text-secondary);">R$</span>
@@ -697,6 +710,20 @@ function renderBreakdownItem(item) {
                     <span class="badge" style="background:rgba(255,160,0,0.15); color:#ff9800;">Fixo</span>
                 </div>
                 <div style="font-size:0.85rem; color:var(--text-secondary);">Valor travado neste contrato</div>
+                <div style="margin-top:0.5rem; font-size:1.1rem; font-weight:700; color:var(--fast-green,#7cfc00);">R$ ${fmt(item.totalCost)}</div>
+            </div>
+        `;
+    }
+    if (item.mode === 'founder_brand') {
+        return `
+            <div class="breakdown-person-card">
+                <div class="breakdown-person-header">
+                    <strong>${item.name}</strong>
+                    <span class="badge" style="background:rgba(186,104,200,0.18); color:#ba68c8;">Founder Brand</span>
+                </div>
+                <div style="font-size:0.85rem; color:var(--text-secondary);">
+                    ${item.reservePct}% do salário reservado, dividido entre ${item.fbClientCount} cliente${item.fbClientCount !== 1 ? 's' : ''} Founder Brand
+                </div>
                 <div style="margin-top:0.5rem; font-size:1.1rem; font-weight:700; color:var(--fast-green,#7cfc00);">R$ ${fmt(item.totalCost)}</div>
             </div>
         `;
@@ -1017,6 +1044,7 @@ function contractStyles() {
         .role-chip-badge.auto { color: var(--text-secondary); }
         .role-chip-badge.rateado { background: rgba(33,150,243,0.15); color: #64b5f6; }
         .role-chip-badge.fixo { background: rgba(255,160,0,0.15); color: #ff9800; }
+        .role-chip-badge.fb { background: rgba(186,104,200,0.18); color: #ba68c8; }
         .role-chip-cost { font-size: 0.68rem; color: var(--text-secondary); margin-top: 0.1rem; }
         .role-chip-add {
             font-size: 0.72rem; color: var(--text-secondary);

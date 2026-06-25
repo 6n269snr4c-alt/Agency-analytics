@@ -63,6 +63,13 @@ export function renderPeoplePage() {
                         <label class="form-label">Salário Mensal (R$) *</label>
                         <input type="number" class="form-input" id="salary" step="0.01" min="0" required>
                     </div>
+                    <div class="form-group">
+                        <label class="form-label">% reservado para Founder Brand</label>
+                        <input type="number" class="form-input" id="founder-brand-percent" step="1" min="0" max="100" value="0">
+                        <p style="font-size:0.78rem; color:var(--text-secondary); margin-top:0.4rem;">
+                            Só preencha se essa pessoa atua em contratos de Estratégia de Founder Brand. Essa % do salário fica reservada e dividida entre os clientes Founder Brand; o resto continua rateado normalmente.
+                        </p>
+                    </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" onclick="window.closePersonModal()">Cancelar</button>
                         <button type="submit" class="btn btn-primary">Salvar</button>
@@ -413,6 +420,7 @@ function openPersonModal() {
     document.getElementById('person-modal').classList.add('active');
     document.getElementById('modal-title').textContent = 'Nova Pessoa';
     document.getElementById('person-form').reset();
+    document.getElementById('founder-brand-percent').value = 0;
 }
 
 function closePersonModal() {
@@ -427,6 +435,7 @@ function editPerson(id) {
     document.getElementById('name').value   = person.name;
     document.getElementById('role').value   = person.role;
     document.getElementById('salary').value = person.salary;
+    document.getElementById('founder-brand-percent').value = person.founderBrandPercent || 0;
 
     document.getElementById('modal-title').textContent = 'Editar Pessoa';
     document.getElementById('person-modal').classList.add('active');
@@ -438,7 +447,8 @@ function handlePersonSubmit(e) {
     const formData = {
         name:   document.getElementById('name').value,
         role:   document.getElementById('role').value,
-        salary: parseFloat(document.getElementById('salary').value)
+        salary: parseFloat(document.getElementById('salary').value),
+        founderBrandPercent: parseFloat(document.getElementById('founder-brand-percent').value) || 0
     };
 
     try {

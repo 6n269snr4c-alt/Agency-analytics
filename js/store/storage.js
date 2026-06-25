@@ -123,6 +123,11 @@ class Storage {
                     contract.trafficManagement = false;
                     changed = true;
                 }
+
+                if (contract.founderBrand === undefined) {
+                    contract.founderBrand = false;
+                    changed = true;
+                }
             });
 
             if (changed) {
@@ -164,6 +169,7 @@ class Storage {
         if (contract.videoCount === undefined) contract.videoCount = 0;
         if (contract.staticCount === undefined) contract.staticCount = 0;
         if (contract.trafficManagement === undefined) contract.trafficManagement = false;
+        if (contract.founderBrand === undefined) contract.founderBrand = false;
         if (!contract.peopleAllocations) contract.peopleAllocations = [];
         if (!contract.confirmedPeriods) contract.confirmedPeriods = [];
         contract._v3Migrated = true;

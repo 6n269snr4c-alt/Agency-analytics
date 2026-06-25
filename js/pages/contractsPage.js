@@ -269,6 +269,7 @@ function renderRow({ contract, roi, squad, locked, confirmedThisMonth, lastConfi
     return `
         <tr class="${rowMuted ? 'row-inactive' : ''}">
             <td style="position:sticky; left:0; background:${rowMuted ? 'var(--bg-darker,#15151a)' : 'var(--bg,#0f0f12)'};">
+                ${contract.founderBrand ? '<span class="fb-badge" title="Estratégia de Founder Brand">🎤</span>' : ''}
                 <input type="text" class="inline-input inline-client-input" value="${contract.client}"
                        ${viewLocked ? 'disabled' : ''}
                        onchange="window.updateField('${contract.id}','client',this.value)">
@@ -417,10 +418,14 @@ function renderContractForm(prefill, squads) {
                             ${squads.map(s => `<option value="${s.id}" ${prefill?.squadTag === s.id ? 'selected' : ''}>${s.icon||''} ${s.name}</option>`).join('')}
                         </select>
                     </div>
-                    <div class="form-group" style="margin:0; display:flex; align-items:flex-end;">
+                    <div class="form-group" style="margin:0; display:flex; align-items:flex-end; gap:1.25rem;">
                         <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
                             <input type="checkbox" id="traffic-management" ${prefill?.trafficManagement ? 'checked' : ''}>
                             Inclui gestão de tráfego
+                        </label>
+                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                            <input type="checkbox" id="founder-brand" ${prefill?.founderBrand ? 'checked' : ''}>
+                            🎤 Estratégia de Founder Brand
                         </label>
                     </div>
                 </div>
@@ -510,6 +515,12 @@ function renderAllocationsList(allPeople) {
     }).join('');
 }
 
+function defaultModeFor(personId, isFounderBrandContract) {
+    if (!isFounderBrandContract) return 'rateado';
+    const person = personService.getPerson(personId);
+    return (person && person.founderBrandPercent > 0) ? 'founder_brand' : 'rateado';
+}
+
 function attachPersonSearch() {
     const input = document.getElementById('person-search');
     const results = document.getElementById('person-search-results');
@@ -537,7 +548,8 @@ function attachPersonSearch() {
             item.addEventListener('mousedown', (e) => {
                 e.preventDefault();
                 const personId = item.dataset.id;
-                draftAllocations.push({ personId, mode: 'rateado', fixedValue: 0 });
+                const isFB = document.getElementById('founder-brand')?.checked || false;
+                draftAllocations.push({ personId, mode: defaultModeFor(personId, isFB), fixedValue: 0 });
                 document.getElementById('allocations-list').innerHTML = renderAllocationsList(personService.getAllPeople());
                 input.value = '';
                 results.style.display = 'none';
@@ -586,9 +598,10 @@ function saveContract() {
         const videoCount  = parseInt(document.getElementById('video-count').value) || 0;
         const staticCount = parseInt(document.getElementById('static-count').value) || 0;
         const trafficManagement = document.getElementById('traffic-management').checked;
+        const founderBrand = document.getElementById('founder-brand').checked;
 
         const formData = {
-            client, value, squadTag, videoCount, staticCount, trafficManagement,
+            client, value, squadTag, videoCount, staticCount, trafficManagement, founderBrand,
             peopleAllocations: draftAllocations.map(a => ({ ...a })),
         };
 
@@ -658,7 +671,9 @@ function attachTeamPersonSearch() {
             item.addEventListener('mousedown', (e) => {
                 e.preventDefault();
                 const personId = item.dataset.id;
-                draftAllocations.push({ personId, mode: 'rateado', fixedValue: 0 });
+                const editingContract = currentEditId ? contractService.getContract(currentEditId) : null;
+                const isFB = editingContract ? !!editingContract.founderBrand : false;
+                draftAllocations.push({ personId, mode: defaultModeFor(personId, isFB), fixedValue: 0 });
                 document.getElementById('team-allocations-list').innerHTML = renderAllocationsList(personService.getAllPeople());
                 input.value = '';
                 results.style.display = 'none';
@@ -1064,6 +1079,11 @@ function contractStyles() {
         .month-sq.ref { border-color: #64b5f6; }
 
         .project-badge {
+            display: inline-block;
+            font-size: 0.85rem;
+            margin-right: 0.25rem;
+        }
+        .fb-badge {
             display: inline-block;
             font-size: 0.85rem;
             margin-right: 0.25rem;

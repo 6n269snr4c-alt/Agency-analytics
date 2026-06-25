@@ -187,6 +187,8 @@ function renderPeopleList(people) {
             let deliveryHtml;
             if (profile.kind === 'head') {
                 deliveryHtml = `<strong>${profile.total}</strong> cliente${profile.total !== 1 ? 's' : ''} no squad`;
+            } else if (profile.kind === 'head_master') {
+                deliveryHtml = `<strong>${profile.total}</strong> cliente${profile.total !== 1 ? 's' : ''} (agência toda)`;
             } else if (profile.kind === 'traffic') {
                 deliveryHtml = `<strong>${profile.total}</strong> contrato${profile.total !== 1 ? 's' : ''} de tráfego`;
             } else if (profile.total > 0 || profile.founderBrandClients > 0) {
@@ -205,7 +207,7 @@ function renderPeopleList(people) {
                 deliveryHtml = '<span class="text-muted" style="color:var(--text-secondary);">-</span>';
             }
 
-            const contractCountDisplay = (profile.kind === 'head') ? profile.total : profile.contractCount;
+            const contractCountDisplay = (profile.kind === 'head' || profile.kind === 'head_master') ? profile.total : profile.contractCount;
 
             return `
                 <div style="${wrapCellStyle} font-weight: 500;">${person.name}</div>

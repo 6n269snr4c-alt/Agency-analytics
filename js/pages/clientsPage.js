@@ -199,6 +199,7 @@ function renderClientCard(profile) {
                                     <div>
                                         <span style="font-weight:600;">${c.name}</span>
                                         ${c.squad ? `<span style="font-size:0.78rem;color:var(--text-secondary);margin-left:0.5rem;">${c.squad.icon || '🏢'} ${c.squad.name}</span>` : ''}
+                                        ${c.founderBrand ? `<span style="font-size:0.7rem;margin-left:0.4rem;">🎤</span>` : ''}
                                     </div>
                                     <span class="badge ${marginBadgeClass(c.margin)}" style="font-size:0.72rem;">${pct(c.margin)}</span>
                                 </div>
@@ -207,6 +208,22 @@ function renderClientCard(profile) {
                                     <span>Custo: <strong style="color:var(--error,#f44336)">R$ ${fmt(c.cost)}</strong></span>
                                     <span>Lucro: <strong style="color:${marginColor(c.margin)}">R$ ${fmt(c.profit)}</strong></span>
                                 </div>
+                                <div style="font-size:0.78rem;color:var(--text-secondary);margin-top:0.4rem;">
+                                    ${c.videoCount > 0 ? `🎬 ${c.videoCount} vídeo${c.videoCount !== 1 ? 's' : ''}` : ''}
+                                    ${c.staticCount > 0 ? ` · 🖼️ ${c.staticCount} estático${c.staticCount !== 1 ? 's' : ''}` : ''}
+                                    ${c.trafficManagement ? ` · 📣 gestão de tráfego` : ''}
+                                    ${!c.videoCount && !c.staticCount && !c.trafficManagement ? '—' : ''}
+                                </div>
+                                ${c.team && c.team.length > 0 ? `
+                                <div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;">
+                                    ${c.team.map(t => `
+                                        <span class="client-team-chip">
+                                            ${t.name}
+                                            <span class="client-team-chip-cost">R$ ${fmt(t.totalCost)}</span>
+                                        </span>
+                                    `).join('')}
+                                </div>
+                                ` : ''}
                             </div>
                         `).join('')}
                         <div style="text-align:right;font-size:0.85rem;color:var(--text-secondary);margin-top:0.25rem;">
@@ -233,6 +250,16 @@ function renderClientCard(profile) {
                                     <span>Valor: <strong style="color:#ff9800">R$ ${fmt(p.revenue)}</strong></span>
                                     ${p.externalCost > 0 ? `<span>Custo ext: <strong style="color:var(--error,#f44336)">R$ ${fmt(p.externalCost)}</strong></span>` : ''}
                                 </div>
+                                ${p.team && p.team.length > 0 ? `
+                                <div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;">
+                                    ${p.team.map(t => `
+                                        <span class="client-team-chip">
+                                            ${t.name}
+                                            <span class="client-team-chip-cost">R$ ${fmt(t.totalCost)}</span>
+                                        </span>
+                                    `).join('')}
+                                </div>
+                                ` : ''}
                             </div>
                         `).join('')}
                         <div style="text-align:right;font-size:0.85rem;color:var(--text-secondary);margin-top:0.25rem;">
@@ -323,6 +350,21 @@ function clientStyles() {
         .client-card { transition: border-color 0.2s; }
         .client-card:hover { border-color: rgba(124,252,0,0.25); }
         .client-card-header:hover { opacity: 0.9; }
+
+        .client-team-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.74rem;
+            background: var(--bg-card, #1a1a1a);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 0.2rem 0.6rem;
+        }
+        .client-team-chip-cost {
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+        }
 
         .client-metric {
             display: flex;

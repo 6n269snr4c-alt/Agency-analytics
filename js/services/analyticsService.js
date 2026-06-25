@@ -199,12 +199,15 @@ class AnalyticsService {
         const totalRateable = this.getPersonTotalRateableDeliverables(personId, currentPeriod);
         if (totalRateable > 0) return salary / totalRateable;
 
-        // Sem nada rateado (vídeo/estático/tráfego): se só recebe por valor
-        // fixo, "custo por entrega" passa a ser o valor fixo médio por
-        // contrato — não tem porquê ficar zerado só porque não há rateio.
+        // Sem nada rateado: se só recebe por valor fixo, "custo por entrega"
+        // passa a ser o valor fixo dividido pelos criativos reais entregues
+        // (vídeo/estático, ou contratos de tráfego) — e só cai na média por
+        // contrato como último recurso, se não houver nenhum criativo lançado
+        // (ex.: um retainer fixo sem vídeo/estático informado).
         const profile = this.getPersonDeliveryProfile(personId, currentPeriod);
-        if (profile.fixedCount > 0) {
-            return profile.fixedTotal / profile.fixedCount;
+        if (profile.fixedTotal > 0) {
+            if (profile.total > 0) return profile.fixedTotal / profile.total;
+            if (profile.fixedCount > 0) return profile.fixedTotal / profile.fixedCount;
         }
         return 0;
     }
@@ -824,9 +827,12 @@ class AnalyticsService {
         const contracts = this.getPersonContractsForPeriod(personId, currentPeriod);
         const contractCount = contracts.length;
 
-        // Alocações em modo 'fixo' — independente do cargo, pra não ficar
-        // "zerado" em Tipo de Entrega/Custo·Ent quando a pessoa só recebe
-        // valor fixo (sem rateio por vídeo/estático/tráfego nenhum).
+        // Total recebido por valor fixo — usado só como respaldo do Custo/Ent
+        // quando não há nenhum criativo real pra dividir (ex.: retainer fixo
+        // sem vídeo/estático lançado). O volume de entrega em si (abaixo) já
+        // conta contratos fixos igual aos rateados — pagamento é uma coisa,
+        // quantidade entregue é outra, e mostrar as duas juntas só repetia
+        // Contr./Custo-Ent com outras palavras.
         let fixedCount = 0;
         let fixedTotal = 0;
         contracts.forEach(contract => {
@@ -842,7 +848,7 @@ class AnalyticsService {
             const trafficCount = contracts.filter(contract => {
                 const data = this._getProjectionData(contract, currentPeriod);
                 const alloc = data.peopleAllocations.find(a => a.personId === personId);
-                return alloc && alloc.mode === 'rateado' && data.trafficManagement;
+                return alloc && (alloc.mode === 'rateado' || alloc.mode === 'fixo') && data.trafficManagement;
             }).length;
             return { kind: 'traffic', contractCount, video: 0, static: 0, total: trafficCount, founderBrandClients: 0, fixedCount, fixedTotal };
         }
@@ -860,7 +866,10 @@ class AnalyticsService {
                 founderBrandClients++;
                 return;
             }
-            if (alloc.mode !== 'rateado') return;
+            // Conta vídeo/estático tanto de rateado quanto de fixo — a
+            // quantidade de criativos entregues não depende de como a
+            // pessoa é paga por eles.
+            if (alloc.mode !== 'rateado' && alloc.mode !== 'fixo') return;
 
             if (person.role === 'Filmmaker') {
                 video += data.videoCount || 0;

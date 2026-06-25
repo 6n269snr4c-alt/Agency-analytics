@@ -38,6 +38,7 @@ class ContractService {
             videoCount:         parseInt(contractData.videoCount) || 0,
             staticCount:        parseInt(contractData.staticCount) || 0,
             trafficManagement:  !!contractData.trafficManagement,
+            founderBrand:       !!contractData.founderBrand,
             peopleAllocations:  contractData.peopleAllocations || [],
             squadTag:           contractData.squadTag || null,
             notes:              contractData.notes || '',
@@ -57,6 +58,7 @@ class ContractService {
         if (updates.videoCount !== undefined)   updates.videoCount   = parseInt(updates.videoCount)  || 0;
         if (updates.staticCount !== undefined)  updates.staticCount  = parseInt(updates.staticCount) || 0;
         if (updates.trafficManagement !== undefined) updates.trafficManagement = !!updates.trafficManagement;
+        if (updates.founderBrand !== undefined) updates.founderBrand = !!updates.founderBrand;
 
         return storage.updateContract(id, updates);
     }
@@ -115,6 +117,7 @@ class ContractService {
             videoCount:         overrides.videoCount ?? original.videoCount ?? 0,
             staticCount:        overrides.staticCount ?? original.staticCount ?? 0,
             trafficManagement:  overrides.trafficManagement ?? original.trafficManagement ?? false,
+            founderBrand:       overrides.founderBrand ?? original.founderBrand ?? false,
             peopleAllocations:  (overrides.peopleAllocations ?? original.peopleAllocations ?? []).map(a => ({ ...a })),
             squadTag:           overrides.squadTag ?? original.squadTag ?? null,
             notes:              original.notes ?? '',

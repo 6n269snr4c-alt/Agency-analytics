@@ -21,6 +21,8 @@ let selectedMonth   = null;
 let showInactive    = false;
 let viewLocked      = false;
 let searchTerm      = '';
+let typeFilter         = 'todos'; // 'todos' | 'recorrencia' | 'pontual' | 'founder_brand'
+let professionalFilter = '';      // personId ou ''
 
 let currentEditId   = null;   // contrato sendo editado (modal de equipe)
 let relaunchFromId  = null;   // contrato de origem ao "lançar novo a partir de"
@@ -69,6 +71,23 @@ function groupTeamByRole(contract, allPeople) {
     return groups;
 }
 
+function personInvolvedInContract(contract, personId) {
+    if ((contract.peopleAllocations || []).some(a => a.personId === personId)) return true;
+    if (contract.squadTag) {
+        const squad = squadService.getSquad(contract.squadTag);
+        if (squad && squad.headId === personId) return true;
+    }
+    return false;
+}
+
+function personInvolvedInProject(project, personId) {
+    if (project.squadId) {
+        const squad = squadService.getSquad(project.squadId);
+        if (squad && squad.headId === personId) return true;
+    }
+    return false;
+}
+
 // ─── entry point ──────────────────────────────────────────────────────────────
 
 export function renderContractsPage() {
@@ -91,6 +110,20 @@ export function renderContractsPage() {
         const term = searchTerm.toLowerCase();
         contracts = contracts.filter(c => c.client.toLowerCase().includes(term));
         projects = projects.filter(p => (p.client || p.name).toLowerCase().includes(term));
+    }
+
+    if (typeFilter === 'recorrencia') {
+        projects = [];
+    } else if (typeFilter === 'pontual') {
+        contracts = [];
+    } else if (typeFilter === 'founder_brand') {
+        contracts = contracts.filter(c => c.founderBrand);
+        projects = [];
+    }
+
+    if (professionalFilter) {
+        contracts = contracts.filter(c => personInvolvedInContract(c, professionalFilter));
+        projects = projects.filter(p => personInvolvedInProject(p, professionalFilter));
     }
 
     const recurringRevenue = contractService.getContractsForPeriod(selectedMonth)
@@ -130,6 +163,21 @@ export function renderContractsPage() {
                 </button>
                 <button class="btn btn-secondary" onclick="window.exportContracts()">📥 Exportar</button>
             </div>
+        </div>
+
+        <div class="filter-bar">
+            <span style="font-size:0.78rem; color:var(--text-secondary);">Tipo:</span>
+            <button class="month-pill ${typeFilter === 'todos' ? 'active' : ''}" onclick="window.setTypeFilter('todos')">Todos</button>
+            <button class="month-pill ${typeFilter === 'recorrencia' ? 'active' : ''}" onclick="window.setTypeFilter('recorrencia')">Recorrência</button>
+            <button class="month-pill ${typeFilter === 'pontual' ? 'active' : ''}" onclick="window.setTypeFilter('pontual')">🚀 Pontual</button>
+            <button class="month-pill ${typeFilter === 'founder_brand' ? 'active' : ''}" onclick="window.setTypeFilter('founder_brand')">🎤 Founder Brand</button>
+
+            <span style="font-size:0.78rem; color:var(--text-secondary); margin-left:1rem;">Profissional:</span>
+            <select class="form-select" id="professional-filter" style="max-width:200px; font-size:0.82rem; padding:0.35rem 0.6rem;" onchange="window.setProfessionalFilter(this.value)">
+                <option value="">Todos</option>
+                ${allPeople.map(p => `<option value="${p.id}" ${professionalFilter === p.id ? 'selected' : ''}>${p.name} — ${p.role}</option>`).join('')}
+            </select>
+            ${(typeFilter !== 'todos' || professionalFilter) ? `<button class="btn btn-small btn-secondary" onclick="window.clearContractFilters()" style="margin-left:0.5rem;">✕ Limpar filtros</button>` : ''}
         </div>
 
         <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin-bottom:1.5rem;">
@@ -898,7 +946,20 @@ function attachContractHandlers() {
     window.selectMonth = (periodId) => { selectedMonth = periodId; renderContractsPage(); };
     window.toggleShowInactive = (checked) => { showInactive = checked; renderContractsPage(); };
     window.toggleViewLock = () => { viewLocked = !viewLocked; renderContractsPage(); };
-    window.filterContracts = (value) => { searchTerm = value; renderContractsPage(); };
+    window.filterContracts = (value) => {
+        searchTerm = value;
+        renderContractsPage();
+        const input = document.getElementById('contract-search');
+        if (input) {
+            input.focus();
+            const len = input.value.length;
+            input.setSelectionRange(len, len);
+        }
+    };
+
+    window.setTypeFilter = (type) => { typeFilter = type; renderContractsPage(); };
+    window.setProfessionalFilter = (personId) => { professionalFilter = personId; renderContractsPage(); };
+    window.clearContractFilters = () => { typeFilter = 'todos'; professionalFilter = ''; renderContractsPage(); };
 
     window.toggleMonth = (contractId, periodId) => {
         const contract = contractService.getContract(contractId);
@@ -1024,6 +1085,16 @@ function contractStyles() {
             border-color: var(--fast-green, #7cfc00);
             color: var(--fast-green, #7cfc00);
             font-weight: 700;
+        }
+
+        .filter-bar {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            margin-bottom: 1.25rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border);
         }
 
         .itable { border-collapse: collapse; font-size: 0.82rem; white-space: nowrap; }

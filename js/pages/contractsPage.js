@@ -426,11 +426,15 @@ function renderTeamCell(contract, entries, role, locked) {
     return `<td>${entries.map(({ person, alloc }) => {
         const badgeClass = alloc.mode === 'fixo' ? 'fixo' : alloc.mode === 'founder_brand' ? 'fb' : 'rateado';
         const badgeLabel = alloc.mode === 'fixo' ? 'fixo' : alloc.mode === 'founder_brand' ? 'FB' : 'rateado';
+        const personCost = analyticsService.getPersonCostInContract(person.id, contract.id, selectedMonth);
         return `
-        <span class="role-chip" ${locked ? '' : `onclick="window.openTeamModal('${contract.id}')" style="cursor:pointer;"`}>
-            <span class="role-chip-avatar">${person.name[0]}</span>${person.name}
-            <span class="role-chip-badge ${badgeClass}">${badgeLabel}</span>
-        </span>
+        <div>
+            <span class="role-chip" ${locked ? '' : `onclick="window.openTeamModal('${contract.id}')" style="cursor:pointer;"`}>
+                <span class="role-chip-avatar">${person.name[0]}</span>${person.name}
+                <span class="role-chip-badge ${badgeClass}">${badgeLabel}</span>
+            </span>
+            ${personCost > 0 ? `<div class="role-chip-cost">R$ ${fmt(personCost)}</div>` : ''}
+        </div>
     `;
     }).join('')}</td>`;
 }

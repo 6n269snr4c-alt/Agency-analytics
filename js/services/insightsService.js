@@ -49,7 +49,7 @@ class InsightsService {
         }
         
         // Check negative contracts
-        const contractRanking = analyticsService.getContractProfitabilityRanking();
+        const contractRanking = analyticsService.getEngagementProfitabilityRanking();
         const negativeContracts = contractRanking.filter(c => c.profit < 0);
         
         if (negativeContracts.length > 0) {
@@ -205,7 +205,7 @@ class InsightsService {
         const opportunities = [];
         
         // High-margin contracts to replicate
-        const contractRanking = analyticsService.getContractProfitabilityRanking();
+        const contractRanking = analyticsService.getEngagementProfitabilityRanking();
         const topContracts = contractRanking.filter(c => c.margin > 40).slice(0, 3);
         
         if (topContracts.length > 0) {

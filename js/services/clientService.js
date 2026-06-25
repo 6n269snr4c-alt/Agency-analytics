@@ -70,6 +70,11 @@ class ClientService {
                 cost:     roi.cost,
                 profit:   roi.profit,
                 margin:   roi.margin,
+                videoCount:         c.videoCount || 0,
+                staticCount:        c.staticCount || 0,
+                trafficManagement:  !!c.trafficManagement,
+                founderBrand:       !!c.founderBrand,
+                team:               roi.costBreakdown,
             };
         });
 
@@ -95,6 +100,7 @@ class ClientService {
                 cost:         roi.cost,
                 profit:       roi.profit,
                 status:       p.status,
+                team:         roi.costBreakdown,
             };
         });
 

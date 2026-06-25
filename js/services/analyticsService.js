@@ -80,6 +80,38 @@ class AnalyticsService {
         return this.getPersonContractsForPeriod(personId);
     }
 
+    /**
+     * Contratos em que a pessoa está alocada no modo 'founder_brand' nesse
+     * período — usados pra dividir igualmente o bloco reservado da % dela.
+     */
+    _founderBrandContractsForPerson(personId, periodId) {
+        return this.getPersonContractsForPeriod(personId, periodId).filter(contract => {
+            const data = this._getProjectionData(contract, periodId);
+            const alloc = data.peopleAllocations.find(a => a.personId === personId);
+            return alloc && alloc.mode === 'founder_brand';
+        });
+    }
+
+    /**
+     * Bloco reservado pra Founder Brand: % do salário da pessoa (definida no
+     * cadastro dela) dividida igualmente entre os clientes Founder Brand que
+     * ela atende nesse período. O resto do salário (100% − %) é o que sobra
+     * pra rateio normal por vídeo/estático nos outros contratos dela.
+     */
+    _personFounderBrandReserve(personId, periodId) {
+        const person = storage.getPersonById(personId);
+        const pct = person ? (person.founderBrandPercent || 0) : 0;
+        const salary = this.getPersonCost(personId, periodId);
+        const fbContracts = this._founderBrandContractsForPerson(personId, periodId);
+
+        if (pct === 0 || fbContracts.length === 0) {
+            return { pct: 0, reserveTotal: 0, perClient: 0, fbContracts: [] };
+        }
+
+        const reserveTotal = salary * (pct / 100);
+        return { pct, reserveTotal, perClient: reserveTotal / fbContracts.length, fbContracts };
+    }
+
     getPersonTotalRateableDeliverables(personId, periodId = null) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
         const person = storage.getPersonById(personId);
@@ -112,6 +144,11 @@ class AnalyticsService {
             return alloc.fixedValue || 0;
         }
 
+        if (alloc.mode === 'founder_brand') {
+            const reserve = this._personFounderBrandReserve(personId, currentPeriod);
+            return reserve.perClient;
+        }
+
         const relevantHere = this._relevantQuantity(person.role, data);
         if (relevantHere === 0) return 0;
 
@@ -119,7 +156,9 @@ class AnalyticsService {
         if (totalRateable === 0) return 0;
 
         const salary = this.getPersonCost(personId, currentPeriod);
-        return (relevantHere / totalRateable) * salary;
+        const reserve = this._personFounderBrandReserve(personId, currentPeriod);
+        const availableSalary = salary - reserve.reserveTotal;
+        return (relevantHere / totalRateable) * availableSalary;
     }
 
     getPersonTotalAllocated(personId, periodId = null) {
@@ -212,6 +251,7 @@ class AnalyticsService {
 
         const relevantQuantity = this._relevantQuantity(person.role, data);
         const cost = this.getPersonCostInContract(personId, contractId, currentPeriod);
+        const fbReserve = alloc.mode === 'founder_brand' ? this._personFounderBrandReserve(personId, currentPeriod) : null;
 
         return {
             contractId,
@@ -221,7 +261,9 @@ class AnalyticsService {
             videoCount: data.videoCount || 0,
             staticCount: data.staticCount || 0,
             relevantQuantity,
-            cost
+            cost,
+            founderBrandReservePct: fbReserve ? fbReserve.pct : null,
+            founderBrandClientCount: fbReserve ? fbReserve.fbContracts.length : null
         };
     }
 
@@ -447,7 +489,7 @@ class AnalyticsService {
             if (!person) return;
 
             const personCost = this.getPersonCostInContract(alloc.personId, contractId, currentPeriod);
-            if (personCost === 0 && alloc.mode === 'rateado') return;
+            if (personCost === 0 && (alloc.mode === 'rateado' || alloc.mode === 'founder_brand')) return;
 
             cost += personCost;
 
@@ -458,6 +500,17 @@ class AnalyticsService {
                     role: person.role,
                     mode: 'fixo',
                     totalCost: personCost
+                });
+            } else if (alloc.mode === 'founder_brand') {
+                const reserve = this._personFounderBrandReserve(person.id, currentPeriod);
+                costBreakdown.push({
+                    personId: person.id,
+                    name: person.name,
+                    role: person.role,
+                    mode: 'founder_brand',
+                    totalCost: personCost,
+                    reservePct: reserve.pct,
+                    fbClientCount: reserve.fbContracts.length
                 });
             } else {
                 const relevantHere = this._relevantQuantity(person.role, data);

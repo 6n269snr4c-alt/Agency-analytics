@@ -13,7 +13,8 @@ class PersonService {
         const person = storage.addPerson({
             name: personData.name,
             role: personData.role,
-            salary: parseFloat(personData.salary)
+            salary: parseFloat(personData.salary),
+            founderBrandPercent: parseFloat(personData.founderBrandPercent) || 0
         });
 
         return person;
@@ -28,6 +29,9 @@ class PersonService {
         // Validate salary if being updated
         if (updates.salary !== undefined) {
             updates.salary = parseFloat(updates.salary);
+        }
+        if (updates.founderBrandPercent !== undefined) {
+            updates.founderBrandPercent = parseFloat(updates.founderBrandPercent) || 0;
         }
 
         return storage.updatePerson(id, updates);

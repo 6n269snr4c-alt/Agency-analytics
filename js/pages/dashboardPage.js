@@ -2,20 +2,27 @@
 
 import analyticsService from '../services/analyticsService.js';
 import contractService from '../services/contractService.js';
-import personService from '../services/personService.js';
-import squadService from '../services/squadService.js';
 import insightsService from '../services/insightsService.js';
+import storage from '../store/storage.js';
 import { renderPeriodSelector } from '../components/periodSelector.js';
 
 export function renderDashboard() {
     const contentEl = document.getElementById('content');
+    const currentPeriod = storage.getCurrentPeriod();
 
-    const overallROI          = analyticsService.getOverallROI();
-    const squadComparison     = analyticsService.getSquadComparison();
-    const productivityRanking = analyticsService.getProductivityRanking();
-    const contractRanking     = analyticsService.getContractProfitabilityRanking();
+    const overallROI          = analyticsService.getOverallROI(currentPeriod);
+    const squadComparison     = analyticsService.getSquadComparison(currentPeriod);
+    const productivityRanking = analyticsService.getProductivityRanking(currentPeriod);
+    const engagementRanking   = analyticsService.getEngagementProfitabilityRanking(currentPeriod);
     const insights            = insightsService.generateAllInsights();
     const opportunities       = insightsService.getTopOpportunities();
+
+    const recurringRevenue = contractService.getAllContracts()
+        .reduce((s, c) => s + analyticsService.getContractROI(c.id, currentPeriod).revenue, 0);
+    const oneOffRevenue = overallROI.revenue - recurringRevenue;
+
+    const salaryDivergences = analyticsService.getSalaryReconciliation(currentPeriod).filter(r => !r.isOk);
+    const founderBrand       = analyticsService.getFounderBrandSummary(currentPeriod);
 
     contentEl.innerHTML = `
         <div class="page-header">
@@ -30,9 +37,11 @@ export function renderDashboard() {
             ${renderOverallStats(overallROI)}
         </div>
 
+        ${renderRevenueSplit(recurringRevenue, oneOffRevenue)}
+        ${renderAttentionPanel(salaryDivergences, founderBrand)}
         ${renderSquadsPerformance(squadComparison)}
+        ${renderEngagementProfitability(engagementRanking)}
         ${renderProductivityRanking(productivityRanking)}
-        ${renderContractProfitability(contractRanking)}
     `;
 }
 
@@ -138,6 +147,83 @@ function renderOverallStats(roi) {
     `;
 }
 
+// ─── Recorrência vs. Pontual ───────────────────────────────────────────────────
+
+function renderRevenueSplit(recurringRevenue, oneOffRevenue) {
+    const total = recurringRevenue + oneOffRevenue;
+    const recurringPct = total > 0 ? (recurringRevenue / total) * 100 : 0;
+
+    return `
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin:1.5rem 0;">
+            <div class="stat-card">
+                <div class="stat-value">R$ ${formatCurrency(recurringRevenue)}</div>
+                <div class="stat-label">Receita Recorrência</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">R$ ${formatCurrency(oneOffRevenue)}</div>
+                <div class="stat-label">🚀 Receita Projetos Pontuais</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">${recurringPct.toFixed(0)}% / ${(100 - recurringPct).toFixed(0)}%</div>
+                <div class="stat-label">Mix Recorrência / Pontual</div>
+            </div>
+        </div>
+    `;
+}
+
+// ─── Pontos de Atenção ─────────────────────────────────────────────────────────
+
+function renderAttentionPanel(salaryDivergences, founderBrand) {
+    const hasDivergences = salaryDivergences.length > 0;
+    const hasFounderBrand = founderBrand.clientCount > 0;
+
+    if (!hasDivergences && !hasFounderBrand) return '';
+
+    return `
+        <div class="grid grid-2" style="margin-bottom: 1.5rem;">
+            ${hasDivergences ? `
+                <div class="widget">
+                    <div class="widget-header"><h2 class="widget-title">⚠️ Conferência Salarial</h2></div>
+                    <div class="widget-body">
+                        <p style="margin-bottom: 0.75rem;">
+                            <strong style="color: var(--error,#f44336); font-size: 1.3rem;">${salaryDivergences.length}</strong>
+                            pessoa${salaryDivergences.length !== 1 ? 's' : ''} com divergência entre salário e alocação.
+                        </p>
+                        <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.85rem; color: var(--text-secondary);">
+                            ${salaryDivergences.slice(0, 5).map(r => `
+                                <li>${r.name} — ${r.diff > 0 ? `faltam R$ ${formatCurrency(r.diff)}` : `R$ ${formatCurrency(Math.abs(r.diff))} acima`}</li>
+                            `).join('')}
+                        </ul>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); font-style: italic; margin-top: 0.5rem;">💡 Ver detalhes em Conferência Salarial</div>
+                    </div>
+                </div>
+            ` : ''}
+
+            ${hasFounderBrand ? `
+                <div class="widget">
+                    <div class="widget-header"><h2 class="widget-title">🎤 Founder Brand</h2></div>
+                    <div class="widget-body">
+                        <div style="display:flex; gap:2rem;">
+                            <div>
+                                <div class="stat-value" style="font-size:1.6rem;">${founderBrand.clientCount}</div>
+                                <div class="stat-label">cliente${founderBrand.clientCount !== 1 ? 's' : ''}</div>
+                            </div>
+                            <div>
+                                <div class="stat-value" style="font-size:1.6rem;">R$ ${formatCurrency(founderBrand.revenue)}</div>
+                                <div class="stat-label">receita</div>
+                            </div>
+                            <div>
+                                <div class="stat-value" style="font-size:1.6rem; color:var(--text-secondary);">R$ ${formatCurrency(founderBrand.reserveTotal)}</div>
+                                <div class="stat-label">salário reservado</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
 // ─── Performance dos Squads ───────────────────────────────────────────────────
 
 function renderSquadsPerformance(squads) {
@@ -163,7 +249,7 @@ function renderSquadsPerformance(squads) {
                             <tr>
                                 <th>Squad</th>
                                 <th>Membros</th>
-                                <th>Contratos</th>
+                                <th>Clientes</th>
                                 <th>Receita</th>
                                 <th>Custo</th>
                                 <th>Lucro</th>
@@ -171,11 +257,13 @@ function renderSquadsPerformance(squads) {
                             </tr>
                         </thead>
                         <tbody>
-                            ${squads.map(squad => `
+                            ${squads.map(squad => {
+                                const clientCount = (squad.contractCount || 0) + (squad.projectCount || 0);
+                                return `
                                 <tr>
                                     <td><strong>${squad.name}</strong></td>
                                     <td>${squad.memberCount}</td>
-                                    <td>${squad.contractCount}</td>
+                                    <td>${clientCount}${squad.projectCount > 0 ? ` <span style="color:var(--text-secondary); font-size:0.78rem;">(${squad.contractCount} + ${squad.projectCount} 🚀)</span>` : ''}</td>
                                     <td>R$ ${formatCurrency(squad.revenue)}</td>
                                     <td>R$ ${formatCurrency(squad.cost)}</td>
                                     <td>
@@ -185,9 +273,66 @@ function renderSquadsPerformance(squads) {
                                     </td>
                                     <td>${safeFixed(squad.margin)}%</td>
                                 </tr>
-                            `).join('')}
+                            `;
+                            }).join('')}
                         </tbody>
                     </table>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// ─── Lucratividade (recorrência + pontual) ─────────────────────────────────────
+
+function renderEngagementProfitability(ranking) {
+    if (ranking.length === 0) {
+        return `
+            <div class="widget">
+                <div class="widget-header"><h2 class="widget-title">Lucratividade por Cliente</h2></div>
+                <div class="empty-state">
+                    <div class="empty-state-icon">💰</div>
+                    <p>Nenhum contrato ou projeto cadastrado ainda</p>
+                </div>
+            </div>
+        `;
+    }
+
+    const top    = ranking.slice(0, 5);
+    const bottom = [...ranking].sort((a, b) => a.profit - b.profit).slice(0, 5);
+
+    const renderRows = (rows) => rows.map(r => `
+        <tr>
+            <td><strong>${r.client}</strong> ${r.type === 'pontual' ? '<span style="font-size:0.7rem; color:#ff9800;">🚀</span>' : ''}</td>
+            <td>R$ ${formatCurrency(r.revenue)}</td>
+            <td>R$ ${formatCurrency(r.cost)}</td>
+            <td><span class="badge ${r.profit > 0 ? 'badge-success' : 'badge-error'}">R$ ${formatCurrency(r.profit)}</span></td>
+            <td>${safeFixed(r.margin)}%</td>
+        </tr>
+    `).join('');
+
+    return `
+        <div class="grid grid-2">
+            <div class="widget">
+                <div class="widget-header"><h2 class="widget-title">📈 Mais Lucrativos</h2></div>
+                <div class="widget-body">
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Cliente</th><th>Receita</th><th>Custo</th><th>Lucro</th><th>Margem</th></tr></thead>
+                            <tbody>${renderRows(top)}</tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="widget">
+                <div class="widget-header"><h2 class="widget-title">📉 Menos Lucrativos</h2></div>
+                <div class="widget-body">
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Cliente</th><th>Receita</th><th>Custo</th><th>Lucro</th><th>Margem</th></tr></thead>
+                            <tbody>${renderRows(bottom)}</tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -209,25 +354,29 @@ function renderProductivityRanking(ranking) {
         `;
     }
 
+    const sorted = [...ranking].sort((a, b) => (a.costPerDeliverable || Infinity) - (b.costPerDeliverable || Infinity));
+
+    const kindLabel = (kind) => kind === 'head' ? 'clientes' : kind === 'traffic' ? 'contratos tráfego' : 'entregas';
+
     return `
         <div class="widget">
             <div class="widget-header"><h2 class="widget-title">Ranking de Produtividade</h2></div>
             <div class="widget-body">
                 <ul class="ranking-list">
-                    ${ranking.slice(0, 10).map((person, index) => `
+                    ${sorted.slice(0, 10).map((person, index) => `
                         <li class="ranking-item">
                             <div class="ranking-position">${index + 1}</div>
                             <div class="ranking-info">
                                 <div class="ranking-name">${person.name}</div>
                                 <div class="ranking-meta">
                                     ${person.role} •
-                                    ${person.totalDeliverables ?? person.totalWeightedPoints ?? 0} entregas •
-                                    ${person.contractCount} contratos
+                                    ${person.totalDeliverables} ${kindLabel(person.deliveryKind)} •
+                                    ${person.contractCount} contrato${person.contractCount !== 1 ? 's' : ''}
                                 </div>
                             </div>
                             <div class="ranking-value">
-                                ${(person.costPerDeliverable ?? person.costPerPoint ?? 0) > 0
-                                    ? `R$ ${formatCurrency(person.costPerDeliverable ?? person.costPerPoint)}/entrega`
+                                ${person.costPerDeliverable > 0
+                                    ? `R$ ${formatCurrency(person.costPerDeliverable)}/${person.deliveryKind === 'head' ? 'cliente' : 'entrega'}`
                                     : 'N/A'
                                 }
                             </div>
@@ -239,77 +388,21 @@ function renderProductivityRanking(ranking) {
     `;
 }
 
-// ─── Contratos Mais Lucrativos ────────────────────────────────────────────────
-
-function renderContractProfitability(contracts) {
-    if (contracts.length === 0) {
-        return `
-            <div class="widget">
-                <div class="widget-header"><h2 class="widget-title">Contratos Mais Lucrativos</h2></div>
-                <div class="empty-state">
-                    <div class="empty-state-icon">💰</div>
-                    <p>Nenhum contrato cadastrado ainda</p>
-                </div>
-            </div>
-        `;
-    }
-
-    return `
-        <div class="widget">
-            <div class="widget-header"><h2 class="widget-title">Contratos Mais Lucrativos</h2></div>
-            <div class="widget-body">
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Cliente</th>
-                                <th>Receita</th>
-                                <th>Custo</th>
-                                <th>Lucro</th>
-                                <th>Margem</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${contracts.slice(0, 10).map(contract => `
-                                <tr>
-                                    <td><strong>${contract.client}</strong></td>
-                                    <td>R$ ${formatCurrency(contract.revenue)}</td>
-                                    <td>R$ ${formatCurrency(contract.cost)}</td>
-                                    <td>
-                                        <span class="badge ${contract.profit > 0 ? 'badge-success' : 'badge-error'}">
-                                            R$ ${formatCurrency(contract.profit)}
-                                        </span>
-                                    </td>
-                                    <td>${safeFixed(contract.margin)}%</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 /**
  * Formata número como moeda pt-BR. Retorna '0,00' se o valor não for número.
  */
 function formatCurrency(value) {
-    const n = Number(value);
-    if (isNaN(n)) return '0,00';
-    return n.toLocaleString('pt-BR', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    });
+    const num = Number(value);
+    if (isNaN(num)) return '0,00';
+    return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /**
- * toFixed seguro — retorna '0.0' se o valor não for número.
+ * toFixed seguro — retorna '0.0' se o valor não for um número válido.
  */
 function safeFixed(value, digits = 1) {
-    const n = Number(value);
-    if (isNaN(n)) return '0.0';
-    return n.toFixed(digits);
+    const num = Number(value);
+    return isNaN(num) ? (0).toFixed(digits) : num.toFixed(digits);
 }

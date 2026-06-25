@@ -189,10 +189,7 @@ function renderPeopleList(people) {
                 deliveryHtml = `<strong>${profile.total}</strong> cliente${profile.total !== 1 ? 's' : ''} no squad`;
             } else if (profile.kind === 'traffic') {
                 deliveryHtml = `<strong>${profile.total}</strong> contrato${profile.total !== 1 ? 's' : ''} de tráfego`;
-                if (profile.fixedCount > 0) {
-                    deliveryHtml += `<br>💰 <strong>${profile.fixedCount}</strong> fixo${profile.fixedCount !== 1 ? 's' : ''} · R$ ${formatCurrency(profile.fixedTotal / profile.fixedCount)} cada`;
-                }
-            } else if (profile.total > 0 || profile.founderBrandClients > 0 || profile.fixedCount > 0) {
+            } else if (profile.total > 0 || profile.founderBrandClients > 0) {
                 const parts = [];
                 if (profile.video > 0)    parts.push(`Vídeo: <strong>${profile.video}</strong>`);
                 if (profile.static > 0)   parts.push(`Estático: <strong>${profile.static}</strong>`);
@@ -202,9 +199,8 @@ function renderPeopleList(people) {
                 if (profile.founderBrandClients > 0) {
                     deliveryHtml += `${deliveryHtml ? '<br>' : ''}🎤 <strong>${profile.founderBrandClients}</strong> Founder Brand`;
                 }
-                if (profile.fixedCount > 0) {
-                    deliveryHtml += `${deliveryHtml ? '<br>' : ''}💰 <strong>${profile.fixedCount}</strong> fixo${profile.fixedCount !== 1 ? 's' : ''} · R$ ${formatCurrency(profile.fixedTotal / profile.fixedCount)} cada`;
-                }
+            } else if (profile.fixedCount > 0) {
+                deliveryHtml = `💰 <strong>${profile.fixedCount}</strong> fixo${profile.fixedCount !== 1 ? 's' : ''} sem entregável lançado`;
             } else {
                 deliveryHtml = '<span class="text-muted" style="color:var(--text-secondary);">-</span>';
             }

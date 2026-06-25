@@ -894,9 +894,27 @@ class AnalyticsService {
     }
 
     getPersonAverageTicket(personId, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+
+        const headSquads = storage.getSquads().filter(s => s.headId === personId);
+        if (headSquads.length > 0) {
+            let totalValue = 0;
+            let count = 0;
+            headSquads.forEach(squad => {
+                this.getSquadContracts(squad.id, currentPeriod).forEach(contract => {
+                    totalValue += this._getProjectionData(contract, currentPeriod).value || 0;
+                    count++;
+                });
+                this.getSquadProjects(squad.id, currentPeriod).forEach(project => {
+                    totalValue += project.value || 0;
+                    count++;
+                });
+            });
+            return count > 0 ? totalValue / count : 0;
+        }
+
         const contracts = this.getPersonContractsForPeriod(personId, periodId);
         if (contracts.length === 0) return 0;
-        const currentPeriod = periodId || storage.getCurrentPeriod();
         let totalValue = 0;
         contracts.forEach(contract => {
             const data = this._getProjectionData(contract, currentPeriod);

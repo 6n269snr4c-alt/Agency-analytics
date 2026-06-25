@@ -79,41 +79,46 @@ class InsightsService {
     getProductivityInsights() {
         const insights = [];
         const people = personService.getAllPeople();
-        
+
         people.forEach(person => {
-            const contracts = analyticsService.getPersonContracts(person.id);
-            const totalDeliverables = analyticsService.getPersonTotalDeliverables(person.id);
-            
-            // Check if person has no contracts
-            if (contracts.length === 0) {
+            const profile = analyticsService.getPersonDeliveryProfile(person.id);
+
+            // "Sem contratos" agora usa contractCount do perfil — que pra Head já
+            // significa "clientes do squad dela", não a alocação manual (que ela
+            // nunca tem). Antes, toda Head aparecia aqui por engano.
+            if (profile.contractCount === 0) {
                 insights.push({
                     type: 'warning',
                     title: `${person.name} sem contratos`,
-                    message: `${person.role} não está atribuído(a) a nenhum contrato`,
+                    message: `${person.role} não está atribuído(a) a nenhum contrato${profile.kind === 'head' ? ' (squad sem clientes neste mês)' : ''}`,
                     action: 'Alocar em projetos ou revisar necessidade da posição'
                 });
+                return;
             }
-            
-            // Check workload (very high deliverables per month)
-            const avgDeliverablesPerContract = totalDeliverables / Math.max(contracts.length, 1);
-            
-            if (totalDeliverables > 100) {
+
+            // Carga de trabalho — agora baseada só no que é relevante pro cargo
+            // dessa pessoa (vídeo pra Filmmaker, estático pra Designer, clientes
+            // pra Head, contratos de tráfego pro Gestor de Tráfego).
+            const total = profile.total;
+            const unitLabel = profile.kind === 'head' ? 'clientes' : profile.kind === 'traffic' ? 'contratos de tráfego' : 'entregas mensais';
+
+            if (total > 100) {
                 insights.push({
                     type: 'critical',
                     title: `${person.name} pode estar sobrecarregado(a)`,
-                    message: `${totalDeliverables} entregas mensais é uma carga muito alta`,
+                    message: `${total} ${unitLabel} é uma carga muito alta`,
                     action: 'Redistribuir trabalho ou contratar suporte'
                 });
-            } else if (totalDeliverables > 60) {
+            } else if (total > 60) {
                 insights.push({
                     type: 'warning',
                     title: `${person.name} com carga alta`,
-                    message: `${totalDeliverables} entregas mensais - monitorar qualidade`,
+                    message: `${total} ${unitLabel} — monitorar qualidade`,
                     action: 'Avaliar possibilidade de redistribuição'
                 });
             }
         });
-        
+
         return insights;
     }
 
@@ -166,6 +171,7 @@ class InsightsService {
         squads.forEach(squad => {
             const roi = analyticsService.getSquadROI(squad.id);
             const members = squadService.getSquadMembers(squad.id);
+            const engagementCount = (roi.contractCount || 0) + (roi.projectCount || 0);
             
             // Check squad profitability
             if (roi.profit < 0) {
@@ -177,22 +183,22 @@ class InsightsService {
                 });
             }
             
-            // Check squad utilization
-            if (roi.contractCount === 0) {
+            // Check squad utilization (contratos + projetos pontuais juntos)
+            if (engagementCount === 0) {
                 insights.push({
                     type: 'warning',
                     title: `Squad ${squad.name} sem contratos`,
-                    message: `Squad com ${members.length} pessoas mas sem contratos atribuídos`,
+                    message: `Squad com ${members.length} pessoas mas sem contratos ou projetos atribuídos`,
                     action: 'Alocar contratos ou desmontar squad'
                 });
             }
             
             // Check squad size efficiency
-            if (members.length > 6 && roi.contractCount < 3) {
+            if (members.length > 6 && engagementCount < 3) {
                 insights.push({
                     type: 'info',
                     title: `Squad ${squad.name} pode estar grande demais`,
-                    message: `${members.length} pessoas para apenas ${roi.contractCount} contrato(s)`,
+                    message: `${members.length} pessoas para apenas ${engagementCount} contrato(s)/projeto(s)`,
                     action: 'Considerar dividir o squad ou alocar mais projetos'
                 });
             }
@@ -220,14 +226,18 @@ class InsightsService {
         
         // Most efficient people
         const ranking = analyticsService.getProductivityRanking();
-        const topPerformers = ranking.slice(0, 3).filter(p => p.totalDeliverables > 0);
+        const topPerformers = ranking
+            .filter(p => p.totalDeliverables > 0 && p.costPerDeliverable > 0)
+            .sort((a, b) => a.costPerDeliverable - b.costPerDeliverable)
+            .slice(0, 3);
         
         if (topPerformers.length > 0) {
+            const unitLabel = (p) => p.deliveryKind === 'head' ? 'clientes' : p.deliveryKind === 'traffic' ? 'contratos de tráfego' : 'entregas';
             opportunities.push({
                 type: 'success',
                 title: 'Top performers',
                 message: 'Profissionais mais eficientes',
-                items: topPerformers.map(p => `${p.name} (${p.role}): ${p.totalDeliverables} entregas`),
+                items: topPerformers.map(p => `${p.name} (${p.role}): ${p.totalDeliverables} ${unitLabel(p)}`),
                 action: 'Reconhecer e usar como benchmarks'
             });
         }

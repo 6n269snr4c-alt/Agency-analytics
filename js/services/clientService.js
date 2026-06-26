@@ -48,7 +48,7 @@ class ClientService {
      * Receita pontual     = projetos com billingPeriod === periodId
      * Custo externo       = custos externos (freelancers) dos projetos pontuais
      */
-    getClientProfile(clientName, periodId) {
+    getClientProfile(clientName, periodId, includeProjects = true) {
         const key = this._key(clientName);
 
         // ── Contratos recorrentes ativos no período ──
@@ -59,7 +59,7 @@ class ClientService {
         let recurringCost    = 0;
 
         const contractDetails = activeContracts.map(c => {
-            const roi = analyticsService.getContractROI(c.id, periodId);
+            const roi = analyticsService.getContractROI(c.id, periodId, includeProjects);
             recurringRevenue += roi.revenue;
             recurringCost    += roi.cost;
             return {
@@ -79,8 +79,9 @@ class ClientService {
         });
 
         // ── Projetos pontuais faturando no período ──
-        const periodProjects = projectService.getProjectsForPeriod(periodId)
-            .filter(p => this._key(p.client) === key);
+        const periodProjects = includeProjects
+            ? projectService.getProjectsForPeriod(periodId).filter(p => this._key(p.client) === key)
+            : [];
 
         let projectRevenue  = 0;
         let projectExtCost  = 0;
@@ -115,7 +116,7 @@ class ClientService {
         const margin       = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
 
         // ── LTV histórico (todas as projeções de todos os contratos + todos os projetos concluídos) ──
-        const ltv = this._calculateLTV(key);
+        const ltv = this._calculateLTV(key, includeProjects);
 
         return {
             clientName:       clientName.trim(),
@@ -149,7 +150,7 @@ class ClientService {
      * LTV simplificado: soma de todas as projeções confirmadas/projetadas
      * de todos os contratos + todos os projetos pontuais concluídos.
      */
-    _calculateLTV(key) {
+    _calculateLTV(key, includeProjects = true) {
         let ltv = 0;
 
         storage.getContracts()
@@ -158,20 +159,22 @@ class ClientService {
                 ltv += (c.value || 0) * (c.confirmedPeriods || []).length;
             });
 
-        storage.getProjects()
-            .filter(p => this._key(p.client) === key && p.status === 'concluido')
-            .forEach(p => {
-                ltv += (p.value || 0);
-            });
+        if (includeProjects) {
+            storage.getProjects()
+                .filter(p => this._key(p.client) === key && p.status === 'concluido')
+                .forEach(p => {
+                    ltv += (p.value || 0);
+                });
+        }
 
         return ltv;
     }
 
     // ─── Lista completa de perfis para o período ──────────────────────────────
 
-    getAllClientProfiles(periodId) {
+    getAllClientProfiles(periodId, includeProjects = true) {
         return this.getAllClientNames()
-            .map(name => this.getClientProfile(name, periodId))
+            .map(name => this.getClientProfile(name, periodId, includeProjects))
             .sort((a, b) => b.totalRevenue - a.totalRevenue);
     }
 

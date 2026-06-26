@@ -870,9 +870,9 @@ class AnalyticsService {
         return storage.getSquads().map(sq => this.getSquadDRE(sq.id, periodId, includeProjects));
     }
 
-    getSquadComparison(periodId = null) {
+    getSquadComparison(periodId = null, includeProjects = true) {
         return storage.getSquads().map(squad => {
-            const roi = this.getSquadROI(squad.id, periodId);
+            const roi = this.getSquadROI(squad.id, periodId, includeProjects);
             return {
                 id: squad.id,
                 name: squad.name,
@@ -887,16 +887,16 @@ class AnalyticsService {
     // ROI GERAL
     // ========================================
 
-    getOverallROI(periodId = null) {
+    getOverallROI(periodId = null, includeProjects = true) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
         const activeContracts = storage.getActiveContractsForPeriod(currentPeriod);
-        const activeProjects  = projectService.getProjectsForPeriod(currentPeriod);
+        const activeProjects  = includeProjects ? projectService.getProjectsForPeriod(currentPeriod) : [];
 
         let totalRevenue = 0;
         let totalCost = 0;
 
         activeContracts.forEach(contract => {
-            const roi = this.getContractROI(contract.id, currentPeriod);
+            const roi = this.getContractROI(contract.id, currentPeriod, includeProjects);
             totalRevenue += roi.revenue;
             totalCost += roi.cost;
         });
@@ -915,15 +915,15 @@ class AnalyticsService {
         };
     }
 
-    getMonthOverMonthComparison(periodId = null) {
+    getMonthOverMonthComparison(periodId = null, includeProjects = true) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
         const [year, month] = currentPeriod.split('-').map(Number);
         const prevMonth = month === 1 ? 12 : month - 1;
         const prevYear  = month === 1 ? year - 1 : year;
         const previousPeriod = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
 
-        const current  = this.getOverallROI(currentPeriod);
-        const previous = this.getOverallROI(previousPeriod);
+        const current  = this.getOverallROI(currentPeriod, includeProjects);
+        const previous = this.getOverallROI(previousPeriod, includeProjects);
 
         return {
             current,
@@ -1130,18 +1130,18 @@ class AnalyticsService {
      * pontuais juntos, cada um marcado com seu tipo. Substitui o ranking
      * antigo que ignorava projetos por completo.
      */
-    getEngagementProfitabilityRanking(periodId = null) {
+    getEngagementProfitabilityRanking(periodId = null, includeProjects = true) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
 
         const contracts = storage.getActiveContractsForPeriod(currentPeriod).map(c => {
-            const roi = this.getContractROI(c.id, currentPeriod);
+            const roi = this.getContractROI(c.id, currentPeriod, includeProjects);
             return { id: c.id, client: c.client, type: 'recorrente', revenue: roi.revenue, cost: roi.cost, profit: roi.profit, margin: roi.margin };
         });
 
-        const projects = projectService.getProjectsForPeriod(currentPeriod).map(p => {
+        const projects = includeProjects ? projectService.getProjectsForPeriod(currentPeriod).map(p => {
             const roi = this.getProjectROI(p.id, currentPeriod);
             return { id: p.id, client: p.client || p.name, type: 'pontual', revenue: roi.revenue, cost: roi.cost, profit: roi.profit, margin: roi.margin };
-        });
+        }) : [];
 
         return [...contracts, ...projects].sort((a, b) => b.profit - a.profit);
     }
@@ -1177,7 +1177,7 @@ class AnalyticsService {
      * período atual), com receita/custo/lucro/margem de cada mês. Usado
      * pela página de Evolução.
      */
-    getMonthlyEvolution(months = 6) {
+    getMonthlyEvolution(months = 6, includeProjects = true) {
         const currentPeriod = storage.getCurrentPeriod();
         const periodIds = [];
         let cursor = currentPeriod;
@@ -1191,7 +1191,7 @@ class AnalyticsService {
         }
 
         return periodIds.map(periodId => {
-            const roi = this.getOverallROI(periodId);
+            const roi = this.getOverallROI(periodId, includeProjects);
             const period = storage.getPeriod(periodId);
             return {
                 periodId,
@@ -1207,8 +1207,8 @@ class AnalyticsService {
     /**
      * Alias de getMonthOverMonthComparison — usado pela página de Evolução.
      */
-    compareWithPreviousMonth(periodId = null) {
-        return this.getMonthOverMonthComparison(periodId);
+    compareWithPreviousMonth(periodId = null, includeProjects = true) {
+        return this.getMonthOverMonthComparison(periodId, includeProjects);
     }
 }
 

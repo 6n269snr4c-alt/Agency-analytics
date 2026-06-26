@@ -862,7 +862,12 @@ class AnalyticsService {
             margin,
             contractCount: contracts.length,
             projectCount: projects.length,
-            memberCount: squad.members.length
+            // Pessoas de fato listadas no detalhamento (equipe + head + head
+            // master) — não o roster oficial do squad (squad.members), que
+            // pode estar desatualizado em relação a quem realmente aparece
+            // com custo aqui (ex: alguém alocado num contrato sem ter sido
+            // formalmente adicionado como membro do squad).
+            memberCount: memberCosts.length + (headData ? 1 : 0) + (headMasterData ? 1 : 0)
         };
     }
 

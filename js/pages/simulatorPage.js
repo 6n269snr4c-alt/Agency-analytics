@@ -11,13 +11,14 @@ import storage from '../store/storage.js';
 let draft = {
     squadId: null,
     clientMode: 'new',
-    existingClientName: '',
+    existingContractId: '',
     value: '',
     videoCount: '',
     staticCount: '',
     trafficManagement: false,
     founderBrand: false,
     selectedPeople: [], // [personId]
+    fixedWarning: null,
 };
 
 let lastResult = null;
@@ -104,7 +105,7 @@ export function renderSimulatorPage() {
 // ─── Campos de modo de cliente ─────────────────────────────────────────────
 
 function renderClientModeFields(squadId) {
-    const existingClients = getSquadClientNames(squadId);
+    const existingContracts = getSquadContracts(squadId);
 
     return `
         <div class="form-group">
@@ -115,28 +116,31 @@ function renderClientModeFields(squadId) {
                     Cliente novo
                 </label>
                 <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer;">
-                    <input type="radio" name="sim-client-mode" value="existing" ${draft.clientMode === 'existing' ? 'checked' : ''} onchange="window.simSetClientMode('existing')" ${existingClients.length === 0 ? 'disabled' : ''}>
-                    Cliente que já existe ${existingClients.length === 0 ? '(squad sem clientes ainda)' : ''}
+                    <input type="radio" name="sim-client-mode" value="existing" ${draft.clientMode === 'existing' ? 'checked' : ''} onchange="window.simSetClientMode('existing')" ${existingContracts.length === 0 ? 'disabled' : ''}>
+                    Cliente que já existe (editar um contrato real) ${existingContracts.length === 0 ? '— squad sem contratos ainda' : ''}
                 </label>
             </div>
         </div>
 
-        ${draft.clientMode === 'existing' && existingClients.length > 0 ? `
+        ${draft.clientMode === 'existing' && existingContracts.length > 0 ? `
             <div class="form-group">
-                <label class="form-label">Qual cliente?</label>
-                <select class="form-select" id="sim-existing-client" onchange="window.simUpdateField('existingClientName', this.value)">
+                <label class="form-label">Qual contrato você quer editar?</label>
+                <select class="form-select" id="sim-existing-contract" onchange="window.simLoadExistingContract(this.value)">
                     <option value="">Selecione...</option>
-                    ${existingClients.map(name => `<option value="${name}" ${draft.existingClientName === name ? 'selected' : ''}>${name}</option>`).join('')}
+                    ${existingContracts.map(c => `<option value="${c.id}" ${draft.existingContractId === c.id ? 'selected' : ''}>${c.client} — R$ ${fmt(c.value)}</option>`).join('')}
                 </select>
+                <p style="font-size:0.78rem; color:var(--text-secondary); margin-top:0.4rem;">
+                    Os campos abaixo vêm preenchidos com os dados reais desse contrato — ajuste o que quiser e simule.
+                </p>
+                ${draft.fixedWarning ? `<p style="font-size:0.78rem; color:#ff9800; margin-top:0.4rem;">⚠️ ${draft.fixedWarning}</p>` : ''}
             </div>
         ` : ''}
     `;
 }
 
-function getSquadClientNames(squadId) {
+function getSquadContracts(squadId) {
     const currentPeriod = storage.getCurrentPeriod();
-    const contracts = storage.getActiveContractsForPeriod(currentPeriod).filter(c => c.squadTag === squadId);
-    return Array.from(new Set(contracts.map(c => c.client)));
+    return storage.getActiveContractsForPeriod(currentPeriod).filter(c => c.squadTag === squadId);
 }
 
 // ─── Seletor de pessoas ─────────────────────────────────────────────────────
@@ -229,15 +233,51 @@ function attachSimulatorHandlers() {
     window.simChangeSquad = (squadId) => {
         draft.squadId = squadId || null;
         draft.clientMode = 'new';
-        draft.existingClientName = '';
+        draft.existingContractId = '';
         draft.selectedPeople = [];
+        draft.value = ''; draft.videoCount = ''; draft.staticCount = '';
+        draft.trafficManagement = false; draft.founderBrand = false;
+        draft.fixedWarning = null;
         lastResult = null;
         renderSimulatorPage();
     };
 
     window.simSetClientMode = (mode) => {
         draft.clientMode = mode;
-        if (mode === 'new') draft.existingClientName = '';
+        if (mode === 'new') {
+            draft.existingContractId = '';
+            draft.value = ''; draft.videoCount = ''; draft.staticCount = '';
+            draft.trafficManagement = false; draft.founderBrand = false;
+            draft.selectedPeople = [];
+            draft.fixedWarning = null;
+        }
+        renderSimulatorPage();
+    };
+
+    // Carrega os dados reais do contrato escolhido pro draft, incluindo
+    // quem já está alocado nele — a partir daqui o usuário só ajusta o que
+    // quiser e simula.
+    window.simLoadExistingContract = (contractId) => {
+        draft.existingContractId = contractId;
+        if (!contractId) { renderSimulatorPage(); return; }
+
+        const contract = storage.getContractById(contractId);
+        if (!contract) { renderSimulatorPage(); return; }
+
+        draft.value             = contract.value || 0;
+        draft.videoCount        = contract.videoCount || 0;
+        draft.staticCount       = contract.staticCount || 0;
+        draft.trafficManagement = !!contract.trafficManagement;
+        draft.founderBrand      = !!contract.founderBrand;
+        draft.selectedPeople    = (contract.peopleAllocations || [])
+            .filter(a => a.mode === 'rateado' || a.mode === 'founder_brand')
+            .map(a => a.personId);
+
+        const fixedAllocs = (contract.peopleAllocations || []).filter(a => a.mode === 'fixo');
+        draft.fixedWarning = fixedAllocs.length > 0
+            ? `Esse contrato tem ${fixedAllocs.length} alocação(ões) em valor fixo que o simulador ainda não soma — o resultado fica menor que o real até isso ser considerado.`
+            : null;
+
         renderSimulatorPage();
     };
 
@@ -268,7 +308,7 @@ function attachSimulatorHandlers() {
             lastResult = analyticsService.simulateContractMargin({
                 squadId: draft.squadId,
                 clientMode: draft.clientMode,
-                existingClientName: draft.existingClientName || null,
+                existingContractId: draft.existingContractId || null,
                 value: parseFloat(draft.value) || 0,
                 videoCount: parseInt(draft.videoCount) || 0,
                 staticCount: parseInt(draft.staticCount) || 0,

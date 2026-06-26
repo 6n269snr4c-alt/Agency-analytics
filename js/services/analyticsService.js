@@ -1174,8 +1174,149 @@ class AnalyticsService {
     }
 
     // ========================================
-    // EVOLUÇÃO MENSAL
+    // SIMULADOR DE MARGEM
     // ========================================
+
+    /**
+     * Simula a margem de um contrato hipotético, calculando o custo
+     * MARGINAL — ou seja, o quanto cada pessoa envolvida passaria a custar
+     * SE esse contrato fosse somado ao que já existe hoje, usando exatamente
+     * as mesmas fórmulas de rateio do sistema real. Não escreve nada no
+     * storage — é só leitura, pura simulação.
+     *
+     * params:
+     *   squadId            - squad escolhido
+     *   clientMode         - 'new' (cliente novo) ou 'existing' (cliente que já existe)
+     *   existingClientName - obrigatório se clientMode === 'existing'
+     *   value              - valor do contrato simulado
+     *   videoCount, staticCount, trafficManagement, founderBrand
+     *   assignments        - [{ personId, mode: 'rateado' | 'founder_brand' }]
+     *                        (Head e Head Master entram automaticamente, não precisa incluir)
+     */
+    simulateContractMargin(params, periodId = null) {
+        const currentPeriod = periodId || storage.getCurrentPeriod();
+        const squad = storage.getSquadById(params.squadId);
+        if (!squad) throw new Error('Squad não encontrado');
+
+        const data = {
+            value: params.value || 0,
+            videoCount: params.videoCount || 0,
+            staticCount: params.staticCount || 0,
+            trafficManagement: !!params.trafficManagement,
+        };
+
+        const costBreakdown = [];
+        let totalCost = 0;
+
+        // ── Pessoas selecionadas (rateado / founder_brand) ──
+        (params.assignments || []).forEach(({ personId, mode }) => {
+            const person = storage.getPersonById(personId);
+            if (!person) return;
+
+            let cost = 0;
+
+            if (mode === 'founder_brand') {
+                const salary = this.getPersonCost(personId, currentPeriod);
+                const pct = person.founderBrandPercent || 0;
+                const reserveTotal = salary * (pct / 100);
+                const currentFbCount = this._founderBrandContractsForPerson(personId, currentPeriod).length;
+                const newFbCount = currentFbCount + 1;
+                cost = newFbCount > 0 ? reserveTotal / newFbCount : 0;
+            } else {
+                const relevantNew = this._relevantQuantity(person.role, data);
+                if (relevantNew > 0) {
+                    const salary = this.getPersonCost(personId, currentPeriod);
+                    const reserve = this._personFounderBrandReserve(personId, currentPeriod);
+                    const availableSalary = salary - reserve.reserveTotal;
+                    const currentRateable = this.getPersonTotalRateableDeliverables(personId, currentPeriod);
+                    const newTotalRateable = currentRateable + relevantNew;
+                    cost = newTotalRateable > 0 ? (relevantNew / newTotalRateable) * availableSalary : 0;
+                }
+            }
+
+            if (cost > 0) {
+                totalCost += cost;
+                costBreakdown.push({ personId, name: person.name, role: person.role, mode, cost });
+            }
+        });
+
+        // ── Head do squad (automático) ──
+        if (squad.headId) {
+            const head = storage.getPersonById(squad.headId);
+            if (head) {
+                const headCost = this._simulateClientShareCost(
+                    head.id, currentPeriod, params.value,
+                    () => this._squadClientsInPeriod(squad.id, currentPeriod),
+                    (clientName) => this._clientRevenueAcrossSquad(squad.id, clientName, currentPeriod),
+                    params.clientMode, params.existingClientName
+                );
+                if (headCost > 0) {
+                    totalCost += headCost;
+                    costBreakdown.push({ personId: head.id, name: head.name + ' (Head)', role: head.role, mode: 'head', cost: headCost });
+                }
+            }
+        }
+
+        // ── Head Master (automático, agência toda) ──
+        const headMaster = this.getHeadMaster();
+        if (headMaster) {
+            const hmCost = this._simulateClientShareCost(
+                headMaster.id, currentPeriod, params.value,
+                () => this._allClientsInPeriod(currentPeriod),
+                (clientName) => this._clientRevenueAgencyWide(clientName, currentPeriod),
+                params.clientMode, params.existingClientName
+            );
+            if (hmCost > 0) {
+                totalCost += hmCost;
+                costBreakdown.push({ personId: headMaster.id, name: headMaster.name + ' (Head Master)', role: headMaster.role, mode: 'head_master', cost: hmCost });
+            }
+        }
+
+        const revenue = params.value || 0;
+        const profit  = revenue - totalCost;
+        const margin  = revenue > 0 ? (profit / revenue) * 100 : 0;
+
+        const squadDRE   = this.getSquadDRE(squad.id, currentPeriod);
+        const overallROI = this.getOverallROI(currentPeriod);
+
+        return {
+            revenue,
+            cost: totalCost,
+            profit,
+            margin,
+            costBreakdown,
+            squad: { id: squad.id, name: squad.name, icon: squad.icon, currentMargin: squadDRE ? squadDRE.margin : 0 },
+            agency: { currentMargin: overallROI.margin },
+            vsSquad:  margin - (squadDRE ? squadDRE.margin : 0),
+            vsAgency: margin - overallROI.margin,
+        };
+    }
+
+    /**
+     * Calcula a fatia do custo de um Head/Head Master que cairia no contrato
+     * simulado — equilíbrio entre "cliente novo" (mais um na divisão) e
+     * "cliente existente" (divide a fatia já existente pela receita).
+     */
+    _simulateClientShareCost(personId, periodId, simulatedValue, getClients, getClientRevenue, clientMode, existingClientName) {
+        const salary = this.getPersonCost(personId, periodId);
+        if (salary === 0) return 0;
+
+        const clients = getClients();
+        if (clientMode === 'new' || !existingClientName) {
+            const newCount = clients.length + 1;
+            return salary / newCount;
+        }
+
+        // Cliente existente: a fatia por cliente não muda (não é um cliente
+        // novo), mas dentro dela, divide pela receita entre o que já existe
+        // e o valor simulado.
+        const count = clients.length || 1;
+        const perClient = salary / count;
+        const existingRevenue = getClientRevenue(existingClientName);
+        const newTotalRevenue = existingRevenue + simulatedValue;
+        if (newTotalRevenue === 0) return 0;
+        return perClient * (simulatedValue / newTotalRevenue);
+    }
 
     /**
      * Série dos últimos N meses (mais antigo → mais recente, terminando no

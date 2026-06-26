@@ -4,6 +4,7 @@
 
 import { renderNavbar } from './components/navbar.js';
 import router from './router.js';
+import storage from './store/storage.js';
 import { renderDashboard } from './pages/dashboardPage.js';
 import { renderContractsPage } from './pages/contractsPage.js';
 import { renderPeoplePage } from './pages/peoplePage.js';
@@ -14,7 +15,12 @@ import { renderEvolutionPage } from './pages/evolutionPage.js';
 import { renderProjectsPage } from './pages/projectsPage.js';
 import { renderClientsPage } from './pages/clientsPage.js';
 
-function init() {
+async function init() {
+    const contentEl = document.getElementById('content');
+    if (contentEl) contentEl.innerHTML = '<div style="padding:3rem;text-align:center;color:#888;">☁️ Sincronizando dados…</div>';
+
+    await storage.loadFromFirestore();
+
     renderNavbar();
 
     router.register('/', renderDashboard);

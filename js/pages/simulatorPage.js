@@ -17,8 +17,7 @@ let draft = {
     staticCount: '',
     trafficManagement: false,
     founderBrand: false,
-    selectedPeople: [], // [personId]
-    fixedWarning: null,
+    selectedPeople: [], // [{ personId, mode: 'rateado'|'fixo', fixedValue }]
 };
 
 let lastResult = null;
@@ -132,7 +131,6 @@ function renderClientModeFields(squadId) {
                 <p style="font-size:0.78rem; color:var(--text-secondary); margin-top:0.4rem;">
                     Os campos abaixo vêm preenchidos com os dados reais desse contrato — ajuste o que quiser e simule.
                 </p>
-                ${draft.fixedWarning ? `<p style="font-size:0.78rem; color:#ff9800; margin-top:0.4rem;">⚠️ ${draft.fixedWarning}</p>` : ''}
             </div>
         ` : ''}
     `;
@@ -155,14 +153,37 @@ function renderPeoplePicker(squadId) {
         <div class="form-group">
             <label class="form-label">Quem participaria?</label>
             <div class="sim-people-list">
-                ${members.map(p => `
-                    <label class="sim-people-item">
-                        <input type="checkbox" ${draft.selectedPeople.includes(p.id) ? 'checked' : ''} onchange="window.simTogglePerson('${p.id}', this.checked)">
-                        ${p.name}
-                        <span class="sim-people-role">${p.role}</span>
-                        ${p.role === 'Copywriter' && (p.founderBrandPercent || 0) > 0 ? `<span class="sim-people-fb">FB ${p.founderBrandPercent}%</span>` : ''}
-                    </label>
-                `).join('')}
+                ${members.map(p => {
+                    const entry = draft.selectedPeople.find(sel => sel.personId === p.id);
+                    const isSelected = !!entry;
+                    return `
+                    <div class="sim-people-item-wrap">
+                        <label class="sim-people-item">
+                            <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="window.simTogglePerson('${p.id}', this.checked)">
+                            ${p.name}
+                            <span class="sim-people-role">${p.role}</span>
+                            ${p.role === 'Copywriter' && (p.founderBrandPercent || 0) > 0 ? `<span class="sim-people-fb">FB ${p.founderBrandPercent}%</span>` : ''}
+                        </label>
+                        ${isSelected ? `
+                            <div class="sim-people-mode">
+                                <label>
+                                    <input type="radio" name="sim-mode-${p.id}" value="rateado" ${entry.mode === 'rateado' ? 'checked' : ''} onchange="window.simSetPersonMode('${p.id}', 'rateado')">
+                                    Rateado
+                                </label>
+                                <label>
+                                    <input type="radio" name="sim-mode-${p.id}" value="fixo" ${entry.mode === 'fixo' ? 'checked' : ''} onchange="window.simSetPersonMode('${p.id}', 'fixo')">
+                                    Valor fixo
+                                </label>
+                                ${entry.mode === 'fixo' ? `
+                                    <span style="display:flex; align-items:center; gap:0.3rem;">
+                                        R$ <input type="number" class="form-input sim-fixed-input" min="0" step="0.01" value="${entry.fixedValue || ''}" placeholder="0,00" oninput="window.simSetPersonFixedValue('${p.id}', this.value)">
+                                    </span>
+                                ` : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+                }).join('')}
             </div>
             <p style="font-size:0.78rem; color:var(--text-secondary); margin-top:0.5rem;">O Head do squad e a Head Master (se houver) entram automaticamente — não precisa selecionar.</p>
         </div>
@@ -237,7 +258,6 @@ function attachSimulatorHandlers() {
         draft.selectedPeople = [];
         draft.value = ''; draft.videoCount = ''; draft.staticCount = '';
         draft.trafficManagement = false; draft.founderBrand = false;
-        draft.fixedWarning = null;
         lastResult = null;
         renderSimulatorPage();
     };
@@ -249,14 +269,13 @@ function attachSimulatorHandlers() {
             draft.value = ''; draft.videoCount = ''; draft.staticCount = '';
             draft.trafficManagement = false; draft.founderBrand = false;
             draft.selectedPeople = [];
-            draft.fixedWarning = null;
         }
         renderSimulatorPage();
     };
 
     // Carrega os dados reais do contrato escolhido pro draft, incluindo
-    // quem já está alocado nele — a partir daqui o usuário só ajusta o que
-    // quiser e simula.
+    // quem já está alocado nele (rateado E fixo) — a partir daqui o usuário
+    // só ajusta o que quiser e simula.
     window.simLoadExistingContract = (contractId) => {
         draft.existingContractId = contractId;
         if (!contractId) { renderSimulatorPage(); return; }
@@ -270,13 +289,12 @@ function attachSimulatorHandlers() {
         draft.trafficManagement = !!contract.trafficManagement;
         draft.founderBrand      = !!contract.founderBrand;
         draft.selectedPeople    = (contract.peopleAllocations || [])
-            .filter(a => a.mode === 'rateado' || a.mode === 'founder_brand')
-            .map(a => a.personId);
-
-        const fixedAllocs = (contract.peopleAllocations || []).filter(a => a.mode === 'fixo');
-        draft.fixedWarning = fixedAllocs.length > 0
-            ? `Esse contrato tem ${fixedAllocs.length} alocação(ões) em valor fixo que o simulador ainda não soma — o resultado fica menor que o real até isso ser considerado.`
-            : null;
+            .filter(a => a.mode === 'rateado' || a.mode === 'founder_brand' || a.mode === 'fixo')
+            .map(a => ({
+                personId: a.personId,
+                mode: a.mode === 'fixo' ? 'fixo' : 'rateado', // founder_brand é decidido automaticamente na hora de simular
+                fixedValue: a.mode === 'fixo' ? (a.fixedValue || 0) : 0,
+            }));
 
         renderSimulatorPage();
     };
@@ -291,15 +309,31 @@ function attachSimulatorHandlers() {
 
     window.simTogglePerson = (personId, checked) => {
         if (checked) {
-            if (!draft.selectedPeople.includes(personId)) draft.selectedPeople.push(personId);
+            if (!draft.selectedPeople.some(p => p.personId === personId)) {
+                draft.selectedPeople.push({ personId, mode: 'rateado', fixedValue: 0 });
+            }
         } else {
-            draft.selectedPeople = draft.selectedPeople.filter(id => id !== personId);
+            draft.selectedPeople = draft.selectedPeople.filter(p => p.personId !== personId);
         }
+        renderSimulatorPage();
+    };
+
+    window.simSetPersonMode = (personId, mode) => {
+        const entry = draft.selectedPeople.find(p => p.personId === personId);
+        if (entry) entry.mode = mode;
+        renderSimulatorPage();
+    };
+
+    window.simSetPersonFixedValue = (personId, value) => {
+        const entry = draft.selectedPeople.find(p => p.personId === personId);
+        if (entry) entry.fixedValue = parseFloat(value) || 0;
     };
 
     window.simRun = () => {
         try {
-            const assignments = draft.selectedPeople.map(personId => {
+            const assignments = draft.selectedPeople.map(({ personId, mode, fixedValue }) => {
+                if (mode === 'fixo') return { personId, mode: 'fixo', fixedValue };
+
                 const person = personService.getPerson(personId);
                 const useFounderBrand = draft.founderBrand && person.role === 'Copywriter' && (person.founderBrandPercent || 0) > 0;
                 return { personId, mode: useFounderBrand ? 'founder_brand' : 'rateado' };
@@ -363,6 +397,19 @@ function simulatorStyles() {
         .sim-people-item:hover { background: rgba(255,255,255,0.04); }
         .sim-people-role { color: var(--text-secondary, #999); font-size: 0.76rem; }
         .sim-people-fb { font-size: 0.7rem; background: rgba(186,104,200,0.18); color: #ba68c8; padding: 0.1rem 0.4rem; border-radius: 4px; }
+
+        .sim-people-item-wrap { border-bottom: 1px solid var(--border, #2a2a2a); padding-bottom: 0.4rem; }
+        .sim-people-item-wrap:last-child { border-bottom: none; }
+        .sim-people-mode {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-size: 0.78rem;
+            color: var(--text-secondary, #999);
+            padding: 0.3rem 0 0.3rem 1.8rem;
+        }
+        .sim-people-mode label { display: flex; align-items: center; gap: 0.3rem; cursor: pointer; }
+        .sim-fixed-input { width: 90px; padding: 0.2rem 0.4rem; font-size: 0.78rem; }
 
         .sim-result-stats {
             display: grid;

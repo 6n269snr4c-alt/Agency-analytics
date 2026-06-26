@@ -171,12 +171,20 @@ function renderSquadDRE(dre) {
 
             <!-- Cabeçalho do Squad -->
             <div class="dre-card-header">
-                ${dre.squadIcon ? `<span class="dre-squad-icon">${dre.squadIcon}</span>` : ''}
+                <span class="dre-squad-icon">${dre.squadIcon || '🏢'}</span>
                 <div class="dre-squad-info">
                     <h3 class="dre-squad-name">${dre.squadName}</h3>
                     ${dre.squadDescription ? `<p class="dre-squad-desc">${dre.squadDescription}</p>` : ''}
                 </div>
                 <span class="dre-margin-badge ${marginClass(dre.margin)}">${pct(dre.margin)}</span>
+            </div>
+
+            <!-- Entregáveis do squad neste período -->
+            <div class="dre-deliverables-bar">
+                <span class="dre-deliverable-item">🎬 <strong>${dre.deliverables.video}</strong> vídeos</span>
+                <span class="dre-deliverable-item">🖼️ <strong>${dre.deliverables.static}</strong> estáticos</span>
+                <span class="dre-deliverable-item">📣 <strong>${dre.deliverables.trafficCount}</strong> tráfego</span>
+                <span class="dre-deliverable-item">🎤 <strong>${dre.deliverables.founderBrandCount}</strong> founder brand</span>
             </div>
 
             <!-- ══ RECEITA (linha colapsável) ══ -->
@@ -399,6 +407,18 @@ function dreStyles() {
         }
         .dre-squad-icon { font-size: 2rem; line-height: 1; }
         .dre-squad-info { flex: 1; }
+
+        .dre-deliverables-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem 1.25rem;
+            padding: 0.75rem 1.5rem;
+            background: var(--bg-darker, #15151a);
+            border-bottom: 1px solid var(--border, #2a2a2a);
+            font-size: 0.8rem;
+            color: var(--text-secondary, #999);
+        }
+        .dre-deliverable-item strong { color: var(--primary, #00ff41); }
         .dre-squad-name {
             margin: 0;
             font-size: 1.15rem;

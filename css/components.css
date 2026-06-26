@@ -404,6 +404,20 @@
     }
 }
 
+/* Toggle "Incluir Projetos Pontuais" — usado em qualquer tela que mostra
+   receita, pra alternar entre visão completa e só recorrência. */
+.revenue-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.88rem;
+    color: var(--text-secondary, #999);
+    cursor: pointer;
+    margin: 0.75rem 0 1.25rem;
+    width: fit-content;
+}
+.revenue-filter-toggle input { width: 16px; height: 16px; cursor: pointer; }
+
 /* Responsive Adjustments */
 @media (max-width: 768px) {
     .modal-content {

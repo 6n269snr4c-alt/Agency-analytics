@@ -163,8 +163,9 @@ function renderSquadDRE(dre) {
     const revenueCount  = revenueItems.length;
     const membersCount  = dre.costs.members.length;
     const hasHead       = !!dre.costs.head;
+    const hasHeadMaster = !!dre.costs.headMaster;
     const externalProjectsList = dre.costs.externalProjectsList || [];
-    const costLinesCount = membersCount + (hasHead ? 1 : 0) + externalProjectsList.length;
+    const costLinesCount = membersCount + (hasHead ? 1 : 0) + (hasHeadMaster ? 1 : 0) + externalProjectsList.length;
 
     return `
         <div class="dre-card">
@@ -250,7 +251,27 @@ function renderSquadDRE(dre) {
                                     <span class="dre-tag dre-tag-head">HEAD</span>
                                     <span class="dre-alloc-hint">100% alocado</span>
                                 </span>
-                                <span class="dre-row-value">R$ ${fmt(dre.costs.head.salary)}</span>
+                                <span class="dre-row-value">R$ ${fmt(dre.costs.head.cost)}</span>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <!-- Head Master -->
+                    ${dre.costs.headMaster ? `
+                        <div class="dre-subsection-label">
+                            <span>Liderança (agência)</span>
+                            <span>R$ ${fmt(dre.costs.totalHeadMaster)}</span>
+                        </div>
+                        <div class="dre-rows">
+                            <div class="dre-row">
+                                <span class="dre-row-label">
+                                    <span class="dre-dot dre-dot-head"></span>
+                                    ${dre.costs.headMaster.name}
+                                    <span class="dre-role-tag">${dre.costs.headMaster.role}</span>
+                                    <span class="dre-tag dre-tag-head">MASTER</span>
+                                    <span class="dre-alloc-hint">rateado com outros squads</span>
+                                </span>
+                                <span class="dre-row-value">R$ ${fmt(dre.costs.headMaster.cost)}</span>
                             </div>
                         </div>
                     ` : ''}

@@ -54,6 +54,11 @@ export function renderNavbar() {
                     <span class="nav-text">DRE Squads</span>
                 </a>
 
+                <a href="#/simulator" class="nav-link" data-route="/simulator">
+                    <span class="nav-icon">🧮</span>
+                    <span class="nav-text">Simulador de Margem</span>
+                </a>
+
                 <a href="#/validation" class="nav-link" data-route="/validation">
                     <span class="nav-icon">✓</span>
                     <span class="nav-text">Conferência Salarial</span>

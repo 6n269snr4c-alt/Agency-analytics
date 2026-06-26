@@ -766,6 +766,14 @@ class AnalyticsService {
         const contracts = this.getSquadContracts(squadId, currentPeriod);
         const projects  = includeProjects ? this.getSquadProjects(squadId, currentPeriod) : [];
 
+        const deliverables = contracts.reduce((acc, c) => {
+            acc.video += c.videoCount || 0;
+            acc.static += c.staticCount || 0;
+            if (c.trafficManagement) acc.trafficCount++;
+            if (c.founderBrand) acc.founderBrandCount++;
+            return acc;
+        }, { video: 0, static: 0, trafficCount: 0, founderBrandCount: 0 });
+
         const revenuePerContract = contracts.map(contract => {
             const roi = this.getContractROI(contract.id, currentPeriod, includeProjects);
             return { contractId: contract.id, client: contract.client, value: roi.revenue };
@@ -837,6 +845,7 @@ class AnalyticsService {
             squadName: squad.name,
             squadIcon: squad.icon || null,
             squadDescription: squad.description || '',
+            deliverables,
             revenue: { total: totalRevenue, perContract: revenuePerContract, perProject: revenuePerProject },
             costs: {
                 total: totalCost,

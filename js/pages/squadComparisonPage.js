@@ -236,26 +236,6 @@ function renderSquadDRE(dre) {
                 </div>
                 <div id="${costBodyId}" class="dre-collapsible-body">
 
-                    <!-- Head -->
-                    ${dre.costs.head ? `
-                        <div class="dre-subsection-label">
-                            <span>Liderança</span>
-                            <span>R$ ${fmt(dre.costs.totalHead)}</span>
-                        </div>
-                        <div class="dre-rows">
-                            <div class="dre-row">
-                                <span class="dre-row-label">
-                                    <span class="dre-dot dre-dot-head"></span>
-                                    ${dre.costs.head.name}
-                                    <span class="dre-role-tag">${dre.costs.head.role}</span>
-                                    <span class="dre-tag dre-tag-head">HEAD</span>
-                                    <span class="dre-alloc-hint">100% alocado</span>
-                                </span>
-                                <span class="dre-row-value">R$ ${fmt(dre.costs.head.cost)}</span>
-                            </div>
-                        </div>
-                    ` : ''}
-
                     <!-- Head Master -->
                     ${dre.costs.headMaster ? `
                         <div class="dre-subsection-label">
@@ -272,6 +252,26 @@ function renderSquadDRE(dre) {
                                     <span class="dre-alloc-hint">rateado com outros squads</span>
                                 </span>
                                 <span class="dre-row-value">R$ ${fmt(dre.costs.headMaster.cost)}</span>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <!-- Head -->
+                    ${dre.costs.head ? `
+                        <div class="dre-subsection-label">
+                            <span>Liderança</span>
+                            <span>R$ ${fmt(dre.costs.totalHead)}</span>
+                        </div>
+                        <div class="dre-rows">
+                            <div class="dre-row">
+                                <span class="dre-row-label">
+                                    <span class="dre-dot dre-dot-head"></span>
+                                    ${dre.costs.head.name}
+                                    <span class="dre-role-tag">${dre.costs.head.role}</span>
+                                    <span class="dre-tag dre-tag-head">HEAD</span>
+                                    <span class="dre-alloc-hint">100% alocado</span>
+                                </span>
+                                <span class="dre-row-value">R$ ${fmt(dre.costs.head.cost)}</span>
                             </div>
                         </div>
                     ` : ''}

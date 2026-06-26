@@ -36,12 +36,20 @@ function typeTag(profile) {
     return                                                  `<span class="badge"              style="font-size:0.72rem;background:rgba(255,160,0,0.15);color:#ff9800;">pontual</span>`;
 }
 
+let includeProjects = true;
+
 // ─── entry point ─────────────────────────────────────────────────────────────
 
 export function renderClientsPage() {
     const contentEl    = document.getElementById('content');
     const periodId     = storage.getCurrentPeriod();
-    const profiles     = clientService.getAllClientProfiles(periodId);
+    let profiles        = clientService.getAllClientProfiles(periodId, includeProjects);
+
+    // Sem projetos pontuais, cliente que só tem projeto não tem nada a mostrar
+    // nessa visão — tira da lista em vez de mostrar tudo zerado.
+    if (!includeProjects) {
+        profiles = profiles.filter(p => p.isRecurring);
+    }
 
     // ── Totais gerais do período ──
     const totalRevenue  = profiles.reduce((s, p) => s + p.totalRevenue, 0);
@@ -58,6 +66,11 @@ export function renderClientsPage() {
         </div>
 
         ${renderPeriodSelector()}
+
+        <label class="revenue-filter-toggle">
+            <input type="checkbox" id="clients-include-projects" ${includeProjects ? 'checked' : ''} onchange="window.toggleClientsProjects(this.checked)">
+            🚀 Incluir Projetos Pontuais
+        </label>
 
         <!-- Resumo do período -->
         <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:1.25rem;margin-bottom:2rem;">
@@ -303,6 +316,11 @@ function periodLabel(pid) {
 // ─── Handlers interativos ────────────────────────────────────────────────────
 
 function attachHandlers(profiles) {
+    window.toggleClientsProjects = (checked) => {
+        includeProjects = checked;
+        renderClientsPage();
+    };
+
     // Expandir/colapsar card
     window.toggleClientCard = function(id) {
         const el = document.getElementById(id);

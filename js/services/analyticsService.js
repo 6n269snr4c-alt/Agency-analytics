@@ -1199,7 +1199,7 @@ class AnalyticsService {
      *   existingContractId - obrigatório se clientMode === 'existing'
      *   value              - valor do contrato simulado
      *   videoCount, staticCount, trafficManagement, founderBrand
-     *   assignments        - [{ personId, mode: 'rateado' | 'founder_brand' }]
+     *   assignments        - [{ personId, mode: 'rateado' | 'fixo' | 'founder_brand', fixedValue? }]
      *                        (Head e Head Master entram automaticamente, não precisa incluir)
      */
     simulateContractMargin(params, periodId = null) {
@@ -1221,14 +1221,18 @@ class AnalyticsService {
         const costBreakdown = [];
         let totalCost = 0;
 
-        // ── Pessoas selecionadas (rateado / founder_brand) ──
-        (params.assignments || []).forEach(({ personId, mode }) => {
+        // ── Pessoas selecionadas (rateado / fixo / founder_brand) ──
+        (params.assignments || []).forEach(({ personId, mode, fixedValue }) => {
             const person = storage.getPersonById(personId);
             if (!person) return;
 
             let cost = 0;
 
-            if (mode === 'founder_brand') {
+            if (mode === 'fixo') {
+                // Valor fixo não depende de rateio nenhum — é literalmente o
+                // valor negociado, igual no sistema real.
+                cost = fixedValue || 0;
+            } else if (mode === 'founder_brand') {
                 const salary = this.getPersonCost(personId, currentPeriod);
                 const pct = person.founderBrandPercent || 0;
                 const reserveTotal = salary * (pct / 100);

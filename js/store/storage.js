@@ -1,6 +1,16 @@
 // storage.js - LocalStorage wrapper v3
 // MODELO SIMPLIFICADO: contrato tem videoCount/staticCount + peopleAllocations (rateado|fixo)
 // Sistema de pesos/pontos/entregáveis genéricos foi REMOVIDO.
+//
+// SINCRONIZAÇÃO COM FIREBASE: o localStorage continua sendo a fonte usada
+// por todo o resto do app (leitura sempre síncrona, nada mudou ali). Por
+// baixo, toda escrita também é replicada pro Firestore em segundo plano
+// (_scheduleFirestoreSync), e no carregamento da página a gente decide se
+// baixa os dados do Firestore (se ele já tiver algo) ou se sobe os dados
+// locais pra lá (se o Firestore estiver vazio) — nunca o contrário, pra
+// nunca apagar dados locais reais com algo vazio.
+
+import { firebaseConfig, FIRESTORE_COLLECTION, FIRESTORE_DOC_ID } from '../firebaseConfig.js';
 
 class Storage {
     constructor() {
@@ -13,7 +23,37 @@ class Storage {
             SALARY_HISTORY: 'agency_salary_history',
             PROJECTS: 'agency_projects',
         };
+
+        this._firestoreDocRef = null;
+        this._firestoreFns = null;
+        this._syncTimer = null;
+        this._firebaseReady = false;
+
+        // Import DINÂMICO de propósito: se a URL do CDN do Firebase ficar
+        // inacessível (sem internet, bloqueio de rede etc.), um import
+        // ESTÁTICO travaria o carregamento do storage.js inteiro — e isso
+        // quebraria o app todo, já que toda página depende dele. Com
+        // import() dinâmico dentro de uma Promise, qualquer falha aqui é
+        // só capturada e ignorada; o resto do app nunca percebe.
+        this._firebaseInitPromise = this._initFirebase();
+
         this.initStorage();
+    }
+
+    async _initFirebase() {
+        try {
+            const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+            const { getFirestore, doc, getDoc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+
+            const app = initializeApp(firebaseConfig);
+            const db = getFirestore(app);
+            this._firestoreDocRef = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_ID);
+            this._firestoreFns = { getDoc, setDoc };
+            this._firebaseReady = true;
+        } catch (e) {
+            console.warn('⚠️ Firebase não configurado ou indisponível — funcionando só com localStorage.', e);
+            this._firebaseReady = false;
+        }
     }
 
     initStorage() {
@@ -36,6 +76,88 @@ class Storage {
 
     generateId() {
         return 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    // ====================
+    // SINCRONIZAÇÃO COM FIREBASE
+    // ====================
+
+    /** Junta tudo que está no localStorage num objeto só, pra mandar pro Firestore. */
+    _collectAllData() {
+        return {
+            contracts: JSON.parse(localStorage.getItem(this.keys.CONTRACTS) || '[]'),
+            people: JSON.parse(localStorage.getItem(this.keys.PEOPLE) || '[]'),
+            squads: JSON.parse(localStorage.getItem(this.keys.SQUADS) || '[]'),
+            periods: JSON.parse(localStorage.getItem(this.keys.PERIODS) || '[]'),
+            currentPeriod: localStorage.getItem(this.keys.CURRENT_PERIOD) || null,
+            salaryHistory: JSON.parse(localStorage.getItem(this.keys.SALARY_HISTORY) || '[]'),
+            projects: JSON.parse(localStorage.getItem(this.keys.PROJECTS) || '[]'),
+            updatedAt: new Date().toISOString(),
+        };
+    }
+
+    /** Grava um objeto de dados (vindo do Firestore) direto no localStorage. */
+    _applyAllData(data) {
+        if (!data) return;
+        if (data.contracts)     localStorage.setItem(this.keys.CONTRACTS, JSON.stringify(data.contracts));
+        if (data.people)        localStorage.setItem(this.keys.PEOPLE, JSON.stringify(data.people));
+        if (data.squads)        localStorage.setItem(this.keys.SQUADS, JSON.stringify(data.squads));
+        if (data.periods)       localStorage.setItem(this.keys.PERIODS, JSON.stringify(data.periods));
+        if (data.currentPeriod) localStorage.setItem(this.keys.CURRENT_PERIOD, data.currentPeriod);
+        if (data.salaryHistory) localStorage.setItem(this.keys.SALARY_HISTORY, JSON.stringify(data.salaryHistory));
+        if (data.projects)      localStorage.setItem(this.keys.PROJECTS, JSON.stringify(data.projects));
+    }
+
+    /** Um documento do Firestore "tem dados de verdade" se tiver pelo menos
+     *  uma pessoa, squad ou contrato — evita confundir "vazio" com "tem só
+     *  período/configuração". */
+    _hasRealData(data) {
+        return !!data && (
+            (data.people && data.people.length > 0) ||
+            (data.squads && data.squads.length > 0) ||
+            (data.contracts && data.contracts.length > 0)
+        );
+    }
+
+    /** Envia o estado atual do localStorage pro Firestore, em segundo plano,
+     *  sem bloquear quem chamou (a escrita local já aconteceu, isso aqui é
+     *  só o espelho na nuvem). Debounced pra não disparar uma escrita por
+     *  cada pequena mudança em sequência. */
+    _scheduleFirestoreSync() {
+        clearTimeout(this._syncTimer);
+        this._syncTimer = setTimeout(async () => {
+            await this._firebaseInitPromise;
+            if (!this._firebaseReady) return;
+            try {
+                await this._firestoreFns.setDoc(this._firestoreDocRef, this._collectAllData());
+            } catch (e) {
+                console.warn('⚠️ Falha ao sincronizar com o Firestore (dados locais continuam intactos):', e);
+            }
+        }, 800);
+    }
+
+    /** Chamado uma vez, no carregamento do app (veja app.js). Decide a
+     *  direção da sincronização com segurança: se o Firestore já tem dados
+     *  reais, eles passam a valer (multi-dispositivo); se estiver vazio,
+     *  sobe o que já existe localmente — nunca apaga dado local com algo
+     *  vazio, e qualquer erro de rede/configuração só cai pro modo local. */
+    async loadFromFirestore() {
+        await this._firebaseInitPromise;
+        if (!this._firebaseReady) return;
+        try {
+            const snap = await this._firestoreFns.getDoc(this._firestoreDocRef);
+            const remote = snap.exists() ? snap.data() : null;
+
+            if (this._hasRealData(remote)) {
+                this._applyAllData(remote);
+                console.log('☁️ Dados carregados do Firestore.');
+            } else {
+                await this._firestoreFns.setDoc(this._firestoreDocRef, this._collectAllData());
+                console.log('☁️ Firestore estava vazio — dados locais enviados pra nuvem.');
+            }
+        } catch (e) {
+            console.warn('⚠️ Não foi possível sincronizar com o Firestore agora. Usando dados locais.', e);
+        }
     }
 
     // ====================
@@ -155,6 +277,7 @@ class Storage {
     saveContracts(contracts) {
         try {
             localStorage.setItem(this.keys.CONTRACTS, JSON.stringify(contracts));
+            this._scheduleFirestoreSync();
             return true;
         } catch (e) {
             console.error('Error saving contracts:', e);
@@ -249,6 +372,7 @@ class Storage {
     savePeople(people) {
         try {
             localStorage.setItem(this.keys.PEOPLE, JSON.stringify(people));
+            this._scheduleFirestoreSync();
             return true;
         } catch (e) {
             return false;
@@ -300,6 +424,7 @@ class Storage {
     saveSquads(squads) {
         try {
             localStorage.setItem(this.keys.SQUADS, JSON.stringify(squads));
+            this._scheduleFirestoreSync();
             return true;
         } catch (e) {
             return false;
@@ -351,6 +476,7 @@ class Storage {
     savePeriods(periods) {
         try {
             localStorage.setItem(this.keys.PERIODS, JSON.stringify(periods));
+            this._scheduleFirestoreSync();
             return true;
         } catch (e) {
             return false;
@@ -402,6 +528,7 @@ class Storage {
 
     setCurrentPeriod(periodId) {
         localStorage.setItem(this.keys.CURRENT_PERIOD, periodId);
+        this._scheduleFirestoreSync();
         this.getPeriod(periodId);
     }
 
@@ -421,6 +548,7 @@ class Storage {
     saveSalaryHistory(history) {
         try {
             localStorage.setItem(this.keys.SALARY_HISTORY, JSON.stringify(history));
+            this._scheduleFirestoreSync();
             return true;
         } catch (e) {
             console.error('Error saving salary history:', e);
@@ -510,6 +638,7 @@ class Storage {
     saveProjects(projects) {
         try {
             localStorage.setItem(this.keys.PROJECTS, JSON.stringify(projects));
+            this._scheduleFirestoreSync();
             return true;
         } catch (e) {
             console.error('Error saving projects:', e);

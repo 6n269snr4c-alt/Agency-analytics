@@ -14,6 +14,7 @@ import { renderValidationPage } from './pages/validationPage.js';
 import { renderEvolutionPage } from './pages/evolutionPage.js';
 import { renderProjectsPage } from './pages/projectsPage.js';
 import { renderClientsPage } from './pages/clientsPage.js';
+import { renderSimulatorPage } from './pages/simulatorPage.js';
 
 async function init() {
     const contentEl = document.getElementById('content');
@@ -30,6 +31,7 @@ async function init() {
     router.register('/people', renderPeoplePage);
     router.register('/squads', renderSquadsPage);
     router.register('/comparison', renderSquadComparisonPage);
+    router.register('/simulator', renderSimulatorPage);
     router.register('/validation', renderValidationPage);
     router.register('/evolution', renderEvolutionPage);
 

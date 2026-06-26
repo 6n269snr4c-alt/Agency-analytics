@@ -1178,16 +1178,25 @@ class AnalyticsService {
     // ========================================
 
     /**
-     * Simula a margem de um contrato hipotético, calculando o custo
-     * MARGINAL — ou seja, o quanto cada pessoa envolvida passaria a custar
-     * SE esse contrato fosse somado ao que já existe hoje, usando exatamente
-     * as mesmas fórmulas de rateio do sistema real. Não escreve nada no
-     * storage — é só leitura, pura simulação.
+     * Simula a margem de um contrato — em dois modos:
+     *
+     * - 'new' (cliente novo): calcula o custo MARGINAL de somar esse
+     *   contrato ao que já existe hoje (mais um cliente na divisão do
+     *   Head/Head Master, mais entregáveis na pool de rateio de cada
+     *   pessoa).
+     *
+     * - 'existing' (cliente existente): EDITA um contrato real — remove a
+     *   contribuição ATUAL desse contrato específico de todos os cálculos
+     *   antes de somar os valores simulados. Carregando os dados reais sem
+     *   mudar nada, o resultado bate exatamente com a margem desse contrato
+     *   na tela de Contratos (é o mesmo cálculo, só que hipotético).
+     *
+     * Não escreve nada no storage — é só leitura, pura simulação.
      *
      * params:
      *   squadId            - squad escolhido
-     *   clientMode         - 'new' (cliente novo) ou 'existing' (cliente que já existe)
-     *   existingClientName - obrigatório se clientMode === 'existing'
+     *   clientMode         - 'new' ou 'existing'
+     *   existingContractId - obrigatório se clientMode === 'existing'
      *   value              - valor do contrato simulado
      *   videoCount, staticCount, trafficManagement, founderBrand
      *   assignments        - [{ personId, mode: 'rateado' | 'founder_brand' }]
@@ -1205,6 +1214,10 @@ class AnalyticsService {
             trafficManagement: !!params.trafficManagement,
         };
 
+        const isExisting = params.clientMode === 'existing' && params.existingContractId;
+        const oldContract = isExisting ? storage.getContractById(params.existingContractId) : null;
+        const oldData = oldContract ? this._getProjectionData(oldContract, currentPeriod) : null;
+
         const costBreakdown = [];
         let totalCost = 0;
 
@@ -1219,7 +1232,15 @@ class AnalyticsService {
                 const salary = this.getPersonCost(personId, currentPeriod);
                 const pct = person.founderBrandPercent || 0;
                 const reserveTotal = salary * (pct / 100);
-                const currentFbCount = this._founderBrandContractsForPerson(personId, currentPeriod).length;
+
+                // Se a pessoa já tinha esse MESMO contrato em modo founder_brand,
+                // remove ele da contagem antes de somar o simulado de volta —
+                // senão contaria duas vezes o mesmo contrato.
+                let currentFbCount = this._founderBrandContractsForPerson(personId, currentPeriod).length;
+                if (oldContract) {
+                    const oldAlloc = (oldData.peopleAllocations || []).find(a => a.personId === personId);
+                    if (oldAlloc && oldAlloc.mode === 'founder_brand') currentFbCount -= 1;
+                }
                 const newFbCount = currentFbCount + 1;
                 cost = newFbCount > 0 ? reserveTotal / newFbCount : 0;
             } else {
@@ -1228,7 +1249,19 @@ class AnalyticsService {
                     const salary = this.getPersonCost(personId, currentPeriod);
                     const reserve = this._personFounderBrandReserve(personId, currentPeriod);
                     const availableSalary = salary - reserve.reserveTotal;
-                    const currentRateable = this.getPersonTotalRateableDeliverables(personId, currentPeriod);
+
+                    // Remove a contribuição ATUAL desse contrato específico
+                    // (se a pessoa já estava alocada em modo rateado nele)
+                    // antes de somar o valor simulado — assim "editar sem
+                    // mudar nada" reproduz exatamente o número real.
+                    let currentRateable = this.getPersonTotalRateableDeliverables(personId, currentPeriod);
+                    if (oldContract) {
+                        const oldAlloc = (oldData.peopleAllocations || []).find(a => a.personId === personId);
+                        if (oldAlloc && oldAlloc.mode === 'rateado') {
+                            currentRateable -= this._relevantQuantity(person.role, oldData);
+                        }
+                    }
+
                     const newTotalRateable = currentRateable + relevantNew;
                     cost = newTotalRateable > 0 ? (relevantNew / newTotalRateable) * availableSalary : 0;
                 }
@@ -1248,12 +1281,10 @@ class AnalyticsService {
                     head.id, currentPeriod, params.value,
                     () => this._squadClientsInPeriod(squad.id, currentPeriod),
                     (clientName) => this._clientRevenueAcrossSquad(squad.id, clientName, currentPeriod),
-                    params.clientMode, params.existingClientName
+                    params.clientMode, oldContract
                 );
-                if (headCost > 0) {
-                    totalCost += headCost;
-                    costBreakdown.push({ personId: head.id, name: head.name + ' (Head)', role: head.role, mode: 'head', cost: headCost });
-                }
+                costBreakdown.push({ personId: head.id, name: head.name + ' (Head)', role: head.role, mode: 'head', cost: headCost });
+                totalCost += headCost;
             }
         }
 
@@ -1264,12 +1295,10 @@ class AnalyticsService {
                 headMaster.id, currentPeriod, params.value,
                 () => this._allClientsInPeriod(currentPeriod),
                 (clientName) => this._clientRevenueAgencyWide(clientName, currentPeriod),
-                params.clientMode, params.existingClientName
+                params.clientMode, oldContract
             );
-            if (hmCost > 0) {
-                totalCost += hmCost;
-                costBreakdown.push({ personId: headMaster.id, name: headMaster.name + ' (Head Master)', role: headMaster.role, mode: 'head_master', cost: hmCost });
-            }
+            costBreakdown.push({ personId: headMaster.id, name: headMaster.name + ' (Head Master)', role: headMaster.role, mode: 'head_master', cost: hmCost });
+            totalCost += hmCost;
         }
 
         const revenue = params.value || 0;
@@ -1293,27 +1322,32 @@ class AnalyticsService {
     }
 
     /**
-     * Calcula a fatia do custo de um Head/Head Master que cairia no contrato
-     * simulado — equilíbrio entre "cliente novo" (mais um na divisão) e
-     * "cliente existente" (divide a fatia já existente pela receita).
+     * Calcula a fatia do custo de um Head/Head Master que cairia no
+     * contrato simulado.
+     *
+     * - Cliente novo: mais um cliente entra na divisão.
+     * - Cliente existente (editando um contrato real): a divisão por
+     *   cliente não muda, mas a receita desse cliente é recalculada
+     *   removendo o valor ANTIGO do contrato sendo editado e somando o
+     *   valor SIMULADO no lugar — assim "editar sem mudar nada" reproduz
+     *   exatamente a fatia real de hoje.
      */
-    _simulateClientShareCost(personId, periodId, simulatedValue, getClients, getClientRevenue, clientMode, existingClientName) {
+    _simulateClientShareCost(personId, periodId, simulatedValue, getClients, getClientRevenue, clientMode, oldContract) {
         const salary = this.getPersonCost(personId, periodId);
         if (salary === 0) return 0;
 
         const clients = getClients();
-        if (clientMode === 'new' || !existingClientName) {
+
+        if (clientMode !== 'existing' || !oldContract) {
             const newCount = clients.length + 1;
             return salary / newCount;
         }
 
-        // Cliente existente: a fatia por cliente não muda (não é um cliente
-        // novo), mas dentro dela, divide pela receita entre o que já existe
-        // e o valor simulado.
         const count = clients.length || 1;
         const perClient = salary / count;
-        const existingRevenue = getClientRevenue(existingClientName);
-        const newTotalRevenue = existingRevenue + simulatedValue;
+        const totalClientRevenue = getClientRevenue(oldContract.client);
+        const adjustedRevenue = totalClientRevenue - (oldContract.value || 0);
+        const newTotalRevenue = adjustedRevenue + simulatedValue;
         if (newTotalRevenue === 0) return 0;
         return perClient * (simulatedValue / newTotalRevenue);
     }

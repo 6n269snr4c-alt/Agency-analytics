@@ -21,6 +21,7 @@ let draft = {
 };
 
 let lastResult = null;
+let includeProjects = true;
 
 export function renderSimulatorPage() {
     const contentEl = document.getElementById('content');
@@ -31,6 +32,11 @@ export function renderSimulatorPage() {
             <h1 class="page-title">🧮 Simulador de Margem</h1>
             <p class="page-subtitle">Simule um contrato hipotético e veja a margem real, comparada com o squad e com a Fast inteira</p>
         </div>
+
+        <label class="revenue-filter-toggle">
+            <input type="checkbox" id="sim-include-projects" ${includeProjects ? 'checked' : ''} onchange="window.simToggleIncludeProjects(this.checked)">
+            🚀 Incluir Projetos Pontuais na comparação (squad e Fast inteira)
+        </label>
 
         <div class="sim-layout">
             <div class="widget">
@@ -251,6 +257,15 @@ function renderResult(result) {
 // ─── Handlers ───────────────────────────────────────────────────────────────
 
 function attachSimulatorHandlers() {
+    window.simToggleIncludeProjects = (checked) => {
+        includeProjects = checked;
+        if (lastResult) {
+            window.simRun();
+        } else {
+            renderSimulatorPage();
+        }
+    };
+
     window.simChangeSquad = (squadId) => {
         draft.squadId = squadId || null;
         draft.clientMode = 'new';
@@ -349,7 +364,7 @@ function attachSimulatorHandlers() {
                 trafficManagement: draft.trafficManagement,
                 founderBrand: draft.founderBrand,
                 assignments,
-            });
+            }, null, includeProjects);
 
             document.getElementById('sim-result').innerHTML = renderResult(lastResult);
         } catch (e) {

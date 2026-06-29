@@ -10,7 +10,8 @@
 // locais pra lá (se o Firestore estiver vazio) — nunca o contrário, pra
 // nunca apagar dados locais reais com algo vazio.
 
-import { firebaseConfig, FIRESTORE_COLLECTION, FIRESTORE_DOC_ID } from '../firebaseConfig.js';
+import { FIRESTORE_COLLECTION, FIRESTORE_DOC_ID } from '../firebaseConfig.js';
+import { getFirebaseApp } from '../firebaseApp.js';
 
 class Storage {
     constructor() {
@@ -42,10 +43,9 @@ class Storage {
 
     async _initFirebase() {
         try {
-            const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+            const app = await getFirebaseApp();
             const { getFirestore, doc, getDoc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
 
-            const app = initializeApp(firebaseConfig);
             const db = getFirestore(app);
             this._firestoreDocRef = doc(db, FIRESTORE_COLLECTION, FIRESTORE_DOC_ID);
             this._firestoreFns = { getDoc, setDoc };

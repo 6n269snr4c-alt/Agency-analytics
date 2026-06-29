@@ -1,6 +1,8 @@
 // navbar.js - v3: removidos os links de Entregáveis e Funções (sistema de pesos descontinuado)
 // Adicionado link de Conferência Salarial no lugar de "Validação" genérica.
 
+import { logout, getCurrentUserEmail } from '../services/authService.js';
+
 export function renderNavbar() {
     const navbarContainer = document.getElementById('navbar');
 
@@ -66,10 +68,16 @@ export function renderNavbar() {
             </div>
 
             <div class="sidebar-footer">
+                <div class="sidebar-footer-text">${getCurrentUserEmail() || ''}</div>
+                <button class="nav-logout-btn" onclick="window.handleLogout()">🚪 Sair</button>
                 <div class="sidebar-footer-text">Fast Digital 360</div>
             </div>
         </nav>
     `;
+
+    window.handleLogout = () => {
+        if (confirm('Sair da sua conta?')) logout();
+    };
 
     setTimeout(() => attachNavHandlers(), 100);
 }

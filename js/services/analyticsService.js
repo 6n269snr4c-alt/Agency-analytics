@@ -1201,8 +1201,13 @@ class AnalyticsService {
      *   videoCount, staticCount, trafficManagement, founderBrand
      *   assignments        - [{ personId, mode: 'rateado' | 'fixo' | 'founder_brand', fixedValue? }]
      *                        (Head e Head Master entram automaticamente, não precisa incluir)
+     *
+     * includeProjects (3º argumento da função): se false, tanto o cálculo do
+     * Head/Head Master quanto os benchmarks de comparação (squad e agência)
+     * ignoram projetos pontuais — útil pra avaliar a margem do contrato só
+     * contra a recorrência.
      */
-    simulateContractMargin(params, periodId = null) {
+    simulateContractMargin(params, periodId = null, includeProjects = true) {
         const currentPeriod = periodId || storage.getCurrentPeriod();
         const squad = storage.getSquadById(params.squadId);
         if (!squad) throw new Error('Squad não encontrado');
@@ -1283,8 +1288,8 @@ class AnalyticsService {
             if (head) {
                 const headCost = this._simulateClientShareCost(
                     head.id, currentPeriod, params.value,
-                    () => this._squadClientsInPeriod(squad.id, currentPeriod),
-                    (clientName) => this._clientRevenueAcrossSquad(squad.id, clientName, currentPeriod),
+                    () => this._squadClientsInPeriod(squad.id, currentPeriod, includeProjects),
+                    (clientName) => this._clientRevenueAcrossSquad(squad.id, clientName, currentPeriod, includeProjects),
                     params.clientMode, oldContract
                 );
                 costBreakdown.push({ personId: head.id, name: head.name + ' (Head)', role: head.role, mode: 'head', cost: headCost });
@@ -1297,8 +1302,8 @@ class AnalyticsService {
         if (headMaster) {
             const hmCost = this._simulateClientShareCost(
                 headMaster.id, currentPeriod, params.value,
-                () => this._allClientsInPeriod(currentPeriod),
-                (clientName) => this._clientRevenueAgencyWide(clientName, currentPeriod),
+                () => this._allClientsInPeriod(currentPeriod, includeProjects),
+                (clientName) => this._clientRevenueAgencyWide(clientName, currentPeriod, includeProjects),
                 params.clientMode, oldContract
             );
             costBreakdown.push({ personId: headMaster.id, name: headMaster.name + ' (Head Master)', role: headMaster.role, mode: 'head_master', cost: hmCost });
@@ -1309,8 +1314,8 @@ class AnalyticsService {
         const profit  = revenue - totalCost;
         const margin  = revenue > 0 ? (profit / revenue) * 100 : 0;
 
-        const squadDRE   = this.getSquadDRE(squad.id, currentPeriod);
-        const overallROI = this.getOverallROI(currentPeriod);
+        const squadDRE   = this.getSquadDRE(squad.id, currentPeriod, includeProjects);
+        const overallROI = this.getOverallROI(currentPeriod, includeProjects);
 
         return {
             revenue,

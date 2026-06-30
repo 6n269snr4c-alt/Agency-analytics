@@ -104,11 +104,18 @@ export function renderClientsPage() {
                        oninput="window.filterClients()"
                        style="max-width:320px;">
             </div>
-            <div class="action-bar-right" style="gap:0.5rem;">
+            <div class="action-bar-right" style="gap:0.5rem; flex-wrap:wrap;">
+                <span style="font-size:0.78rem; color:var(--text-secondary); align-self:center;">Ordenar por:</span>
                 <button class="btn btn-small btn-secondary ${window._clientSort === 'revenue' || !window._clientSort ? 'active' : ''}"
                         onclick="window.sortClients('revenue')">💵 Receita</button>
+                <button class="btn btn-small btn-secondary ${window._clientSort === 'cost' ? 'active' : ''}"
+                        onclick="window.sortClients('cost')">💸 Custo</button>
+                <button class="btn btn-small btn-secondary ${window._clientSort === 'profit' ? 'active' : ''}"
+                        onclick="window.sortClients('profit')">📈 Lucro</button>
                 <button class="btn btn-small btn-secondary ${window._clientSort === 'margin' ? 'active' : ''}"
                         onclick="window.sortClients('margin')">📊 Margem</button>
+                <button class="btn btn-small btn-secondary ${window._clientSort === 'ltv' ? 'active' : ''}"
+                        onclick="window.sortClients('ltv')">🏆 LTV</button>
                 <button class="btn btn-small btn-secondary ${window._clientSort === 'name' ? 'active' : ''}"
                         onclick="window.sortClients('name')">🔤 Nome</button>
             </div>
@@ -160,6 +167,14 @@ function renderClientCard(profile) {
                         <div style="font-size:0.72rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;">Pontual (mês)</div>
                         <div style="font-weight:700;color:#ff9800;">R$ ${fmt(profile.projectRevenue)}</div>
                     </div>` : ''}
+                    <div style="text-align:right;">
+                        <div style="font-size:0.72rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;">Custo</div>
+                        <div style="font-weight:700;color:var(--error,#f44336);">R$ ${fmt(profile.totalCost)}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:0.72rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;">Lucro</div>
+                        <div style="font-weight:700;color:${marginColor(profile.margin)};">R$ ${fmt(profile.profit)}</div>
+                    </div>
                     <div style="text-align:right;">
                         <div style="font-size:0.72rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;">Total (mês)</div>
                         <div style="font-weight:700;font-size:1.1rem;color:${marginColor(profile.margin)};">R$ ${fmt(profile.totalRevenue)}</div>
@@ -348,13 +363,21 @@ function attachHandlers(profiles) {
         window._clientSort = by;
         let sorted = [...profiles];
         if (by === 'revenue') sorted.sort((a, b) => b.totalRevenue - a.totalRevenue);
-        if (by === 'margin')  sorted.sort((a, b) => b.margin - a.margin);
+        if (by === 'cost')    sorted.sort((a, b) => b.totalCost   - a.totalCost);
+        if (by === 'profit')  sorted.sort((a, b) => b.profit      - a.profit);
+        if (by === 'margin')  sorted.sort((a, b) => b.margin      - a.margin);
+        if (by === 'ltv')     sorted.sort((a, b) => (b.ltv || 0)  - (a.ltv || 0));
         if (by === 'name')    sorted.sort((a, b) => a.clientName.localeCompare(b.clientName, 'pt-BR'));
 
         document.getElementById('clients-list').innerHTML =
             sorted.length === 0
                 ? '<div class="empty-state"><p>Nenhum cliente</p></div>'
                 : sorted.map(p => renderClientCard(p)).join('');
+
+        // Atualiza estado visual dos botões de ordenação
+        document.querySelectorAll('.action-bar-right .btn').forEach(btn => btn.classList.remove('active'));
+        const activeBtn = document.querySelector(`.action-bar-right .btn[onclick="window.sortClients('${by}')"]`);
+        if (activeBtn) activeBtn.classList.add('active');
 
         // Rebind
         attachHandlers(sorted);

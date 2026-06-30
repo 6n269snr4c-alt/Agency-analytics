@@ -35,6 +35,19 @@ function fmt(value) {
     return Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Converte string digitada em formato monetário pt-BR (ex: "1.234,56", "1234,56", "1234.56")
+// para number. Aceita também valores já numéricos.
+function parseCurrencyInput(str) {
+    if (str === null || str === undefined || str === '') return 0;
+    if (typeof str === 'number') return str;
+    let s = String(str).trim().replace(/^R\$\s*/i, '');
+    if (s === '') return 0;
+    // remove separador de milhar (ponto) e troca vírgula decimal por ponto
+    s = s.replace(/\./g, '').replace(',', '.');
+    const n = parseFloat(s);
+    return isNaN(n) ? 0 : n;
+}
+
 function marginBadgeClass(margin) {
     if (margin >= 30) return 'badge-success';
     if (margin >= 15) return 'badge-warning';
@@ -357,9 +370,13 @@ function renderRow({ contract, roi, squad, locked, confirmedThisMonth, lastConfi
             </td>
             ${TEAM_ROLES.map(role => renderTeamCell(contract, team[role], role, locked || viewLocked)).join('')}
             <td style="text-align:right;">
-                <input type="number" min="0" step="0.01" class="inline-input inline-input-num" style="width:90px;" value="${contract.value}"
+                <input type="text" inputmode="decimal" class="inline-input inline-input-num currency-input" style="width:110px; text-align:right;"
+                       value="R$ ${fmt(contract.value)}"
+                       data-raw="${contract.value || 0}"
                        ${viewLocked || locked ? 'disabled' : ''}
-                       onchange="window.updateField('${contract.id}','value',this.value)">
+                       onfocus="window.currencyInputFocus(this)"
+                       onblur="window.currencyInputBlur(this, '${contract.id}')"
+                       onkeydown="if(event.key==='Enter'){this.blur();}">
             </td>
             <td style="text-align:right; color:var(--text-secondary);">R$ ${fmt(roi.cost)}</td>
             <td style="text-align:center;"><span class="badge ${marginBadgeClass(roi.margin)}">${roi.margin.toFixed(0)}%</span></td>
@@ -1007,6 +1024,20 @@ function attachContractHandlers() {
             alert(error.message);
         }
         renderContractsPage();
+    };
+
+    // Campo de Receita (R$): mostra valor "cru" editável ao focar e reformata em moeda ao sair.
+    window.currencyInputFocus = (el) => {
+        const raw = parseFloat(el.dataset.raw) || 0;
+        el.value = raw === 0 ? '' : String(raw).replace('.', ',');
+        el.select();
+    };
+
+    window.currencyInputBlur = (el, contractId) => {
+        const parsed = parseCurrencyInput(el.value);
+        el.value = `R$ ${fmt(parsed)}`;
+        el.dataset.raw = parsed;
+        window.updateField(contractId, 'value', parsed);
     };
 
     window.setAllocationMode = (personId, mode) => {

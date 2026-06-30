@@ -114,8 +114,6 @@ export function renderClientsPage() {
                         onclick="window.sortClients('profit')">📈 Lucro</button>
                 <button class="btn btn-small btn-secondary ${window._clientSort === 'margin' ? 'active' : ''}"
                         onclick="window.sortClients('margin')">📊 Margem</button>
-                <button class="btn btn-small btn-secondary ${window._clientSort === 'ltv' ? 'active' : ''}"
-                        onclick="window.sortClients('ltv')">🏆 LTV</button>
                 <button class="btn btn-small btn-secondary ${window._clientSort === 'name' ? 'active' : ''}"
                         onclick="window.sortClients('name')">🔤 Nome</button>
             </div>
@@ -176,6 +174,10 @@ function renderClientCard(profile) {
                         <div style="font-weight:700;color:${marginColor(profile.margin)};">R$ ${fmt(profile.profit)}</div>
                     </div>
                     <div style="text-align:right;">
+                        <div style="font-size:0.72rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;">Margem</div>
+                        <div style="font-weight:700;color:${marginColor(profile.margin)};">${pct(profile.margin)}</div>
+                    </div>
+                    <div style="text-align:right;">
                         <div style="font-size:0.72rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;">Total (mês)</div>
                         <div style="font-weight:700;font-size:1.1rem;color:${marginColor(profile.margin)};">R$ ${fmt(profile.totalRevenue)}</div>
                     </div>
@@ -205,12 +207,6 @@ function renderClientCard(profile) {
                         <span class="client-metric-label">📊 Margem</span>
                         <span class="client-metric-value" style="color:${marginColor(profile.margin)}">${pct(profile.margin)}</span>
                     </div>
-                    ${profile.ltv > 0 ? `
-                    <div class="client-metric">
-                        <span class="client-metric-label">🏆 LTV</span>
-                        <span class="client-metric-value" style="color:var(--text-primary)">R$ ${fmt(profile.ltv)}</span>
-                        <span style="font-size:0.72rem;color:var(--text-secondary);">recorrente + concluídos</span>
-                    </div>` : ''}
                 </div>
 
                 <!-- Divisão recorrente + pontual lado a lado -->
@@ -366,7 +362,6 @@ function attachHandlers(profiles) {
         if (by === 'cost')    sorted.sort((a, b) => b.totalCost   - a.totalCost);
         if (by === 'profit')  sorted.sort((a, b) => b.profit      - a.profit);
         if (by === 'margin')  sorted.sort((a, b) => b.margin      - a.margin);
-        if (by === 'ltv')     sorted.sort((a, b) => (b.ltv || 0)  - (a.ltv || 0));
         if (by === 'name')    sorted.sort((a, b) => a.clientName.localeCompare(b.clientName, 'pt-BR'));
 
         document.getElementById('clients-list').innerHTML =

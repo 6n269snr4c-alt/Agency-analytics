@@ -677,19 +677,23 @@ class AnalyticsService {
             }
         }
 
-        const headMasterCost = this.getHeadMasterCostForContract(contractId, currentPeriod, includeProjects);
-        if (headMasterCost > 0) {
-            cost += headMasterCost;
-            const headMaster = this.getHeadMaster();
-            if (headMaster) {
-                costBreakdown.push({
-                    personId: headMaster.id,
-                    name: headMaster.name + ' (Head Master)',
-                    role: headMaster.role,
-                    mode: 'head_master',
-                    totalCost: headMasterCost,
-                    isHead: true
-                });
+        // Só inclui Head Master se o contrato não tiver o flag explicitamente desativado
+        const shouldIncludeHM = contract.includeHeadMaster !== false;
+        if (shouldIncludeHM) {
+            const headMasterCost = this.getHeadMasterCostForContract(contractId, currentPeriod, includeProjects);
+            if (headMasterCost > 0) {
+                cost += headMasterCost;
+                const headMaster = this.getHeadMaster();
+                if (headMaster) {
+                    costBreakdown.push({
+                        personId: headMaster.id,
+                        name: headMaster.name + ' (Head Master)',
+                        role: headMaster.role,
+                        mode: 'head_master',
+                        totalCost: headMasterCost,
+                        isHead: true
+                    });
+                }
             }
         }
 

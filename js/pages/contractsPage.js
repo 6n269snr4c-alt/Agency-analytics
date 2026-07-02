@@ -132,6 +132,9 @@ export function renderContractsPage() {
     } else if (typeFilter === 'founder_brand') {
         contracts = contracts.filter(c => c.founderBrand);
         projects = [];
+    } else if (typeFilter === 'fast_alphaville') {
+        contracts = contracts.filter(c => c.fastAlphaville);
+        projects = [];
     }
 
     if (professionalFilter) {
@@ -184,6 +187,7 @@ export function renderContractsPage() {
             <button class="month-pill ${typeFilter === 'recorrencia' ? 'active' : ''}" onclick="window.setTypeFilter('recorrencia')">Recorrência</button>
             <button class="month-pill ${typeFilter === 'pontual' ? 'active' : ''}" onclick="window.setTypeFilter('pontual')">🚀 Pontual</button>
             <button class="month-pill ${typeFilter === 'founder_brand' ? 'active' : ''}" onclick="window.setTypeFilter('founder_brand')">🎤 Founder Brand</button>
+            <button class="month-pill ${typeFilter === 'fast_alphaville' ? 'active' : ''}" onclick="window.setTypeFilter('fast_alphaville')">🏙️ Fast Alphaville</button>
 
             <span style="font-size:0.78rem; color:var(--text-secondary); margin-left:1rem;">Profissional:</span>
             <select class="form-select" id="professional-filter" style="max-width:200px; font-size:0.82rem; padding:0.35rem 0.6rem;" onchange="window.setProfessionalFilter(this.value)">
@@ -336,6 +340,7 @@ function renderRow({ contract, roi, squad, locked, confirmedThisMonth, lastConfi
         <tr class="${rowMuted ? 'row-inactive' : ''}">
             <td style="position:sticky; left:0; background:${rowMuted ? 'var(--bg-darker,#15151a)' : 'var(--bg,#0f0f12)'};">
                 ${contract.founderBrand ? '<span class="fb-badge" title="Estratégia de Founder Brand">🎤</span>' : ''}
+                ${contract.fastAlphaville ? '<span class="fb-badge" title="Fast Alphaville" style="background:rgba(33,150,243,0.15);color:#2196f3;">🏙️</span>' : ''}
                 <input type="text" class="inline-input inline-client-input" value="${contract.client}"
                        ${viewLocked ? 'disabled' : ''}
                        onchange="window.updateField('${contract.id}','client',this.value)">
@@ -365,8 +370,9 @@ function renderRow({ contract, roi, squad, locked, confirmedThisMonth, lastConfi
             </td>
             <td>${head ? `<span class="role-chip"><span class="role-chip-avatar">${head.name[0]}</span>${head.name}<span class="role-chip-badge auto">auto</span></span>` : '<span class="text-muted">—</span>'}
                 ${headCost ? `<div class="role-chip-cost">R$ ${fmt(headCost.totalCost)}</div>` : ''}
-                ${headMaster ? `<span class="role-chip" style="margin-top:0.2rem;"><span class="role-chip-avatar">${headMaster.name[0]}</span>${headMaster.name}<span class="role-chip-badge auto">master</span></span>` : ''}
-                ${headMasterCost ? `<div class="role-chip-cost">R$ ${fmt(headMasterCost.totalCost)}</div>` : ''}
+                ${headMaster && contract.includeHeadMaster !== false ? `<span class="role-chip" style="margin-top:0.2rem;"><span class="role-chip-avatar">${headMaster.name[0]}</span>${headMaster.name}<span class="role-chip-badge auto">master</span></span>` : ''}
+                ${headMasterCost && contract.includeHeadMaster !== false ? `<div class="role-chip-cost">R$ ${fmt(headMasterCost.totalCost)}</div>` : ''}
+                ${headMaster && contract.includeHeadMaster === false ? `<span style="font-size:0.7rem;color:var(--text-secondary);opacity:0.5;" title="Head Master não incluída neste contrato">👑 —</span>` : ''}
             </td>
             ${TEAM_ROLES.map(role => renderTeamCell(contract, team[role], role, locked || viewLocked)).join('')}
             <td style="text-align:right;">
@@ -494,14 +500,22 @@ function renderContractForm(prefill, squads) {
                             ${squads.map(s => `<option value="${s.id}" ${prefill?.squadTag === s.id ? 'selected' : ''}>${s.icon||''} ${s.name}</option>`).join('')}
                         </select>
                     </div>
-                    <div class="form-group" style="margin:0; display:flex; align-items:flex-end; gap:1.25rem;">
+                    <div class="form-group" style="margin:0; display:flex; align-items:flex-start; gap:1.25rem; flex-wrap:wrap;">
                         <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
                             <input type="checkbox" id="traffic-management" ${prefill?.trafficManagement ? 'checked' : ''}>
                             Inclui gestão de tráfego
                         </label>
                         <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
                             <input type="checkbox" id="founder-brand" ${prefill?.founderBrand ? 'checked' : ''}>
-                            🎤 Estratégia de Founder Brand
+                            🎤 Founder Brand
+                        </label>
+                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                            <input type="checkbox" id="fast-alphaville" ${prefill?.fastAlphaville ? 'checked' : ''}>
+                            🏙️ Fast Alphaville
+                        </label>
+                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;" title="Inclui o custo da Head Master rateado neste contrato">
+                            <input type="checkbox" id="include-head-master" ${prefill?.includeHeadMaster !== false ? 'checked' : ''}>
+                            👑 Incluir custo Head Master
                         </label>
                     </div>
                 </div>
@@ -688,11 +702,14 @@ function saveContract() {
         const squadTag    = document.getElementById('squad-tag').value || null;
         const videoCount  = parseInt(document.getElementById('video-count').value) || 0;
         const staticCount = parseInt(document.getElementById('static-count').value) || 0;
-        const trafficManagement = document.getElementById('traffic-management').checked;
-        const founderBrand = document.getElementById('founder-brand').checked;
+        const trafficManagement  = document.getElementById('traffic-management').checked;
+        const founderBrand       = document.getElementById('founder-brand').checked;
+        const fastAlphaville     = document.getElementById('fast-alphaville').checked;
+        const includeHeadMaster  = document.getElementById('include-head-master').checked;
 
         const formData = {
-            client, value, squadTag, videoCount, staticCount, trafficManagement, founderBrand,
+            client, value, squadTag, videoCount, staticCount,
+            trafficManagement, founderBrand, fastAlphaville, includeHeadMaster,
             peopleAllocations: draftAllocations.map(a => ({ ...a })),
         };
 

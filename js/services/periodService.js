@@ -1,67 +1,32 @@
-// periodService.js - Period management service
+// periodService.js - v4: só mês de referência, sem histórico.
 
 import storage from '../store/storage.js';
 
 class PeriodService {
-    // Get current period
-    getCurrentPeriod() {
-        return storage.getCurrentPeriod();
-    }
+    getCurrentPeriod()     { return storage.getCurrentPeriod(); }
+    setCurrentPeriod(id)   { storage.setCurrentPeriod(id); }
 
-    // Set current period
-    setCurrentPeriod(periodId) {
-        storage.setCurrentPeriod(periodId);
-    }
-
-    // Get all periods sorted by date (newest first)
-    getAllPeriods() {
-        return storage.getPeriods().sort((a, b) => {
-            if (a.year !== b.year) return b.year - a.year;
-            return b.month - a.month;
-        });
-    }
-
-    // Get period info
-    getPeriod(periodId) {
-        return storage.getPeriod(periodId);
-    }
-
-    // Navigate to previous month
     getPreviousPeriod(periodId) {
         const [year, month] = periodId.split('-').map(Number);
-        const prevMonth = month === 1 ? 12 : month - 1;
-        const prevYear = month === 1 ? year - 1 : year;
-        return `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+        const m = month === 1 ? 12 : month - 1;
+        const y = month === 1 ? year - 1 : year;
+        return `${y}-${String(m).padStart(2, '0')}`;
     }
 
-    // Navigate to next month
     getNextPeriod(periodId) {
         const [year, month] = periodId.split('-').map(Number);
-        const nextMonth = month === 12 ? 1 : month + 1;
-        const nextYear = month === 12 ? year + 1 : year;
-        return `${nextYear}-${String(nextMonth).padStart(2, '0')}`;
+        const m = month === 12 ? 1 : month + 1;
+        const y = month === 12 ? year + 1 : year;
+        return `${y}-${String(m).padStart(2, '0')}`;
     }
 
-    // Check if period exists
-    periodExists(periodId) {
-        return !!storage.getPeriod(periodId);
-    }
-
-    // Cria o registro do novo período. Salário não precisa ser copiado: sem
-    // reajuste lançado, getSalaryForPeriod() já cai pro último valor conhecido.
-    createPeriodFromPrevious(newPeriodId) {
-        storage.setCurrentPeriod(newPeriodId);
-        return storage.getPeriod(newPeriodId);
-    }
-
-    // Get formatted label for period
     getPeriodLabel(periodId) {
         if (!periodId) return '';
-        const period = storage.getPeriod(periodId);
-        return period ? period.label : periodId;
+        const [year, month] = periodId.split('-');
+        const names = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+        return `${names[parseInt(month) - 1]}/${year}`;
     }
 
-    // Get current month/year
     getCurrentMonthYear() {
         const now = new Date();
         return {

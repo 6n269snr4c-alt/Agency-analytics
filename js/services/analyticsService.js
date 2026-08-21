@@ -60,11 +60,10 @@ class AnalyticsService {
     // PESSOA — custo total
     // ========================================
 
-    getPersonCost(personId, periodId = null) {
-        const currentPeriod = periodId || storage.getCurrentPeriod();
+    getPersonCost(personId, _periodId = null) {
         const person = storage.getPersonById(personId);
         if (!person) return 0;
-        return storage.getSalaryForPeriod(personId, currentPeriod) || person.salary || 0;
+        return person.salary || 0;
     }
 
     getPersonContractsForPeriod(personId, periodId = null) {

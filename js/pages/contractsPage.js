@@ -15,18 +15,12 @@ import storage from '../store/storage.js';
 import { attachClientAutocomplete } from '../components/clientAutocomplete.js';
 
 const TEAM_ROLES = ['Designer', 'Filmmaker', 'Copywriter', 'Gestor de Tráfego'];
-const MONTHS_VISIBLE = 6;
-
-let selectedMonth   = null;
-let showInactive    = false;
-let viewLocked      = false;
 let searchTerm      = '';
 let typeFilter         = 'todos'; // 'todos' | 'recorrencia' | 'pontual' | 'founder_brand'
 let professionalFilter = '';      // personId ou ''
 
-let currentEditId   = null;   // contrato sendo editado (modal de equipe)
-let relaunchFromId  = null;   // contrato de origem ao "lançar novo a partir de"
-let editingId       = null;   // contrato sendo editado via formulário completo (ainda sem histórico)
+let currentEditId   = null;
+let editingId       = null;
 let draftAllocations = [];
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -57,17 +51,6 @@ function marginBadgeClass(margin) {
 function monthShortLabel(periodId) {
     const [, m] = periodId.split('-').map(Number);
     return ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][m - 1];
-}
-
-function getMonthOptions() {
-    const current = storage.getCurrentPeriod();
-    const months = [current];
-    let cursor = current;
-    for (let i = 1; i < MONTHS_VISIBLE; i++) {
-        cursor = periodService.getPreviousPeriod(cursor);
-        months.unshift(cursor);
-    }
-    return months;
 }
 
 function groupTeamByRole(contract, allPeople) {
@@ -105,19 +88,13 @@ function personInvolvedInProject(project, personId) {
 
 export function renderContractsPage() {
     const contentEl = document.getElementById('content');
-
-    if (!selectedMonth) selectedMonth = storage.getCurrentPeriod();
+    const currentPeriod = storage.getCurrentPeriod();
 
     const squads    = squadService.getAllSquads();
     const allPeople = personService.getAllPeople();
 
-    let contracts = showInactive
-        ? contractService.getAllContractsEver()
-        : contractService.getContractsForPeriod(selectedMonth);
-
-    let projects = showInactive
-        ? projectService.getAllProjects()
-        : projectService.getProjectsForPeriod(selectedMonth);
+    let contracts = contractService.getAllContracts();
+    let projects  = projectService.getProjectsForPeriod(currentPeriod);
 
     if (searchTerm) {
         const term = searchTerm.toLowerCase();
@@ -142,40 +119,28 @@ export function renderContractsPage() {
         projects = projects.filter(p => personInvolvedInProject(p, professionalFilter));
     }
 
-    const recurringRevenue = contractService.getContractsForPeriod(selectedMonth)
-        .reduce((sum, c) => sum + analyticsService.getContractROI(c.id, selectedMonth).revenue, 0);
-    const oneOffRevenue = projectService.getProjectsForPeriod(selectedMonth)
-        .reduce((sum, p) => sum + analyticsService.getProjectROI(p.id, selectedMonth).revenue, 0);
+    const recurringRevenue = contracts
+        .reduce((sum, c) => sum + analyticsService.getContractROI(c.id, currentPeriod).revenue, 0);
+    const oneOffRevenue = projects
+        .reduce((sum, p) => sum + analyticsService.getProjectROI(p.id, currentPeriod).revenue, 0);
 
     contentEl.innerHTML = `
         <div class="page-header">
             <h1 class="page-title">Contratos</h1>
-            <p class="page-subtitle">Confirme mês a mês os contratos que continuam iguais. Mudou algo? Lance um contrato novo.</p>
+            <p class="page-subtitle">Visão geral dos contratos ativos e projetos pontuais do período de referência.</p>
         </div>
 
         <div class="action-bar" style="flex-wrap:wrap; gap:0.75rem;">
             <div class="action-bar-left" style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
                 <button class="btn btn-primary" onclick="window.openContractModal()">+ Novo Contrato</button>
-                <div style="display:flex; align-items:center; gap:0.4rem;">
-                    <span style="font-size:0.78rem; color:var(--text-secondary);">Mês:</span>
-                    ${getMonthOptions().map(p => `
-                        <button class="month-pill ${p === selectedMonth ? 'active' : ''}" onclick="window.selectMonth('${p}')">${monthShortLabel(p)}</button>
-                    `).join('')}
-                    <button class="btn btn-secondary btn-small" style="margin-left:0.4rem;" onclick="window.changePeriod('${periodService.getNextPeriod(storage.getCurrentPeriod())}')" title="Avança o mês atual do sistema (afeta o app todo)">
-                        Avançar mês ▸ ${monthShortLabel(periodService.getNextPeriod(storage.getCurrentPeriod()))}/${periodService.getNextPeriod(storage.getCurrentPeriod()).split('-')[0].slice(2)}
-                    </button>
-                </div>
-                <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.82rem; color:var(--text-secondary); cursor:pointer;">
-                    <input type="checkbox" id="show-inactive" ${showInactive ? 'checked' : ''} onchange="window.toggleShowInactive(this.checked)">
-                    Mostrar inativos
-                </label>
+
             </div>
             <div class="action-bar-right" style="display:flex; align-items:center; gap:0.6rem;">
                 <input type="text" class="form-input" id="contract-search"
                        placeholder="🔍 Buscar cliente..." style="max-width:220px;"
                        value="${searchTerm}" oninput="window.filterContracts(this.value)">
                 <button class="btn btn-secondary" onclick="window.toggleViewLock()" title="Trava todos os campos contra edição/cliques">
-                    ${viewLocked ? '🔒 Travado' : '🔓 Destravado'}
+                    🔓 Destravado
                 </button>
                 <button class="btn btn-secondary" onclick="window.exportContracts()">📥 Exportar</button>
             </div>
@@ -200,11 +165,11 @@ export function renderContractsPage() {
         <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin-bottom:1.5rem;">
             <div class="stat-card">
                 <div class="stat-value">R$ ${fmt(recurringRevenue)}</div>
-                <div class="stat-label">Receita Recorrência (${monthShortLabel(selectedMonth)}/${selectedMonth.split('-')[0].slice(2)})</div>
+                <div class="stat-label">Receita Recorrência</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value">R$ ${fmt(oneOffRevenue)}</div>
-                <div class="stat-label">Receita Projetos Pontuais (${monthShortLabel(selectedMonth)}/${selectedMonth.split('-')[0].slice(2)})</div>
+                <div class="stat-label">Receita Projetos Pontuais</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value" style="color:var(--fast-green,#7cfc00);">R$ ${fmt(recurringRevenue + oneOffRevenue)}</div>
@@ -259,35 +224,31 @@ export function renderContractsPage() {
 // ─── TABELA ───────────────────────────────────────────────────────────────────
 
 function renderContractsTable(contracts, projects, squads, allPeople) {
+    const currentPeriod = storage.getCurrentPeriod();
+
     if (contracts.length === 0 && projects.length === 0) {
         return `
             <div class="empty-state">
                 <div class="empty-state-icon">📋</div>
-                <h3>Nenhum contrato ou projeto${showInactive ? '' : ' ativo neste mês'}</h3>
-                <p>${showInactive ? 'Comece criando seu primeiro contrato' : 'Marque "Mostrar inativos" para ver todos, ou crie um novo contrato'}</p>
+                <h3>Nenhum contrato ou projeto cadastrado</h3>
+                <p>Comece criando seu primeiro contrato</p>
             </div>
         `;
     }
 
-    const months = getMonthOptions();
-    const currentPeriod = storage.getCurrentPeriod();
-
     const contractRows = contracts.map(contract => {
-        const roi   = analyticsService.getContractROI(contract.id, selectedMonth);
+        const roi   = analyticsService.getContractROI(contract.id, currentPeriod);
         const squad = contract.squadTag ? squadService.getSquad(contract.squadTag) : null;
-        const locked = contractService.isLockedByHistory(contract.id, currentPeriod);
-        const confirmedThisMonth = (contract.confirmedPeriods || []).includes(selectedMonth);
-        const lastConfirmed = contractService.getLastConfirmedPeriod(contract.id);
-        const team = groupTeamByRole(contract, allPeople);
-        const head = squad && squad.headId ? allPeople.find(p => p.id === squad.headId) : null;
-        const headCost = roi.costBreakdown.find(c => c.mode === 'head');
-        const headMaster = analyticsService.getHeadMaster();
+        const team  = groupTeamByRole(contract, allPeople);
+        const head  = squad && squad.headId ? allPeople.find(p => p.id === squad.headId) : null;
+        const headCost       = roi.costBreakdown.find(c => c.mode === 'head');
+        const headMaster     = analyticsService.getHeadMaster();
         const headMasterCost = roi.costBreakdown.find(c => c.mode === 'head_master');
-        return { type: 'contract', clientKey: contract.client, contract, roi, squad, locked, confirmedThisMonth, lastConfirmed, team, head, headCost, headMaster, headMasterCost };
+        return { type: 'contract', clientKey: contract.client, contract, roi, squad, team, head, headCost, headMaster, headMasterCost };
     });
 
     const projectRows = projects.map(project => {
-        const roi   = analyticsService.getProjectROI(project.id, selectedMonth);
+        const roi   = analyticsService.getProjectROI(project.id, currentPeriod);
         const squad = project.squadId ? squadService.getSquad(project.squadId) : null;
         const head  = squad && squad.headId ? allPeople.find(p => p.id === squad.headId) : null;
         const headCost = roi.costBreakdown.find(c => c.mode === 'head');
@@ -324,46 +285,42 @@ function renderContractsTable(contracts, projects, squads, allPeople) {
                     </tr>
                 </thead>
                 <tbody>
-                    ${rows.map(r => r.type === 'contract' ? renderRow(r, squads, months) : renderProjectRow(r)).join('')}
+                    ${rows.map(r => r.type === 'contract' ? renderRow(r, squads) : renderProjectRow(r)).join('')}
                 </tbody>
             </table>
         </div>
     `;
 }
 
-function renderRow({ contract, roi, squad, locked, confirmedThisMonth, lastConfirmed, team, head, headCost, headMaster, headMasterCost }, squads, months) {
-    const disabled = viewLocked || locked;
-    const fieldDisabled = viewLocked; // campos sempre travados? não — abaixo cada campo decide
-    const rowMuted = !confirmedThisMonth;
-
+function renderRow({ contract, roi, squad, team, head, headCost, headMaster, headMasterCost }, squads) {
     return `
-        <tr class="${rowMuted ? 'row-inactive' : ''}">
-            <td style="position:sticky; left:0; background:${rowMuted ? 'var(--bg-darker,#15151a)' : 'var(--bg,#0f0f12)'};">
+        <tr>
+            <td style="position:sticky; left:0; background:var(--bg,#0f0f12);">
                 ${contract.founderBrand ? '<span class="fb-badge" title="Estratégia de Founder Brand">🎤</span>' : ''}
                 ${contract.fastAlphaville ? '<span class="fb-badge" title="Fast Alphaville" style="background:rgba(33,150,243,0.15);color:#2196f3;">🏙️</span>' : ''}
                 <input type="text" class="inline-input inline-client-input" value="${contract.client}"
-                       ${viewLocked ? 'disabled' : ''}
+                       
                        onchange="window.updateField('${contract.id}','client',this.value)">
             </td>
             <td>
-                <select class="inline-input" ${viewLocked || locked ? 'disabled' : ''} onchange="window.updateField('${contract.id}','squadTag',this.value)">
+                <select class="inline-input"  onchange="window.updateField('${contract.id}','squadTag',this.value)">
                     <option value="">—</option>
                     ${squads.map(s => `<option value="${s.id}" ${contract.squadTag === s.id ? 'selected' : ''}>${s.icon || ''} ${s.name}</option>`).join('')}
                 </select>
             </td>
             <td style="text-align:center;">
                 <input type="number" min="0" class="inline-input inline-input-num" value="${contract.videoCount || 0}"
-                       ${viewLocked || locked ? 'disabled' : ''}
+                       
                        onchange="window.updateField('${contract.id}','videoCount',this.value)">
             </td>
             <td style="text-align:center;">
                 <input type="number" min="0" class="inline-input inline-input-num" value="${contract.staticCount || 0}"
-                       ${viewLocked || locked ? 'disabled' : ''}
+                       
                        onchange="window.updateField('${contract.id}','staticCount',this.value)">
             </td>
             <td style="text-align:center;">
                 <button class="traffic-pill ${contract.trafficManagement ? 'on' : ''}"
-                        ${viewLocked || locked ? 'disabled' : ''}
+                        
                         onclick="window.toggleTraffic('${contract.id}', ${!contract.trafficManagement})">
                     ${contract.trafficManagement ? 'Sim' : 'Não'}
                 </button>
@@ -374,35 +331,24 @@ function renderRow({ contract, roi, squad, locked, confirmedThisMonth, lastConfi
                 ${headMasterCost && contract.includeHeadMaster !== false ? `<div class="role-chip-cost">R$ ${fmt(headMasterCost.totalCost)}</div>` : ''}
                 ${headMaster && contract.includeHeadMaster === false ? `<span style="font-size:0.7rem;color:var(--text-secondary);opacity:0.5;" title="Head Master não incluída neste contrato">👑 —</span>` : ''}
             </td>
-            ${TEAM_ROLES.map(role => renderTeamCell(contract, team[role], role, locked || viewLocked)).join('')}
+            ${TEAM_ROLES.map(role => renderTeamCell(contract, team[role], role)).join('')}
             <td style="text-align:right;">
                 <input type="text" inputmode="decimal" class="inline-input inline-input-num currency-input" style="width:110px; text-align:right;"
                        value="R$ ${fmt(contract.value)}"
                        data-raw="${contract.value || 0}"
-                       ${viewLocked || locked ? 'disabled' : ''}
+                       
                        onfocus="window.currencyInputFocus(this)"
                        onblur="window.currencyInputBlur(this, '${contract.id}')"
                        onkeydown="if(event.key==='Enter'){this.blur();}">
             </td>
             <td style="text-align:right; color:var(--text-secondary);">R$ ${fmt(roi.cost)}</td>
             <td style="text-align:center;"><span class="badge ${marginBadgeClass(roi.margin)}">${roi.margin.toFixed(0)}%</span></td>
-            <td style="text-align:center; font-size:0.8rem; color:var(--text-secondary);">${lastConfirmed ? monthShortLabel(lastConfirmed) + '/' + lastConfirmed.split('-')[0].slice(2) : '—'}</td>
-            <td style="text-align:center; white-space:nowrap;">
-                ${months.map(m => `
-                    <span class="month-sq ${(contract.confirmedPeriods || []).includes(m) ? 'checked' : ''} ${m === selectedMonth ? 'ref' : ''}"
-                          title="${monthShortLabel(m)}"
-                          onclick="${viewLocked ? '' : `window.toggleMonth('${contract.id}','${m}')`}">${(contract.confirmedPeriods || []).includes(m) ? '✓' : ''}</span>
-                `).join('')}
-            </td>
+
             <td style="white-space:nowrap;">
                 <div style="display:flex; gap:0.3rem; justify-content:center;">
                     <button class="btn btn-small btn-primary" onclick="window.showContractBreakdown('${contract.id}')" title="Ver cálculo">🔍</button>
-                    ${locked
-                        ? `<button class="btn btn-small btn-secondary" ${viewLocked ? 'disabled' : ''} onclick="window.openRelaunchModal('${contract.id}')" title="Algo mudou — lançar novo contrato">🔁</button>`
-                        : `
-                            <button class="btn btn-small btn-secondary" ${viewLocked ? 'disabled' : ''} onclick="window.openEditModal('${contract.id}')" title="Editar contrato">✏️</button>
-                            <button class="btn btn-small btn-error" ${viewLocked ? 'disabled' : ''} onclick="window.deleteContract('${contract.id}')" title="Excluir contrato">🗑️</button>
-                        `}
+                    <button class="btn btn-small btn-secondary"  onclick="window.openEditModal('${contract.id}')" title="Editar contrato">✏️</button>
+                    <button class="btn btn-small btn-error"  onclick="window.deleteContract('${contract.id}')" title="Excluir contrato">🗑️</button>
                 </div>
             </td>
         </tr>
@@ -410,14 +356,13 @@ function renderRow({ contract, roi, squad, locked, confirmedThisMonth, lastConfi
 }
 
 function renderProjectRow({ project, roi, squad, head, headCost, headMaster, headMasterCost }) {
-    const rowMuted = project.billingPeriod !== selectedMonth;
     const periodLabel = project.billingPeriod
         ? monthShortLabel(project.billingPeriod) + '/' + project.billingPeriod.split('-')[0].slice(2)
         : '—';
 
     return `
-        <tr class="${rowMuted ? 'row-inactive' : ''}">
-            <td style="position:sticky; left:0; background:${rowMuted ? 'var(--bg-darker,#15151a)' : 'var(--bg,#0f0f12)'};">
+        <tr>
+            <td style="position:sticky; left:0; background:var(--bg,#0f0f12);">
                 <span class="project-badge" title="Projeto pontual — lançado/editado na tela de Projetos">🚀</span>
                 ${project.client || project.name}
                 ${project.client ? `<div style="font-size:0.7rem; color:var(--text-secondary);">${project.name}</div>` : ''}
@@ -450,14 +395,14 @@ function renderProjectRow({ project, roi, squad, head, headCost, headMaster, hea
     `;
 }
 
-function renderTeamCell(contract, entries, role, locked) {
+function renderTeamCell(contract, entries, role) {
     if (!entries || entries.length === 0) {
-        return `<td>${locked ? '<span class="text-muted">—</span>' : `<button class="role-chip-add" onclick="window.openTeamModal('${contract.id}')">+ adicionar</button>`}</td>`;
+        return `<td><button class="role-chip-add" onclick="window.openTeamModal('${contract.id}')">+ adicionar</button></td>`;
     }
     return `<td>${entries.map(({ person, alloc }) => {
         const badgeClass = alloc.mode === 'fixo' ? 'fixo' : alloc.mode === 'founder_brand' ? 'fb' : 'rateado';
         const badgeLabel = alloc.mode === 'fixo' ? 'fixo' : alloc.mode === 'founder_brand' ? 'FB' : 'rateado';
-        const personCost = analyticsService.getPersonCostInContract(person.id, contract.id, selectedMonth);
+        const personCost = analyticsService.getPersonCostInContract(person.id, contract.id);
         return `
         <div>
             <span class="role-chip" ${locked ? '' : `onclick="window.openTeamModal('${contract.id}')" style="cursor:pointer;"`}>
@@ -654,7 +599,6 @@ function attachPersonSearch() {
 
 function openContractModal() {
     currentEditId = null;
-    relaunchFromId = null;
     editingId = null;
     document.getElementById('modal-title').textContent = 'Novo Contrato';
     document.getElementById('contract-form-body').innerHTML = renderContractForm(null, squadService.getAllSquads());
@@ -663,22 +607,9 @@ function openContractModal() {
     setTimeout(() => attachClientAutocomplete(document.getElementById('client')), 50);
 }
 
-function openRelaunchModal(id) {
-    const original = contractService.getContract(id);
-    relaunchFromId = id;
-    currentEditId = null;
-    editingId = null;
-    document.getElementById('modal-title').textContent = `Lançar novo contrato — ${original.client}`;
-    document.getElementById('contract-form-body').innerHTML = renderContractForm(original, squadService.getAllSquads());
-    document.getElementById('contract-modal').classList.add('active');
-    attachPersonSearch();
-    setTimeout(() => attachClientAutocomplete(document.getElementById('client')), 50);
-}
-
 function openEditModal(id) {
     const contract = contractService.getContract(id);
     editingId = id;
-    relaunchFromId = null;
     currentEditId = null;
     document.getElementById('modal-title').textContent = `Editar contrato — ${contract.client}`;
     document.getElementById('contract-form-body').innerHTML = renderContractForm(contract, squadService.getAllSquads());
@@ -690,7 +621,6 @@ function openEditModal(id) {
 function closeContractModal() {
     document.getElementById('contract-modal').classList.remove('active');
     currentEditId = null;
-    relaunchFromId = null;
     editingId = null;
     draftAllocations = [];
 }
@@ -713,9 +643,7 @@ function saveContract() {
             peopleAllocations: draftAllocations.map(a => ({ ...a })),
         };
 
-        if (relaunchFromId) {
-            contractService.duplicateContract(relaunchFromId, formData);
-        } else if (editingId) {
+        if (editingId) {
             contractService.updateContract(editingId, formData);
         } else {
             contractService.createContract(formData);
@@ -894,9 +822,9 @@ function renderBreakdownItem(item) {
 
 function showContractBreakdown(contractId) {
     const contract = contractService.getContract(contractId);
-    const roi = analyticsService.getContractROI(contractId, selectedMonth);
+    const roi = analyticsService.getContractROI(contractId, currentPeriod);
 
-    document.getElementById('breakdown-title').textContent = `Detalhamento: ${contract.client} (${monthShortLabel(selectedMonth)}/${selectedMonth.split('-')[0].slice(2)})`;
+    document.getElementById('breakdown-title').textContent = `Detalhamento: ${contract.client}`;
 
     const volumeHtml = `
         <div style="background:var(--bg-darker); padding:1rem; border-radius:8px; margin-bottom:1.5rem; display:flex; gap:2rem;">
@@ -926,7 +854,7 @@ function showContractBreakdown(contractId) {
 
 function showProjectBreakdown(projectId) {
     const project = projectService.getProjectById(projectId);
-    const roi = analyticsService.getProjectROI(projectId, selectedMonth);
+    const roi = analyticsService.getProjectROI(projectId, currentPeriod);
 
     document.getElementById('breakdown-title').textContent = `Detalhamento: ${project.name} (projeto pontual${project.client ? ' — ' + project.client : ''})`;
 
@@ -965,7 +893,6 @@ function goToProject(projectId) {
 
 function attachContractHandlers() {
     window.openContractModal  = openContractModal;
-    window.openRelaunchModal  = openRelaunchModal;
     window.openEditModal      = openEditModal;
     window.closeContractModal = closeContractModal;
     window.saveContract       = saveContract;
@@ -976,10 +903,7 @@ function attachContractHandlers() {
 
     window.deleteContract     = (id) => {
         const contract = contractService.getContract(id);
-        const hasHistory = (contract.confirmedPeriods || []).length > 0;
-        const msg = hasHistory
-            ? `Excluir o contrato de ${contract.client}? Isso remove o mês confirmado atual também. Não afeta nenhum outro contrato.`
-            : `Excluir o contrato de ${contract.client}? Ele ainda não tem nenhum mês confirmado.`;
+        const msg = `Excluir o contrato de ${contract.client}?`;
         if (confirm(msg)) {
             contractService.deleteContract(id);
             renderContractsPage();
@@ -1001,9 +925,9 @@ function attachContractHandlers() {
     window.goToProject           = goToProject;
     window.closeBreakdownModal   = closeBreakdownModal;
 
-    window.selectMonth = (periodId) => { selectedMonth = periodId; renderContractsPage(); };
-    window.toggleShowInactive = (checked) => { showInactive = checked; renderContractsPage(); };
-    window.toggleViewLock = () => { viewLocked = !viewLocked; renderContractsPage(); };
+
+
+    window.toggleViewLock = () => {}; // removido
     window.filterContracts = (value) => {
         searchTerm = value;
         renderContractsPage();
@@ -1018,14 +942,6 @@ function attachContractHandlers() {
     window.setTypeFilter = (type) => { typeFilter = type; renderContractsPage(); };
     window.setProfessionalFilter = (personId) => { professionalFilter = personId; renderContractsPage(); };
     window.clearContractFilters = () => { typeFilter = 'todos'; professionalFilter = ''; renderContractsPage(); };
-
-    window.toggleMonth = (contractId, periodId) => {
-        const contract = contractService.getContract(contractId);
-        const isConfirmed = (contract.confirmedPeriods || []).includes(periodId);
-        if (isConfirmed) contractService.unconfirmPeriod(contractId, periodId);
-        else contractService.confirmPeriod(contractId, periodId);
-        renderContractsPage();
-    };
 
     window.toggleTraffic = (contractId, value) => {
         contractService.updateContract(contractId, { trafficManagement: value });

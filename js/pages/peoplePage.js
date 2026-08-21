@@ -1,6 +1,5 @@
 // peoplePage.js - COM SISTEMA MENSAL + COPIAR MÊS ANTERIOR
 
-import { renderPeriodSelector } from '../components/periodSelector.js';
 import personService from '../services/personService.js';
 import analyticsService from '../services/analyticsService.js';
 import storage from '../store/storage.js';
@@ -20,16 +19,13 @@ export function renderPeoplePage() {
             <p class="page-subtitle">Gerenciar equipe e colaboradores</p>
         </div>
 
-        ${renderPeriodSelector()}
 
         <div class="action-bar">
             <div class="action-bar-left">
                 <button class="btn btn-primary" onclick="window.openPersonModal()">
                     + Nova Pessoa
                 </button>
-                <button class="btn btn-secondary" onclick="window.openReajusteModal()">
-                    🔁 Lançar Reajuste
-                </button>
+
             </div>
             <div class="action-bar-right" style="font-size: 0.85rem; color: var(--text-secondary);">
                 Período atual: <strong>${currentPeriod}</strong>
@@ -75,52 +71,6 @@ export function renderPeoplePage() {
                         <button type="submit" class="btn btn-primary">Salvar</button>
                     </div>
                 </form>
-            </div>
-        </div>
-
-        <!-- ── MODAL: LANÇAR REAJUSTE ── -->
-        <div id="reajuste-modal" class="modal">
-            <div class="modal-content" style="max-width: 520px;">
-                <div class="modal-header">
-                    <h2 class="modal-title">🔁 Lançar Reajuste</h2>
-                    <button class="modal-close" onclick="window.closeReajusteModal()">&times;</button>
-                </div>
-                <div style="padding: 1.5rem;">
-                    <div class="form-group">
-                        <label class="form-label">Pessoa *</label>
-                        <select class="form-select" id="reajuste-person" onchange="window.onReajustePersonChange()">
-                            <option value="">Selecione...</option>
-                            ${people.map(p => `<option value="${p.id}">${p.name} — ${p.role}</option>`).join('')}
-                        </select>
-                    </div>
-
-                    <p id="reajuste-current-info" style="font-size: 0.85rem; color: var(--text-secondary); margin: 0.75rem 0;"></p>
-
-                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin: 0.75rem 0;">
-                        <input type="checkbox" id="reajuste-inativo" onchange="window.onReajusteInativoChange()">
-                        Marcar como inativo a partir deste mês (custo zerado)
-                    </label>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                        <div class="form-group" style="margin: 0;">
-                            <label class="form-label">Novo salário (R$) *</label>
-                            <input type="number" class="form-input" id="reajuste-salary" step="0.01" min="0">
-                        </div>
-                        <div class="form-group" style="margin: 0;">
-                            <label class="form-label">A partir de *</label>
-                            <input type="month" class="form-input" id="reajuste-period" value="${currentPeriod}">
-                        </div>
-                    </div>
-
-                    <p style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.75rem;">
-                        Esse valor passa a valer a partir do mês escolhido — meses seguintes continuam com ele automaticamente, até o próximo reajuste.
-                    </p>
-
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary" onclick="window.closeReajusteModal()">Cancelar</button>
-                        <button class="btn btn-primary" onclick="window.saveReajuste()">💾 Salvar Reajuste</button>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -182,7 +132,7 @@ function renderPeopleList(people) {
             const profile            = analyticsService.getPersonDeliveryProfile(person.id);
             const costPerDeliverable = analyticsService.getPersonCostPerDeliverable(person.id);
             const avgTicket          = analyticsService.getPersonAverageTicket(person.id);
-            const periodSalary       = storage.getSalaryForPeriod(person.id, currentPeriod);
+            const periodSalary       = person.salary || 0;
 
             let deliveryHtml;
             if (profile.kind === 'head') {
@@ -222,7 +172,7 @@ function renderPeopleList(people) {
                 </div>
                 <div style="${cellStyle} display: flex; gap: 0.5rem; align-items:center;">
                     <button class="btn btn-small btn-primary" onclick="window.showPersonBreakdown('${person.id}')" title="Ver Cálculo Detalhado">🔍</button>
-                    <button class="btn btn-small btn-secondary" onclick="window.openReajusteModal('${person.id}')" title="Lançar Reajuste">🔁</button>
+
                     <button class="btn btn-small btn-secondary" onclick="window.editPerson('${person.id}')" title="Editar">✏️</button>
                     <button class="btn btn-small btn-danger" onclick="window.deletePerson('${person.id}')" title="Excluir">🗑️</button>
                 </div>
@@ -244,68 +194,6 @@ function renderPeopleList(people) {
     }).join('');
 }
 
-// ─── MODAL: LANÇAR REAJUSTE ──────────────────────────────────────────────────
-
-function openReajusteModal(personId = null) {
-    document.getElementById('reajuste-modal').classList.add('active');
-    document.getElementById('reajuste-person').value = personId || '';
-    document.getElementById('reajuste-period').value = storage.getCurrentPeriod();
-    document.getElementById('reajuste-inativo').checked = false;
-    document.getElementById('reajuste-salary').disabled = false;
-    onReajustePersonChange();
-}
-
-function closeReajusteModal() {
-    document.getElementById('reajuste-modal').classList.remove('active');
-}
-
-function onReajustePersonChange() {
-    const personId = document.getElementById('reajuste-person').value;
-    const infoEl   = document.getElementById('reajuste-current-info');
-    const salaryInput = document.getElementById('reajuste-salary');
-
-    if (!personId) {
-        infoEl.textContent = '';
-        salaryInput.value = '';
-        return;
-    }
-
-    const currentPeriod = storage.getCurrentPeriod();
-    const current = storage.getSalaryForPeriod(personId, currentPeriod);
-    infoEl.textContent = `Salário vigente hoje: R$ ${formatCurrency(current)}`;
-    salaryInput.value = current;
-}
-
-function onReajusteInativoChange() {
-    const inativo = document.getElementById('reajuste-inativo').checked;
-    const salaryInput = document.getElementById('reajuste-salary');
-    salaryInput.disabled = inativo;
-    if (inativo) salaryInput.value = 0;
-}
-
-function saveReajuste() {
-    const personId  = document.getElementById('reajuste-person').value;
-    const period     = document.getElementById('reajuste-period').value;
-    const inativo    = document.getElementById('reajuste-inativo').checked;
-    const salary     = inativo ? 0 : parseFloat(document.getElementById('reajuste-salary').value);
-
-    if (!personId) { alert('Selecione uma pessoa.'); return; }
-    if (!period)   { alert('Selecione o mês de vigência.'); return; }
-    if (!inativo && (isNaN(salary) || salary < 0)) { alert('Informe um salário válido.'); return; }
-
-    storage.setSalaryForPeriod(personId, period, salary, inativo ? 'inactive' : 'active');
-    closeReajusteModal();
-
-    const person = personService.getPerson(personId);
-    const msg = inativo
-        ? `✅ ${person.name} marcado como inativo a partir de ${period}`
-        : `✅ Novo salário de ${person.name} (R$ ${formatCurrency(salary)}) vigente a partir de ${period}`;
-
-    if (typeof window.showToast === 'function') window.showToast(msg);
-    else alert(msg);
-
-    renderPeoplePage();
-}
 
 // ─── BREAKDOWN DETALHADO DA PESSOA ───────────────────────────────────────────
 
@@ -423,11 +311,6 @@ function attachPeopleHandlers() {
     window.deletePerson              = deletePerson;
     window.showPersonBreakdown       = showPersonBreakdown;
     window.closePersonBreakdownModal = closePersonBreakdownModal;
-    window.openReajusteModal         = openReajusteModal;
-    window.closeReajusteModal        = closeReajusteModal;
-    window.onReajustePersonChange    = onReajustePersonChange;
-    window.onReajusteInativoChange   = onReajusteInativoChange;
-    window.saveReajuste              = saveReajuste;
 }
 
 function openPersonModal() {
@@ -471,13 +354,13 @@ function handlePersonSubmit(e) {
             personService.updatePerson(currentEditId, formData);
             // Sincronizar salary_history do período atual
             const currentPeriod = storage.getCurrentPeriod();
-            storage.setSalaryForPeriod(currentEditId, currentPeriod, formData.salary, 'active');
+            // salário salvo direto na pessoa via updatePerson abaixo
         } else {
             const newPerson = personService.createPerson(formData);
             // Criar entrada inicial no salary_history
             if (newPerson) {
                 const currentPeriod = storage.getCurrentPeriod();
-                storage.setSalaryForPeriod(newPerson.id, currentPeriod, formData.salary, 'active');
+                // salário já salvo no addPerson
             }
         }
         closePersonModal();

@@ -1,8 +1,7 @@
-// validationPage.js — v3
+// validationPage.js — v4
 // Conferência salarial: compara o salário cadastrado de cada pessoa
-// com o total que foi alocado a ela em contratos (rateado + fixo).
+// com o total que foi alocado a ela em contratos.
 
-import { renderPeriodSelector } from '../components/periodSelector.js';
 import analyticsService from '../services/analyticsService.js';
 import storage from '../store/storage.js';
 
@@ -23,10 +22,8 @@ export function renderValidationPage() {
     contentEl.innerHTML = `
         <div class="page-header">
             <h1 class="page-title">Conferência Salarial</h1>
-            <p class="page-subtitle">Compara o salário de cada pessoa com o total alocado em contratos no período</p>
+            <p class="page-subtitle">Compara o salário de cada pessoa com o total alocado em contratos</p>
         </div>
-
-        ${renderPeriodSelector()}
 
         <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:1.5rem; margin-bottom:2rem;">
             <div class="stat-card">

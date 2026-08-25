@@ -4,6 +4,8 @@
 
 import squadService from '../services/squadService.js';
 import analyticsService from '../services/analyticsService.js';
+import projectService from '../services/projectService.js';
+import storage from '../store/storage.js';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -55,14 +57,11 @@ export function renderSquadComparisonPage() {
 
     const allDRE = analyticsService.getAllSquadsDRE(null, includeProjects);
 
-    const consolidated = {
-        revenue: allDRE.reduce((s, d) => s + d.revenue.total, 0),
-        cost:    allDRE.reduce((s, d) => s + d.costs.total, 0),
-        profit:  allDRE.reduce((s, d) => s + d.grossProfit, 0),
-    };
-    consolidated.margin = consolidated.revenue > 0
-        ? (consolidated.profit / consolidated.revenue) * 100
-        : 0;
+    // Contratos/projetos SEM squad definido
+    const unassigned = buildUnassignedDRE(includeProjects);
+
+    // Consolidado REAL = soma de todos os squads + sem squad
+    const overall = analyticsService.getOverallROI(null, includeProjects);
 
     contentEl.innerHTML = `
         <div class="page-header">
@@ -74,10 +73,11 @@ export function renderSquadComparisonPage() {
             🚀 Incluir Projetos Pontuais na receita e nos custos
         </label>
 
-        ${renderConsolidatedHeader(consolidated, allDRE.length)}
+        ${renderOverallHeader(overall, allDRE.length, unassigned)}
 
         <div class="dre-squads-grid">
             ${allDRE.map(dre => renderSquadDRE(dre)).join('')}
+            ${unassigned.revenue.total > 0 || unassigned.costs.total > 0 ? renderSquadDRE(unassigned) : ''}
         </div>
 
         <style>${dreStyles()}</style>
@@ -106,35 +106,131 @@ function bindToggleEvents() {
     });
 }
 
+// ─── DRE dos contratos SEM squad ─────────────────────────────────────────────
+
+function buildUnassignedDRE(includeProjects) {
+    const currentPeriod = storage.getCurrentPeriod();
+    const allContracts = storage.getActiveContractsForPeriod(currentPeriod);
+    const unassignedContracts = allContracts.filter(c => !c.squadTag);
+
+    const projects = includeProjects
+        ? (storage.getProjects() || []).filter(p => !p.squadId && p.billingPeriod === currentPeriod)
+        : [];
+
+    let totalRevenue = 0;
+    let totalCost = 0;
+    const perContract = [];
+    const perProject = [];
+    const memberCostMap = {};
+
+    unassignedContracts.forEach(contract => {
+        const roi = analyticsService.getContractROI(contract.id, currentPeriod, includeProjects);
+        totalRevenue += roi.revenue;
+        totalCost += roi.cost;
+        perContract.push({ contractId: contract.id, client: contract.client, value: roi.revenue });
+        roi.costBreakdown.forEach(item => {
+            if (item.isHead) return;
+            if (!memberCostMap[item.personId]) {
+                memberCostMap[item.personId] = { name: item.name, role: item.role, cost: 0 };
+            }
+            memberCostMap[item.personId].cost += item.totalCost;
+        });
+    });
+
+    projects.forEach(project => {
+        const roi = analyticsService.getProjectROI(project.id, currentPeriod);
+        totalRevenue += roi.revenue;
+        totalCost += roi.cost;
+        perProject.push({ projectId: project.id, client: project.client || project.name, value: roi.revenue, isProject: true });
+    });
+
+    const members = Object.entries(memberCostMap).map(([personId, v]) => ({
+        personId, name: v.name, role: v.role, cost: v.cost
+    }));
+
+    // Head Master aparece aqui também (rateado entre TODOS os clientes da agência)
+    const headMaster = analyticsService.getHeadMaster();
+    let totalHeadMasterCost = 0;
+    let headMasterData = null;
+    if (headMaster) {
+        unassignedContracts.forEach(c => {
+            totalHeadMasterCost += analyticsService.getHeadMasterCostForContract(c.id, currentPeriod, includeProjects);
+        });
+        if (totalHeadMasterCost > 0) {
+            headMasterData = { personId: headMaster.id, name: headMaster.name, role: headMaster.role, salary: headMaster.salary, cost: totalHeadMasterCost };
+            totalCost += totalHeadMasterCost;
+        }
+    }
+
+    const grossProfit = totalRevenue - totalCost;
+    const margin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+
+    const deliverables = unassignedContracts.reduce((acc, c) => {
+        acc.video += c.videoCount || 0;
+        acc.static += c.staticCount || 0;
+        if (c.trafficManagement) acc.trafficCount++;
+        if (c.founderBrand) acc.founderBrandCount++;
+        return acc;
+    }, { video: 0, static: 0, trafficCount: 0, founderBrandCount: 0 });
+
+    return {
+        squadId: '__unassigned__',
+        squadName: 'Sem Squad',
+        squadIcon: '📦',
+        squadDescription: 'Contratos e projetos sem squad definido',
+        deliverables,
+        revenue: { total: totalRevenue, perContract, perProject },
+        costs: {
+            total: totalCost,
+            members,
+            totalMembers: members.reduce((s, m) => s + m.cost, 0),
+            head: null,
+            totalHead: 0,
+            headMaster: headMasterData,
+            totalHeadMaster: totalHeadMasterCost,
+            totalExternalProjects: 0,
+            externalProjectsList: []
+        },
+        grossProfit,
+        margin,
+        contractCount: unassignedContracts.length,
+        projectCount: projects.length,
+        memberCount: members.length + (headMasterData ? 1 : 0)
+    };
+}
+
 // ─── consolidated header ─────────────────────────────────────────────────────
 
-function renderConsolidatedHeader(c, squadCount) {
+function renderOverallHeader(overall, squadCount, unassigned) {
+    const hasUnassigned = unassigned.revenue.total > 0 || unassigned.costs.total > 0;
+    const label = hasUnassigned
+        ? `⚡ DRE Geral — ${squadCount} Squad${squadCount > 1 ? 's' : ''} + Sem Squad`
+        : `⚡ DRE Geral — ${squadCount} Squad${squadCount > 1 ? 's' : ''}`;
+
     return `
         <div class="dre-consolidated">
-            <div class="dre-consolidated-title">
-                ⚡ Consolidado — ${squadCount} Squad${squadCount > 1 ? 's' : ''}
-            </div>
+            <div class="dre-consolidated-title">${label}</div>
             <div class="dre-consolidated-metrics">
                 <div class="dre-metric">
                     <span class="dre-metric-label">Receita Total</span>
-                    <span class="dre-metric-value" style="color:var(--success,#4caf50)">R$ ${fmt(c.revenue)}</span>
+                    <span class="dre-metric-value" style="color:var(--success,#4caf50)">R$ ${fmt(overall.revenue)}</span>
                 </div>
                 <div class="dre-metric-sep">−</div>
                 <div class="dre-metric">
                     <span class="dre-metric-label">Custo Total</span>
-                    <span class="dre-metric-value" style="color:var(--error,#f44336)">R$ ${fmt(c.cost)}</span>
+                    <span class="dre-metric-value" style="color:var(--error,#f44336)">R$ ${fmt(overall.cost)}</span>
                 </div>
                 <div class="dre-metric-sep">=</div>
                 <div class="dre-metric">
                     <span class="dre-metric-label">Lucro Bruto</span>
-                    <span class="dre-metric-value" style="color:${c.profit >= 0 ? 'var(--success,#4caf50)' : 'var(--error,#f44336)'}">
-                        R$ ${fmt(c.profit)}
+                    <span class="dre-metric-value" style="color:${overall.profit >= 0 ? 'var(--success,#4caf50)' : 'var(--error,#f44336)'}">
+                        R$ ${fmt(overall.profit)}
                     </span>
                 </div>
                 <div class="dre-metric">
                     <span class="dre-metric-label">Margem</span>
-                    <span class="dre-metric-value ${marginClass(c.margin)}" style="padding:0.25rem 0.6rem;border-radius:6px">
-                        ${pct(c.margin)}
+                    <span class="dre-metric-value ${marginClass(overall.margin)}" style="padding:0.25rem 0.6rem;border-radius:6px">
+                        ${pct(overall.margin)}
                     </span>
                 </div>
             </div>

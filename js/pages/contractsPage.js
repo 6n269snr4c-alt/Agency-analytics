@@ -264,16 +264,16 @@ function renderContractsTable(contracts, projects, squads, allPeople) {
         <div class="contracts-table-wrap">
             <table class="itable contracts-table">
                 <colgroup>
-                    <col style="width:160px"><!-- cliente -->
-                    <col style="width:100px"><!-- squad -->
-                    <col style="width:38px"><!-- video -->
-                    <col style="width:38px"><!-- estático -->
-                    <col style="width:48px"><!-- tráfego -->
+                    <col style="width:150px"><!-- cliente -->
+                    <col style="width:95px"><!-- squad -->
+                    <col style="width:46px"><!-- video -->
+                    <col style="width:46px"><!-- estático -->
+                    <col style="width:50px"><!-- tráfego -->
                     <col><!-- equipe (flex) -->
                     <col style="width:100px"><!-- receita -->
-                    <col style="width:90px"><!-- custo -->
-                    <col style="width:68px"><!-- margem -->
-                    <col style="width:90px"><!-- ações -->
+                    <col style="width:85px"><!-- custo -->
+                    <col style="width:62px"><!-- margem -->
+                    <col style="width:105px"><!-- ações -->
                 </colgroup>
                 <thead>
                     <tr>
@@ -306,7 +306,9 @@ function renderContractsTable(contracts, projects, squads, allPeople) {
             .contracts-table .inline-input { box-sizing: border-box; }
             .contracts-table .inline-client-input { width: 100%; min-width: 0; }
             .contracts-table select.inline-input { width: 100%; min-width: 0; font-size: 0.78rem; padding: 0.2rem; }
-            .contracts-table .inline-input-num { width: 100%; min-width: 0; text-align: center; padding: 0.2rem; }
+            .contracts-table .inline-input-num { width: 100%; min-width: 0; text-align: center; padding: 0.2rem 0.15rem; font-size: 0.82rem; -moz-appearance: textfield; }
+            .contracts-table .inline-input-num::-webkit-inner-spin-button,
+            .contracts-table .inline-input-num::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
             .contracts-table .currency-input { width: 100%; min-width: 0; text-align: right; font-size: 0.8rem; }
 
             .td-num    { text-align: center; }
@@ -321,7 +323,7 @@ function renderContractsTable(contracts, projects, squads, allPeople) {
             .team-grid .role-chip-cost { font-size: 0.65rem; }
             .team-grid .role-chip-add { font-size: 0.72rem; }
 
-            .td-actions .btn-small { padding: 0.2rem 0.35rem; font-size: 0.72rem; }
+            .td-actions .btn-small { padding: 0.2rem 0.3rem; font-size: 0.75rem; min-width: 0; }
         </style>
     `;
 }

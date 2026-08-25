@@ -65,6 +65,11 @@ export function renderNavbar() {
                     <span class="nav-icon">✓</span>
                     <span class="nav-text">Conferência Salarial</span>
                 </a>
+
+                <a href="#/report" class="nav-link" data-route="/report">
+                    <span class="nav-icon">📄</span>
+                    <span class="nav-text">Relatório Mensal</span>
+                </a>
             </div>
 
             <div class="sidebar-footer">

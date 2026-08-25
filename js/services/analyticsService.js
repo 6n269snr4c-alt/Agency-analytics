@@ -180,9 +180,12 @@ class AnalyticsService {
             });
 
         // Custo automático de Head Master — mesma ideia, mas agência toda.
+        // Respeita o flag includeHeadMaster de cada contrato (igual ao getContractROI).
         const headMaster = this.getHeadMaster();
         if (headMaster && headMaster.id === personId) {
-            activeContracts.forEach(c => { total += this.getHeadMasterCostForContract(c.id, currentPeriod); });
+            activeContracts
+                .filter(c => c.includeHeadMaster !== false)
+                .forEach(c => { total += this.getHeadMasterCostForContract(c.id, currentPeriod); });
             projectService.getProjectsForPeriod(currentPeriod)
                 .forEach(p => { total += this.getHeadMasterCostForProject(p.id, currentPeriod); });
         }
@@ -429,6 +432,19 @@ class AnalyticsService {
         return Array.from(new Set([...contractClients, ...projectClients]));
     }
 
+    /** Clientes que de fato incluem a Head Master no custo (ignora contratos
+     *  com includeHeadMaster === false). Assim o salário é dividido só entre
+     *  os clientes que realmente usam a Head Master, e a soma total dos
+     *  custos bate com o salário cheio dela. */
+    _hmClientsInPeriod(periodId, includeProjects = true) {
+        const contractClients = storage.getActiveContractsForPeriod(periodId)
+            .filter(c => c.includeHeadMaster !== false)
+            .map(c => c.client);
+        if (!includeProjects) return Array.from(new Set(contractClients));
+        const projectClients = projectService.getProjectsForPeriod(periodId).map(p => p.client || p.name);
+        return Array.from(new Set([...contractClients, ...projectClients]));
+    }
+
     _clientRevenueAgencyWide(clientName, periodId, includeProjects = true) {
         const contractsRevenue = storage.getActiveContractsForPeriod(periodId)
             .filter(c => c.client === clientName)
@@ -451,14 +467,14 @@ class AnalyticsService {
         const salary = this.getPersonCost(headMaster.id, currentPeriod);
         if (salary === 0) return 0;
 
-        const distinctClients = this._allClientsInPeriod(currentPeriod, includeProjects);
+        const distinctClients = this._hmClientsInPeriod(currentPeriod, includeProjects);
         if (distinctClients.length === 0) return 0;
 
         const perClient = salary / distinctClients.length;
 
         const clientRevenue = this._clientRevenueAgencyWide(contract.client, currentPeriod, includeProjects);
         if (clientRevenue === 0) {
-            const clientContracts = storage.getActiveContractsForPeriod(currentPeriod).filter(c => c.client === contract.client);
+            const clientContracts = storage.getActiveContractsForPeriod(currentPeriod).filter(c => c.client === contract.client && c.includeHeadMaster !== false);
             const clientProjects  = includeProjects
                 ? projectService.getProjectsForPeriod(currentPeriod).filter(p => (p.client || p.name) === contract.client)
                 : [];
@@ -481,7 +497,7 @@ class AnalyticsService {
         const salary = this.getPersonCost(headMaster.id, currentPeriod);
         if (salary === 0) return 0;
 
-        const distinctClients = this._allClientsInPeriod(currentPeriod, true);
+        const distinctClients = this._hmClientsInPeriod(currentPeriod, true);
         if (distinctClients.length === 0) return 0;
 
         const perClient = salary / distinctClients.length;
@@ -489,7 +505,7 @@ class AnalyticsService {
 
         const clientRevenue = this._clientRevenueAgencyWide(clientKey, currentPeriod, true);
         if (clientRevenue === 0) {
-            const clientContracts = storage.getActiveContractsForPeriod(currentPeriod).filter(c => c.client === clientKey);
+            const clientContracts = storage.getActiveContractsForPeriod(currentPeriod).filter(c => c.client === clientKey && c.includeHeadMaster !== false);
             const clientProjects  = projectService.getProjectsForPeriod(currentPeriod).filter(p => (p.client || p.name) === clientKey);
             const sharedCount = clientContracts.length + clientProjects.length;
             return sharedCount <= 1 ? perClient : perClient / sharedCount;

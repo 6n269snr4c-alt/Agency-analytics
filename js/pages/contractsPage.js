@@ -263,18 +263,30 @@ function renderContractsTable(contracts, projects, squads, allPeople) {
     return `
         <div class="contracts-table-wrap">
             <table class="itable contracts-table">
+                <colgroup>
+                    <col style="width:160px"><!-- cliente -->
+                    <col style="width:100px"><!-- squad -->
+                    <col style="width:38px"><!-- video -->
+                    <col style="width:38px"><!-- estático -->
+                    <col style="width:48px"><!-- tráfego -->
+                    <col><!-- equipe (flex) -->
+                    <col style="width:100px"><!-- receita -->
+                    <col style="width:90px"><!-- custo -->
+                    <col style="width:68px"><!-- margem -->
+                    <col style="width:90px"><!-- ações -->
+                </colgroup>
                 <thead>
                     <tr>
-                        <th class="col-client">Cliente</th>
-                        <th class="col-squad">Squad</th>
-                        <th class="col-num">🎬</th>
-                        <th class="col-num">🖼️</th>
-                        <th class="col-num">📣</th>
-                        <th class="col-team">Equipe</th>
-                        <th class="col-money">Receita</th>
-                        <th class="col-money">Custo</th>
-                        <th class="col-margin">Margem</th>
-                        <th class="col-actions">Ações</th>
+                        <th>Cliente</th>
+                        <th>Squad</th>
+                        <th style="text-align:center">🎬</th>
+                        <th style="text-align:center">🖼️</th>
+                        <th style="text-align:center">📣</th>
+                        <th>Equipe</th>
+                        <th style="text-align:right">Receita</th>
+                        <th style="text-align:right">Custo</th>
+                        <th style="text-align:center">Margem</th>
+                        <th style="text-align:center">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -284,29 +296,32 @@ function renderContractsTable(contracts, projects, squads, allPeople) {
         </div>
 
         <style>
-            .contracts-table-wrap { width: 100%; overflow-x: hidden; }
-            .contracts-table { table-layout: fixed; width: 100%; }
-            .contracts-table th, .contracts-table td { padding: 0.5rem 0.4rem; vertical-align: top; font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; }
-            .contracts-table thead th { font-size: 0.72rem; text-transform: uppercase; color: var(--text-secondary, #888); font-weight: 600; letter-spacing: 0.03em; white-space: nowrap; }
-            .col-client  { width: 14%; }
-            .col-squad   { width: 8%; }
-            .col-num     { width: 4%; text-align: center; }
-            .col-team    { width: 34%; }
-            .col-money   { width: 9%; text-align: right; }
-            .col-margin  { width: 6%; text-align: center; }
-            .col-actions { width: 8%; text-align: center; }
-            .contracts-table td.td-client { word-break: break-word; white-space: normal; }
-            .contracts-table td.td-num  { text-align: center; }
-            .contracts-table td.td-money { text-align: right; }
-            .contracts-table td.td-margin { text-align: center; }
-            .contracts-table td.td-actions { text-align: center; white-space: nowrap; }
-            .team-grid { display: flex; flex-wrap: wrap; gap: 0.3rem 0.5rem; }
-            .team-grid .role-chip { font-size: 0.78rem; }
-            .team-grid .role-chip-cost { font-size: 0.68rem; }
+            .contracts-table-wrap { width: 100%; overflow-x: auto; }
+            .contracts-table { table-layout: fixed; width: 100%; min-width: 900px; border-collapse: collapse; }
+            .contracts-table th,
+            .contracts-table td { padding: 0.45rem 0.35rem; vertical-align: top; font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box; }
+            .contracts-table thead th { font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary, #888); font-weight: 600; letter-spacing: 0.03em; white-space: nowrap; border-bottom: 1px solid var(--border, #2a2a2a); padding-bottom: 0.6rem; }
+
+            /* forçar inputs a respeitar a célula */
+            .contracts-table .inline-input { box-sizing: border-box; }
+            .contracts-table .inline-client-input { width: 100%; min-width: 0; }
+            .contracts-table select.inline-input { width: 100%; min-width: 0; font-size: 0.78rem; padding: 0.2rem; }
+            .contracts-table .inline-input-num { width: 100%; min-width: 0; text-align: center; padding: 0.2rem; }
+            .contracts-table .currency-input { width: 100%; min-width: 0; text-align: right; font-size: 0.8rem; }
+
+            .td-num    { text-align: center; }
+            .td-money  { text-align: right; }
+            .td-margin { text-align: center; }
+            .td-actions { text-align: center; white-space: nowrap; }
+            .td-client { word-break: break-word; white-space: normal; }
+
+            .team-grid { display: flex; flex-wrap: wrap; gap: 0.25rem 0.4rem; align-items: flex-start; }
             .team-grid .team-slot { display: inline-flex; flex-direction: column; }
-            .inline-client-input { width: 100% !important; min-width: 0 !important; }
-            .inline-input-num { width: 52px !important; }
-            .currency-input { width: 88px !important; }
+            .team-grid .role-chip { font-size: 0.75rem; white-space: nowrap; }
+            .team-grid .role-chip-cost { font-size: 0.65rem; }
+            .team-grid .role-chip-add { font-size: 0.72rem; }
+
+            .td-actions .btn-small { padding: 0.2rem 0.35rem; font-size: 0.72rem; }
         </style>
     `;
 }
@@ -322,7 +337,7 @@ function renderRow({ contract, roi, squad, team, head, headCost, headMaster, hea
                        onchange="window.updateField('${contract.id}','client',this.value)">
             </td>
             <td>
-                <select class="inline-input" style="width:100%;" onchange="window.updateField('${contract.id}','squadTag',this.value)">
+                <select class="inline-input" onchange="window.updateField('${contract.id}','squadTag',this.value)">
                     <option value="">—</option>
                     ${squads.map(s => `<option value="${s.id}" ${contract.squadTag === s.id ? 'selected' : ''}>${s.icon || ''} ${s.name}</option>`).join('')}
                 </select>
@@ -343,7 +358,7 @@ function renderRow({ contract, roi, squad, team, head, headCost, headMaster, hea
             </td>
             <td>${teamHtml}</td>
             <td class="td-money">
-                <input type="text" inputmode="decimal" class="inline-input currency-input" style="text-align:right;"
+                <input type="text" inputmode="decimal" class="inline-input currency-input"
                        value="R$ ${fmt(contract.value)}"
                        data-raw="${contract.value || 0}"
                        onfocus="window.currencyInputFocus(this)"

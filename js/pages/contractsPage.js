@@ -261,26 +261,20 @@ function renderContractsTable(contracts, projects, squads, allPeople) {
         .sort((a, b) => a.clientKey.toLowerCase().localeCompare(b.clientKey.toLowerCase()));
 
     return `
-        <div class="table-container" style="overflow-x:auto;">
-            <table class="itable">
+        <div class="contracts-table-wrap">
+            <table class="itable contracts-table">
                 <thead>
                     <tr>
-                        <th style="position:sticky; left:0; background:var(--bg-darker, #15151a); z-index:2;">Cliente</th>
-                        <th>Squad</th>
-                        <th>🎬 Vídeo</th>
-                        <th>🖼️ Estático</th>
-                        <th>Tráfego</th>
-                        <th>Head</th>
-                        <th>Designer</th>
-                        <th>Filmmaker</th>
-                        <th>Copywriter</th>
-                        <th>Gestor Tráfego</th>
-                        <th>Receita</th>
-                        <th>Custo</th>
-                        <th>Margem</th>
-                        <th>Último mês</th>
-                        <th>Meses</th>
-                        <th>Ações</th>
+                        <th class="col-client">Cliente</th>
+                        <th class="col-squad">Squad</th>
+                        <th class="col-num">🎬</th>
+                        <th class="col-num">🖼️</th>
+                        <th class="col-num">📣</th>
+                        <th class="col-team">Equipe</th>
+                        <th class="col-money">Receita</th>
+                        <th class="col-money">Custo</th>
+                        <th class="col-margin">Margem</th>
+                        <th class="col-actions">Ações</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -288,112 +282,161 @@ function renderContractsTable(contracts, projects, squads, allPeople) {
                 </tbody>
             </table>
         </div>
+
+        <style>
+            .contracts-table-wrap { width: 100%; overflow-x: hidden; }
+            .contracts-table { table-layout: fixed; width: 100%; }
+            .contracts-table th, .contracts-table td { padding: 0.5rem 0.4rem; vertical-align: top; font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; }
+            .contracts-table thead th { font-size: 0.72rem; text-transform: uppercase; color: var(--text-secondary, #888); font-weight: 600; letter-spacing: 0.03em; white-space: nowrap; }
+            .col-client  { width: 14%; }
+            .col-squad   { width: 8%; }
+            .col-num     { width: 4%; text-align: center; }
+            .col-team    { width: 34%; }
+            .col-money   { width: 9%; text-align: right; }
+            .col-margin  { width: 6%; text-align: center; }
+            .col-actions { width: 8%; text-align: center; }
+            .contracts-table td.td-client { word-break: break-word; white-space: normal; }
+            .contracts-table td.td-num  { text-align: center; }
+            .contracts-table td.td-money { text-align: right; }
+            .contracts-table td.td-margin { text-align: center; }
+            .contracts-table td.td-actions { text-align: center; white-space: nowrap; }
+            .team-grid { display: flex; flex-wrap: wrap; gap: 0.3rem 0.5rem; }
+            .team-grid .role-chip { font-size: 0.78rem; }
+            .team-grid .role-chip-cost { font-size: 0.68rem; }
+            .team-grid .team-slot { display: inline-flex; flex-direction: column; }
+            .inline-client-input { width: 100% !important; min-width: 0 !important; }
+            .inline-input-num { width: 52px !important; }
+            .currency-input { width: 88px !important; }
+        </style>
     `;
 }
 
 function renderRow({ contract, roi, squad, team, head, headCost, headMaster, headMasterCost }, squads) {
+    const teamHtml = renderTeamCellCombined(contract, team, head, headCost, headMaster, headMasterCost);
+
     return `
         <tr>
-            <td style="position:sticky; left:0; background:var(--bg,#0f0f12);">
-                ${contract.founderBrand ? '<span class="fb-badge" title="Estratégia de Founder Brand">🎤</span>' : ''}
-                ${contract.fastAlphaville ? '<span class="fb-badge" title="Fast Alphaville" style="background:rgba(33,150,243,0.15);color:#2196f3;">🏙️</span>' : ''}
+            <td class="td-client">
+                ${contract.founderBrand ? '<span class="fb-badge" title="Founder Brand">🎤</span>' : ''}
                 <input type="text" class="inline-input inline-client-input" value="${contract.client}"
-                       
                        onchange="window.updateField('${contract.id}','client',this.value)">
             </td>
             <td>
-                <select class="inline-input"  onchange="window.updateField('${contract.id}','squadTag',this.value)">
+                <select class="inline-input" style="width:100%;" onchange="window.updateField('${contract.id}','squadTag',this.value)">
                     <option value="">—</option>
                     ${squads.map(s => `<option value="${s.id}" ${contract.squadTag === s.id ? 'selected' : ''}>${s.icon || ''} ${s.name}</option>`).join('')}
                 </select>
             </td>
-            <td style="text-align:center;">
+            <td class="td-num">
                 <input type="number" min="0" class="inline-input inline-input-num" value="${contract.videoCount || 0}"
-                       
                        onchange="window.updateField('${contract.id}','videoCount',this.value)">
             </td>
-            <td style="text-align:center;">
+            <td class="td-num">
                 <input type="number" min="0" class="inline-input inline-input-num" value="${contract.staticCount || 0}"
-                       
                        onchange="window.updateField('${contract.id}','staticCount',this.value)">
             </td>
-            <td style="text-align:center;">
+            <td class="td-num">
                 <button class="traffic-pill ${contract.trafficManagement ? 'on' : ''}"
-                        
                         onclick="window.toggleTraffic('${contract.id}', ${!contract.trafficManagement})">
                     ${contract.trafficManagement ? 'Sim' : 'Não'}
                 </button>
             </td>
-            <td>${head ? `<span class="role-chip"><span class="role-chip-avatar">${head.name[0]}</span>${head.name}<span class="role-chip-badge auto">auto</span></span>` : '<span class="text-muted">—</span>'}
-                ${headCost ? `<div class="role-chip-cost">R$ ${fmt(headCost.totalCost)}</div>` : ''}
-                ${headMaster && contract.includeHeadMaster !== false ? `<span class="role-chip" style="margin-top:0.2rem;"><span class="role-chip-avatar">${headMaster.name[0]}</span>${headMaster.name}<span class="role-chip-badge auto">master</span></span>` : ''}
-                ${headMasterCost && contract.includeHeadMaster !== false ? `<div class="role-chip-cost">R$ ${fmt(headMasterCost.totalCost)}</div>` : ''}
-                ${headMaster && contract.includeHeadMaster === false ? `<span style="font-size:0.7rem;color:var(--text-secondary);opacity:0.5;" title="Head Master não incluída neste contrato">👑 —</span>` : ''}
-            </td>
-            ${TEAM_ROLES.map(role => renderTeamCell(contract, team[role], role)).join('')}
-            <td style="text-align:right;">
-                <input type="text" inputmode="decimal" class="inline-input inline-input-num currency-input" style="width:110px; text-align:right;"
+            <td>${teamHtml}</td>
+            <td class="td-money">
+                <input type="text" inputmode="decimal" class="inline-input currency-input" style="text-align:right;"
                        value="R$ ${fmt(contract.value)}"
                        data-raw="${contract.value || 0}"
-                       
                        onfocus="window.currencyInputFocus(this)"
                        onblur="window.currencyInputBlur(this, '${contract.id}')"
                        onkeydown="if(event.key==='Enter'){this.blur();}">
             </td>
-            <td style="text-align:right; color:var(--text-secondary);">R$ ${fmt(roi.cost)}</td>
-            <td style="text-align:center;"><span class="badge ${marginBadgeClass(roi.margin)}">${roi.margin.toFixed(0)}%</span></td>
-
-            <td style="white-space:nowrap;">
-                <div style="display:flex; gap:0.3rem; justify-content:center;">
-                    <button class="btn btn-small btn-primary" onclick="window.showContractBreakdown('${contract.id}')" title="Ver cálculo">🔍</button>
-                    <button class="btn btn-small btn-secondary"  onclick="window.openEditModal('${contract.id}')" title="Editar contrato">✏️</button>
-                    <button class="btn btn-small btn-error"  onclick="window.deleteContract('${contract.id}')" title="Excluir contrato">🗑️</button>
-                </div>
+            <td class="td-money" style="color:var(--text-secondary);">R$ ${fmt(roi.cost)}</td>
+            <td class="td-margin"><span class="badge ${marginBadgeClass(roi.margin)}">${roi.margin.toFixed(0)}%</span></td>
+            <td class="td-actions">
+                <button class="btn btn-small btn-primary" onclick="window.showContractBreakdown('${contract.id}')" title="Ver cálculo">🔍</button>
+                <button class="btn btn-small btn-secondary" onclick="window.openEditModal('${contract.id}')" title="Editar">✏️</button>
+                <button class="btn btn-small btn-error" onclick="window.deleteContract('${contract.id}')" title="Excluir">🗑️</button>
             </td>
         </tr>
     `;
 }
 
 function renderProjectRow({ project, roi, squad, head, headCost, headMaster, headMasterCost }) {
-    const periodLabel = project.billingPeriod
-        ? monthShortLabel(project.billingPeriod) + '/' + project.billingPeriod.split('-')[0].slice(2)
-        : '—';
+    const leaderHtml = [
+        head ? `<span class="role-chip"><span class="role-chip-avatar">${head.name[0]}</span>${head.name}<span class="role-chip-badge auto">auto</span></span>${headCost ? `<span class="role-chip-cost">R$ ${fmt(headCost.totalCost)}</span>` : ''}` : '',
+        headMaster ? `<span class="role-chip"><span class="role-chip-avatar">${headMaster.name[0]}</span>${headMaster.name}<span class="role-chip-badge auto">master</span></span>${headMasterCost ? `<span class="role-chip-cost">R$ ${fmt(headMasterCost.totalCost)}</span>` : ''}` : '',
+    ].filter(Boolean).join(' ') || '<span class="text-muted">—</span>';
 
     return `
         <tr>
-            <td style="position:sticky; left:0; background:var(--bg,#0f0f12);">
-                <span class="project-badge" title="Projeto pontual — lançado/editado na tela de Projetos">🚀</span>
+            <td class="td-client">
+                <span class="project-badge" title="Projeto pontual">🚀</span>
                 ${project.client || project.name}
                 ${project.client ? `<div style="font-size:0.7rem; color:var(--text-secondary);">${project.name}</div>` : ''}
             </td>
             <td>${squad ? `${squad.icon || ''} ${squad.name}` : '<span class="text-muted">—</span>'}</td>
-            <td style="text-align:center;" class="text-muted">—</td>
-            <td style="text-align:center;" class="text-muted">—</td>
-            <td style="text-align:center;" class="text-muted">—</td>
-            <td>${head ? `<span class="role-chip"><span class="role-chip-avatar">${head.name[0]}</span>${head.name}<span class="role-chip-badge auto">auto</span></span>` : '<span class="text-muted">—</span>'}
-                ${headCost ? `<div class="role-chip-cost">R$ ${fmt(headCost.totalCost)}</div>` : ''}
-                ${headMaster ? `<span class="role-chip" style="margin-top:0.2rem;"><span class="role-chip-avatar">${headMaster.name[0]}</span>${headMaster.name}<span class="role-chip-badge auto">master</span></span>` : ''}
-                ${headMasterCost ? `<div class="role-chip-cost">R$ ${fmt(headMasterCost.totalCost)}</div>` : ''}
-            </td>
-            <td class="text-muted" style="text-align:center;">—</td>
-            <td class="text-muted" style="text-align:center;">—</td>
-            <td class="text-muted" style="text-align:center;">—</td>
-            <td class="text-muted" style="text-align:center;">—</td>
-            <td style="text-align:right;">R$ ${fmt(roi.revenue)}</td>
-            <td style="text-align:right; color:var(--text-secondary);">R$ ${fmt(roi.cost)}</td>
-            <td style="text-align:center;"><span class="badge ${marginBadgeClass(roi.margin)}">${roi.margin.toFixed(0)}%</span></td>
-            <td style="text-align:center; font-size:0.8rem; color:var(--text-secondary);">${periodLabel}</td>
-            <td style="text-align:center;"><span class="project-pill">🚀 Pontual</span></td>
-            <td style="white-space:nowrap;">
-                <div style="display:flex; gap:0.3rem; justify-content:center;">
-                    <button class="btn btn-small btn-primary" onclick="window.showProjectBreakdown('${project.id}')" title="Ver cálculo">🔍</button>
-                    <button class="btn btn-small btn-secondary" onclick="window.goToProject('${project.id}')" title="Editar na tela de Projetos">✏️</button>
-                </div>
+            <td class="td-num text-muted">—</td>
+            <td class="td-num text-muted">—</td>
+            <td class="td-num text-muted">—</td>
+            <td><div class="team-grid">${leaderHtml}</div></td>
+            <td class="td-money">R$ ${fmt(roi.revenue)}</td>
+            <td class="td-money" style="color:var(--text-secondary);">R$ ${fmt(roi.cost)}</td>
+            <td class="td-margin"><span class="badge ${marginBadgeClass(roi.margin)}">${roi.margin.toFixed(0)}%</span></td>
+            <td class="td-actions">
+                <button class="btn btn-small btn-primary" onclick="window.showProjectBreakdown('${project.id}')" title="Ver cálculo">🔍</button>
+                <button class="btn btn-small btn-secondary" onclick="window.goToProject('${project.id}')" title="Editar">✏️</button>
             </td>
         </tr>
     `;
 }
 
+function renderTeamCellCombined(contract, team, head, headCost, headMaster, headMasterCost) {
+    const chips = [];
+
+    // Head do squad
+    if (head) {
+        chips.push(`<span class="team-slot">
+            <span class="role-chip"><span class="role-chip-avatar">${head.name[0]}</span>${head.name}<span class="role-chip-badge auto">auto</span></span>
+            ${headCost ? `<span class="role-chip-cost">R$ ${fmt(headCost.totalCost)}</span>` : ''}
+        </span>`);
+    }
+
+    // Head Master
+    if (headMaster && contract.includeHeadMaster !== false) {
+        chips.push(`<span class="team-slot">
+            <span class="role-chip"><span class="role-chip-avatar">${headMaster.name[0]}</span>${headMaster.name}<span class="role-chip-badge auto">master</span></span>
+            ${headMasterCost ? `<span class="role-chip-cost">R$ ${fmt(headMasterCost.totalCost)}</span>` : ''}
+        </span>`);
+    }
+
+    // Membros da equipe por role
+    TEAM_ROLES.forEach(role => {
+        const entries = team[role];
+        if (!entries || entries.length === 0) return;
+        entries.forEach(({ person, alloc }) => {
+            const badgeClass = alloc.mode === 'fixo' ? 'fixo' : alloc.mode === 'founder_brand' ? 'fb' : 'rateado';
+            const badgeLabel = alloc.mode === 'fixo' ? 'fixo' : alloc.mode === 'founder_brand' ? 'FB' : 'rateado';
+            const personCost = analyticsService.getPersonCostInContract(person.id, contract.id);
+            chips.push(`<span class="team-slot">
+                <span class="role-chip" onclick="window.openTeamModal('${contract.id}')" style="cursor:pointer;">
+                    <span class="role-chip-avatar">${person.name[0]}</span>${person.name}
+                    <span class="role-chip-badge ${badgeClass}">${badgeLabel}</span>
+                </span>
+                ${personCost > 0 ? `<span class="role-chip-cost">R$ ${fmt(personCost)}</span>` : ''}
+            </span>`);
+        });
+    });
+
+    if (chips.length === 0) {
+        chips.push(`<button class="role-chip-add" onclick="window.openTeamModal('${contract.id}')">+ adicionar</button>`);
+    } else {
+        chips.push(`<button class="role-chip-add" onclick="window.openTeamModal('${contract.id}')" style="align-self:center;">+</button>`);
+    }
+
+    return `<div class="team-grid">${chips.join('')}</div>`;
+}
+
+// renderTeamCell mantido por compatibilidade com o modal de equipe
 function renderTeamCell(contract, entries, role) {
     if (!entries || entries.length === 0) {
         return `<td><button class="role-chip-add" onclick="window.openTeamModal('${contract.id}')">+ adicionar</button></td>`;

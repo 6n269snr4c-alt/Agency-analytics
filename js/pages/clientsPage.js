@@ -1,7 +1,6 @@
 // clientsPage.js - Visão consolidada por cliente
 // Agrega receita recorrente + pontual, margem total e histórico de projetos por cliente.
 
-import { renderPeriodSelector } from '../components/periodSelector.js';
 import clientService from '../services/clientService.js';
 import storage from '../store/storage.js';
 
@@ -64,10 +63,7 @@ export function renderClientsPage() {
             <h1 class="page-title">👤 Visão por Cliente</h1>
             <p class="page-subtitle">Receita consolidada (recorrente + projetos pontuais), margem total e LTV por cliente</p>
         </div>
-
-        ${renderPeriodSelector()}
-
-        <label class="revenue-filter-toggle">
+<label class="revenue-filter-toggle">
             <input type="checkbox" id="clients-include-projects" ${includeProjects ? 'checked' : ''} onchange="window.toggleClientsProjects(this.checked)">
             🚀 Incluir Projetos Pontuais
         </label>

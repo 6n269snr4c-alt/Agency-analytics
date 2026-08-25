@@ -1,6 +1,5 @@
 // evolutionPage.js - EVOLUÇÃO MENSAL COM GRÁFICO + TABELA COMPARATIVA
 
-import { renderPeriodSelector } from '../components/periodSelector.js';
 import analyticsService from '../services/analyticsService.js';
 import storage from '../store/storage.js';
 
@@ -16,10 +15,7 @@ export function renderEvolutionPage() {
             <h1 class="page-title">Evolução Mensal</h1>
             <p class="page-subtitle">Análise comparativa de receita, custo e lucro por período</p>
         </div>
-
-        ${renderPeriodSelector()}
-
-        <!-- CARDS DE VARIAÇÃO MÊS A MÊS -->
+<!-- CARDS DE VARIAÇÃO MÊS A MÊS -->
         <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2rem;">
             ${renderDeltaCard('💵 Receita', comparison.current.revenue, comparison.changes.revenue, comparison.changes.revenuePercent)}
             ${renderDeltaCard('💰 Custo',   comparison.current.cost,    comparison.changes.cost,    comparison.changes.costPercent, true)}

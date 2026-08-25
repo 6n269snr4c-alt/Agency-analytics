@@ -1,7 +1,6 @@
 // squadsPage.js - v3: apenas o texto explicativo do Head foi atualizado
 // (custo do Head agora é rateado por volume de vídeo+estático dos clientes, não mais por nº de clientes)
 
-import { renderPeriodSelector } from '../components/periodSelector.js';
 
 import squadService from '../services/squadService.js';
 import personService from '../services/personService.js';
@@ -22,9 +21,7 @@ export function renderSquadsPage() {
         </div>
 
         <!-- Period Selector -->
-        ${renderPeriodSelector()}
-
-        <div class="action-bar">
+<div class="action-bar">
             <div class="action-bar-left">
                 <button class="btn btn-primary" onclick="window.openSquadModal()">
                     + Novo Squad

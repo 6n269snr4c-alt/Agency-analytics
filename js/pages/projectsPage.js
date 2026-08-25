@@ -1,6 +1,5 @@
 // projectsPage.js - Página de Projetos Pontuais + Autocomplete de Cliente
 
-import { renderPeriodSelector } from '../components/periodSelector.js';
 import projectService from '../services/projectService.js';
 import analyticsService from '../services/analyticsService.js';
 import squadService from '../services/squadService.js';
@@ -77,10 +76,7 @@ export function renderProjectsPage() {
             <h1 class="page-title">⚡ Projetos Pontuais</h1>
             <p class="page-subtitle">Projetos one-off com faturamento após entrega — receita somada ao período de cobrança</p>
         </div>
-
-        ${renderPeriodSelector()}
-
-        <!-- Cards de resumo do período -->
+<!-- Cards de resumo do período -->
         <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:1.5rem; margin-bottom:2rem;">
             <div class="stat-card">
                 <div class="stat-value" style="color:var(--fast-green,#7cfc00)">R$ ${fmt(periodRevenue)}</div>

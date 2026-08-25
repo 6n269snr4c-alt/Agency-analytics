@@ -2,7 +2,6 @@
 // Receita e Custos mostram totais por padrão; clique expande os detalhes.
 // Rateio de membros compartilhados é por entregáveis ponderados.
 
-import { renderPeriodSelector } from '../components/periodSelector.js';
 import squadService from '../services/squadService.js';
 import analyticsService from '../services/analyticsService.js';
 
@@ -44,8 +43,7 @@ export function renderSquadComparisonPage() {
                 <h1 class="page-title">DRE por Squad</h1>
                 <p class="page-subtitle">Demonstrativo de Resultado por Squad</p>
             </div>
-            ${renderPeriodSelector()}
-            <div class="empty-state">
+<div class="empty-state">
                 <div class="empty-state-icon">📊</div>
                 <h3>Nenhum squad cadastrado</h3>
                 <p>Crie squads para ver o DRE comparativo</p>
@@ -71,10 +69,7 @@ export function renderSquadComparisonPage() {
             <h1 class="page-title">DRE por Squad</h1>
             <p class="page-subtitle">Demonstrativo de Resultado por Squad — custos rateados por entregáveis</p>
         </div>
-
-        ${renderPeriodSelector()}
-
-        <label class="dre-projects-toggle">
+<label class="dre-projects-toggle">
             <input type="checkbox" id="include-projects-toggle" ${includeProjects ? 'checked' : ''} onchange="window.toggleIncludeProjects(this.checked)">
             🚀 Incluir Projetos Pontuais na receita e nos custos
         </label>

@@ -9,7 +9,6 @@ import projectService from '../services/projectService.js';
 import squadService from '../services/squadService.js';
 import personService from '../services/personService.js';
 import analyticsService from '../services/analyticsService.js';
-import periodService from '../services/periodService.js';
 import router from '../router.js';
 import storage from '../store/storage.js';
 import { attachClientAutocomplete } from '../components/clientAutocomplete.js';
@@ -405,7 +404,7 @@ function renderTeamCell(contract, entries, role) {
         const personCost = analyticsService.getPersonCostInContract(person.id, contract.id);
         return `
         <div>
-            <span class="role-chip" ${locked ? '' : `onclick="window.openTeamModal('${contract.id}')" style="cursor:pointer;"`}>
+            <span class="role-chip" onclick="window.openTeamModal('${contract.id}')" style="cursor:pointer;">
                 <span class="role-chip-avatar">${person.name[0]}</span>${person.name}
                 <span class="role-chip-badge ${badgeClass}">${badgeLabel}</span>
             </span>

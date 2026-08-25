@@ -68,6 +68,55 @@ function buildReportHTML(periodId, includeProjects) {
     const projects   = includeProjects ? projectService.getProjectsForPeriod(periodId) : [];
     const reconciliation = analyticsService.getSalaryReconciliation(periodId);
 
+    // Contratos/projetos sem squad
+    const unassignedContracts = contracts.filter(c => !c.squadTag);
+    const unassignedProjects  = projects.filter(p => !p.squadId);
+    if (unassignedContracts.length > 0 || unassignedProjects.length > 0) {
+        const uRevenue = unassignedContracts.reduce((s, c) => s + (c.value || 0), 0)
+                       + unassignedProjects.reduce((s, p) => s + (p.value || 0), 0);
+        const uCostItems = [];
+        let uTotalCost = 0;
+        unassignedContracts.forEach(c => {
+            const roi = analyticsService.getContractROI(c.id, periodId, includeProjects);
+            uTotalCost += roi.cost;
+            roi.costBreakdown.forEach(item => {
+                const existing = uCostItems.find(x => x.personId === item.personId);
+                if (existing) existing.cost += item.totalCost;
+                else uCostItems.push({ personId: item.personId, name: item.name, role: item.role, cost: item.totalCost, isHead: item.isHead });
+            });
+        });
+        unassignedProjects.forEach(p => {
+            const roi = analyticsService.getProjectROI(p.id, periodId);
+            uTotalCost += roi.cost;
+        });
+        const uProfit = uRevenue - uTotalCost;
+        const uMargin = uRevenue > 0 ? (uProfit / uRevenue) * 100 : 0;
+        allDRE.push({
+            squadIcon: '📦', squadName: 'Sem Squad', squadDescription: 'Contratos e projetos sem squad definido',
+            contractCount: unassignedContracts.length, projectCount: unassignedProjects.length,
+            deliverables: unassignedContracts.reduce((acc, c) => {
+                acc.video += c.videoCount || 0; acc.static += c.staticCount || 0;
+                if (c.trafficManagement) acc.trafficCount++; if (c.founderBrand) acc.founderBrandCount++;
+                return acc;
+            }, { video: 0, static: 0, trafficCount: 0, founderBrandCount: 0 }),
+            revenue: {
+                total: uRevenue,
+                perContract: unassignedContracts.map(c => ({ client: c.client, value: c.value || 0 })),
+                perProject: unassignedProjects.map(p => ({ client: p.client || p.name, value: p.value || 0, isProject: true })),
+            },
+            costs: {
+                total: uTotalCost,
+                members: uCostItems.filter(i => !i.isHead),
+                totalMembers: uCostItems.filter(i => !i.isHead).reduce((s, i) => s + i.cost, 0),
+                head: null, totalHead: 0,
+                headMaster: uCostItems.find(i => i.isHead && i.name.includes('Master')) || null,
+                totalHeadMaster: (uCostItems.find(i => i.isHead && i.name.includes('Master')) || {}).cost || 0,
+                totalExternalProjects: 0, externalProjectsList: [],
+            },
+            grossProfit: uProfit, margin: uMargin,
+        });
+    }
+
     return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>

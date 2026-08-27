@@ -464,6 +464,9 @@ class AnalyticsService {
         const contract = storage.getContractById(contractId);
         if (!contract) return 0;
 
+        // Se o contrato exclui a Head Master, custo é zero — ponto.
+        if (contract.includeHeadMaster === false) return 0;
+
         const salary = this.getPersonCost(headMaster.id, currentPeriod);
         if (salary === 0) return 0;
 

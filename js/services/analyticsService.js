@@ -1012,7 +1012,7 @@ class AnalyticsService {
         }
 
         if (person.role === 'Head Master') {
-            const clientCount = this._allClientsInPeriod(currentPeriod).length;
+            const clientCount = this._hmClientsInPeriod(currentPeriod).length;
             return { kind: 'head_master', contractCount: clientCount, video: 0, static: 0, total: clientCount, founderBrandClients: 0, fixedCount: 0, fixedTotal: 0 };
         }
 
@@ -1324,7 +1324,7 @@ class AnalyticsService {
         if (headMaster) {
             const hmCost = this._simulateClientShareCost(
                 headMaster.id, currentPeriod, params.value,
-                () => this._allClientsInPeriod(currentPeriod, includeProjects),
+                () => this._hmClientsInPeriod(currentPeriod, includeProjects),
                 (clientName) => this._clientRevenueAgencyWide(clientName, currentPeriod, includeProjects),
                 params.clientMode, oldContract
             );

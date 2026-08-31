@@ -128,6 +128,7 @@ class Storage {
             squads:        JSON.parse(localStorage.getItem(this.keys.SQUADS) || '[]'),
             currentPeriod: localStorage.getItem(this.keys.CURRENT_PERIOD) || null,
             projects:      JSON.parse(localStorage.getItem(this.keys.PROJECTS) || '[]'),
+            settings:      JSON.parse(localStorage.getItem('agency_settings') || '{}'),
             updatedAt:     new Date().toISOString(),
         };
     }
@@ -139,6 +140,7 @@ class Storage {
         if (data.squads)        localStorage.setItem(this.keys.SQUADS, JSON.stringify(data.squads));
         if (data.currentPeriod) localStorage.setItem(this.keys.CURRENT_PERIOD, data.currentPeriod);
         if (data.projects)      localStorage.setItem(this.keys.PROJECTS, JSON.stringify(data.projects));
+        if (data.settings)      localStorage.setItem('agency_settings', JSON.stringify(data.settings));
     }
 
     _hasRealData(data) {
@@ -416,6 +418,24 @@ class Storage {
 
     getDeliverableTypes() {
         return [{ id: 'video', name: 'Vídeo' }, { id: 'estatico', name: 'Estático' }];
+    }
+
+    // ====================
+    // SETTINGS (configurações do sistema)
+    // ====================
+
+    getSettings() {
+        try {
+            return JSON.parse(localStorage.getItem('agency_settings')) || {};
+        } catch (e) { return {}; }
+    }
+
+    saveSettings(settings) {
+        try {
+            localStorage.setItem('agency_settings', JSON.stringify(settings));
+            this._scheduleFirestoreSync();
+            return true;
+        } catch (e) { return false; }
     }
 
     // ====================

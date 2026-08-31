@@ -70,6 +70,11 @@ export function renderNavbar() {
                     <span class="nav-icon">📄</span>
                     <span class="nav-text">Relatório Mensal</span>
                 </a>
+
+                <a href="#/settings" class="nav-link" data-route="/settings">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-text">Configurações</span>
+                </a>
             </div>
 
             <div class="sidebar-footer">

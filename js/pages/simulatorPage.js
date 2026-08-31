@@ -168,7 +168,7 @@ function renderPeoplePicker(squadId) {
                             <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="window.simTogglePerson('${p.id}', this.checked)">
                             ${p.name}
                             <span class="sim-people-role">${p.role}</span>
-                            ${p.role === 'Copywriter' && (p.founderBrandPercent || 0) > 0 ? `<span class="sim-people-fb">FB ${p.founderBrandPercent}%</span>` : ''}
+                            ${(p.role === 'Copywriter' || p.role === 'Filmmaker') && (p.founderBrandPercent || 0) > 0 ? `<span class="sim-people-fb">FB ${p.founderBrandPercent}%</span>` : ''}
                         </label>
                         ${isSelected ? `
                             <div class="sim-people-mode">
@@ -350,7 +350,7 @@ function attachSimulatorHandlers() {
                 if (mode === 'fixo') return { personId, mode: 'fixo', fixedValue };
 
                 const person = personService.getPerson(personId);
-                const useFounderBrand = draft.founderBrand && person.role === 'Copywriter' && (person.founderBrandPercent || 0) > 0;
+                const useFounderBrand = draft.founderBrand && (person.role === 'Copywriter' || person.role === 'Filmmaker') && (person.founderBrandPercent || 0) > 0;
                 return { personId, mode: useFounderBrand ? 'founder_brand' : 'rateado' };
             });
 

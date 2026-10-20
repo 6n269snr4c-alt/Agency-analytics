@@ -177,6 +177,10 @@ function renderPeoplePicker(squadId) {
                                     Rateado
                                 </label>
                                 <label>
+                                    <input type="radio" name="sim-mode-${p.id}" value="igual" ${entry.mode === 'igual' ? 'checked' : ''} onchange="window.simSetPersonMode('${p.id}', 'igual')">
+                                    Igual
+                                </label>
+                                <label>
                                     <input type="radio" name="sim-mode-${p.id}" value="fixo" ${entry.mode === 'fixo' ? 'checked' : ''} onchange="window.simSetPersonMode('${p.id}', 'fixo')">
                                     Valor fixo
                                 </label>
@@ -304,10 +308,10 @@ function attachSimulatorHandlers() {
         draft.trafficManagement = !!contract.trafficManagement;
         draft.founderBrand      = !!contract.founderBrand;
         draft.selectedPeople    = (contract.peopleAllocations || [])
-            .filter(a => a.mode === 'rateado' || a.mode === 'founder_brand' || a.mode === 'fixo')
+            .filter(a => a.mode === 'rateado' || a.mode === 'founder_brand' || a.mode === 'fixo' || a.mode === 'igual')
             .map(a => ({
                 personId: a.personId,
-                mode: a.mode === 'fixo' ? 'fixo' : 'rateado', // founder_brand é decidido automaticamente na hora de simular
+                mode: a.mode === 'fixo' ? 'fixo' : a.mode === 'igual' ? 'igual' : 'rateado',
                 fixedValue: a.mode === 'fixo' ? (a.fixedValue || 0) : 0,
             }));
 
@@ -348,6 +352,7 @@ function attachSimulatorHandlers() {
         try {
             const assignments = draft.selectedPeople.map(({ personId, mode, fixedValue }) => {
                 if (mode === 'fixo') return { personId, mode: 'fixo', fixedValue };
+                if (mode === 'igual') return { personId, mode: 'igual' };
 
                 const person = personService.getPerson(personId);
                 const useFounderBrand = draft.founderBrand && (person.role === 'Copywriter' || person.role === 'Filmmaker') && (person.founderBrandPercent || 0) > 0;

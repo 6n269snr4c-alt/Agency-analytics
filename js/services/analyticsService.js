@@ -83,6 +83,14 @@ class AnalyticsService {
      * Contratos em que a pessoa está alocada no modo 'founder_brand' nesse
      * período — usados pra dividir igualmente o bloco reservado da % dela.
      */
+    /** Contratos em que a pessoa está alocada no modo "igual" (divisão por contrato). */
+    _igualContractsForPerson(personId, periodId) {
+        return storage.getActiveContractsForPeriod(periodId).filter(c => {
+            const alloc = (c.peopleAllocations || []).find(a => a.personId === personId);
+            return alloc && alloc.mode === 'igual';
+        });
+    }
+
     _founderBrandContractsForPerson(personId, periodId) {
         return this.getPersonContractsForPeriod(personId, periodId).filter(contract => {
             const data = this._getProjectionData(contract, periodId);
@@ -141,6 +149,14 @@ class AnalyticsService {
 
         if (alloc.mode === 'fixo') {
             return alloc.fixedValue || 0;
+        }
+
+        if (alloc.mode === 'igual') {
+            const salary = this.getPersonCost(personId, currentPeriod);
+            const reserve = this._personFounderBrandReserve(personId, currentPeriod);
+            const availableSalary = salary - reserve.reserveTotal;
+            const igualContracts = this._igualContractsForPerson(personId, currentPeriod);
+            return igualContracts.length > 0 ? availableSalary / igualContracts.length : 0;
         }
 
         if (alloc.mode === 'founder_brand') {
@@ -637,7 +653,7 @@ class AnalyticsService {
             if (!person) return;
 
             const personCost = this.getPersonCostInContract(alloc.personId, contractId, currentPeriod);
-            if (personCost === 0 && (alloc.mode === 'rateado' || alloc.mode === 'founder_brand')) return;
+            if (personCost === 0 && (alloc.mode === 'rateado' || alloc.mode === 'founder_brand' || alloc.mode === 'igual')) return;
 
             cost += personCost;
 
@@ -648,6 +664,16 @@ class AnalyticsService {
                     role: person.role,
                     mode: 'fixo',
                     totalCost: personCost
+                });
+            } else if (alloc.mode === 'igual') {
+                const igualCount = this._igualContractsForPerson(person.id, currentPeriod).length;
+                costBreakdown.push({
+                    personId: person.id,
+                    name: person.name,
+                    role: person.role,
+                    mode: 'igual',
+                    totalCost: personCost,
+                    igualContractCount: igualCount
                 });
             } else if (alloc.mode === 'founder_brand') {
                 const reserve = this._personFounderBrandReserve(person.id, currentPeriod);
@@ -1027,6 +1053,7 @@ class AnalyticsService {
         // Contr./Custo-Ent com outras palavras.
         let fixedCount = 0;
         let fixedTotal = 0;
+        let igualCount = 0;
         contracts.forEach(contract => {
             const data = this._getProjectionData(contract, currentPeriod);
             const alloc = data.peopleAllocations.find(a => a.personId === personId);
@@ -1034,15 +1061,18 @@ class AnalyticsService {
                 fixedCount++;
                 fixedTotal += alloc.fixedValue || 0;
             }
+            if (alloc && alloc.mode === 'igual') {
+                igualCount++;
+            }
         });
 
         if (person.role === 'Gestor de Tráfego') {
             const trafficCount = contracts.filter(contract => {
                 const data = this._getProjectionData(contract, currentPeriod);
                 const alloc = data.peopleAllocations.find(a => a.personId === personId);
-                return alloc && (alloc.mode === 'rateado' || alloc.mode === 'fixo') && data.trafficManagement;
+                return alloc && (alloc.mode === 'rateado' || alloc.mode === 'fixo' || alloc.mode === 'igual') && data.trafficManagement;
             }).length;
-            return { kind: 'traffic', contractCount, video: 0, static: 0, total: trafficCount, founderBrandClients: 0, fixedCount, fixedTotal };
+            return { kind: 'traffic', contractCount, video: 0, static: 0, total: trafficCount, founderBrandClients: 0, fixedCount, fixedTotal, igualCount };
         }
 
         let video = 0;
@@ -1256,9 +1286,20 @@ class AnalyticsService {
             let cost = 0;
 
             if (mode === 'fixo') {
-                // Valor fixo não depende de rateio nenhum — é literalmente o
-                // valor negociado, igual no sistema real.
                 cost = fixedValue || 0;
+            } else if (mode === 'igual') {
+                // Custo dividido igualmente entre os contratos em que a pessoa
+                // participa nesse modo — mais o contrato simulado.
+                const salary = this.getPersonCost(personId, currentPeriod);
+                const reserve = this._personFounderBrandReserve(personId, currentPeriod);
+                const availableSalary = salary - reserve.reserveTotal;
+                let currentIgualCount = this._igualContractsForPerson(personId, currentPeriod).length;
+                if (oldContract) {
+                    const oldAlloc = (oldContract.peopleAllocations || []).find(a => a.personId === personId);
+                    if (oldAlloc && oldAlloc.mode === 'igual') currentIgualCount -= 1;
+                }
+                const newCount = currentIgualCount + 1;
+                cost = newCount > 0 ? availableSalary / newCount : 0;
             } else if (mode === 'founder_brand') {
                 const salary = this.getPersonCost(personId, currentPeriod);
                 const pct = person.founderBrandPercent || 0;

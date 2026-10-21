@@ -426,8 +426,8 @@ function renderTeamCellCombined(contract, team, head, headCost, headMaster, head
         </span>`);
     }
 
-    // Membros da equipe por role
-    TEAM_ROLES.forEach(role => {
+    // Membros da equipe por role — usa todos os roles presentes, não só TEAM_ROLES
+    Object.keys(team).forEach(role => {
         const entries = team[role];
         if (!entries || entries.length === 0) return;
         entries.forEach(({ person, alloc }) => {

@@ -431,8 +431,8 @@ function renderTeamCellCombined(contract, team, head, headCost, headMaster, head
         const entries = team[role];
         if (!entries || entries.length === 0) return;
         entries.forEach(({ person, alloc }) => {
-            const badgeClass = alloc.mode === 'fixo' ? 'fixo' : alloc.mode === 'igual' ? 'igual' : alloc.mode === 'founder_brand' ? 'fb' : 'rateado';
-            const badgeLabel = alloc.mode === 'fixo' ? 'fixo' : alloc.mode === 'igual' ? 'igual' : alloc.mode === 'founder_brand' ? 'FB' : 'rateado';
+            const badgeClass = alloc.mode === 'fixo' ? 'fixo' : alloc.mode === 'founder_brand' ? 'fb' : 'rateado';
+            const badgeLabel = alloc.mode === 'fixo' ? 'fixo' : alloc.mode === 'founder_brand' ? 'FB' : 'rateado';
             const personCost = analyticsService.getPersonCostInContract(person.id, contract.id);
             chips.push(`<span class="team-slot">
                 <span class="role-chip" onclick="window.openTeamModal('${contract.id}')" style="cursor:pointer;">
@@ -459,8 +459,8 @@ function renderTeamCell(contract, entries, role) {
         return `<td><button class="role-chip-add" onclick="window.openTeamModal('${contract.id}')">+ adicionar</button></td>`;
     }
     return `<td>${entries.map(({ person, alloc }) => {
-        const badgeClass = alloc.mode === 'fixo' ? 'fixo' : alloc.mode === 'igual' ? 'igual' : alloc.mode === 'founder_brand' ? 'fb' : 'rateado';
-        const badgeLabel = alloc.mode === 'fixo' ? 'fixo' : alloc.mode === 'igual' ? 'igual' : alloc.mode === 'founder_brand' ? 'FB' : 'rateado';
+        const badgeClass = alloc.mode === 'fixo' ? 'fixo' : alloc.mode === 'founder_brand' ? 'fb' : 'rateado';
+        const badgeLabel = alloc.mode === 'fixo' ? 'fixo' : alloc.mode === 'founder_brand' ? 'FB' : 'rateado';
         const personCost = analyticsService.getPersonCostInContract(person.id, contract.id);
         return `
         <div>
@@ -580,12 +580,6 @@ function renderAllocationsList(allPeople) {
                                ${alloc.mode === 'rateado' ? 'checked' : ''}
                                onchange="window.setAllocationMode('${person.id}', 'rateado')">
                         Rateado
-                    </label>
-                    <label class="mode-toggle">
-                        <input type="radio" name="mode-${person.id}" value="igual"
-                               ${alloc.mode === 'igual' ? 'checked' : ''}
-                               onchange="window.setAllocationMode('${person.id}', 'igual')">
-                        Igual
                     </label>
                     <label class="mode-toggle">
                         <input type="radio" name="mode-${person.id}" value="fixo"
@@ -1205,7 +1199,6 @@ function contractStyles() {
         .role-chip-badge.auto { color: var(--text-secondary); }
         .role-chip-badge.rateado { background: rgba(33,150,243,0.15); color: #64b5f6; }
         .role-chip-badge.fixo { background: rgba(255,160,0,0.15); color: #ff9800; }
-        .role-chip-badge.igual { background: rgba(0,200,83,0.15); color: #00c853; }
         .role-chip-badge.fb { background: rgba(186,104,200,0.18); color: #ba68c8; }
         .role-chip-cost { font-size: 0.68rem; color: var(--text-secondary); margin-top: 0.1rem; }
         .role-chip-add {

@@ -12,7 +12,8 @@ export const ROLES = [
     'Fotógrafo',
     'Motion Designer',
     'Estrategista',
-    'Social Media'
+    'Social Media',
+    'Operacional'
 ];
 
 export default ROLES;

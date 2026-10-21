@@ -158,7 +158,7 @@ function buildUnassignedDRE(includeProjects) {
         });
         if (totalHeadMasterCost > 0) {
             headMasterData = { personId: headMaster.id, name: headMaster.name, role: headMaster.role, salary: headMaster.salary, cost: totalHeadMasterCost };
-            totalCost += totalHeadMasterCost;
+            // NÃO soma ao totalCost — roi.cost já inclui o custo da Head Master
         }
     }
 
